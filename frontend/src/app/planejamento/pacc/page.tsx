@@ -1,0 +1,520 @@
+"use client";
+
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import {
+  ClipboardList,
+  ChevronDown,
+  Loader2,
+  AlertCircle,
+  Search,
+  Plus,
+  GitBranchPlus,
+  FolderPlus,
+  Settings,
+} from "lucide-react";
+import { PaccItemCard } from "@/components/pacc/PaccItemCard";
+import { NovoItemPaccModal } from "@/components/pacc/NovoItemPaccModal";
+import { EditarItemPaccModal } from "@/components/pacc/EditarItemPaccModal";
+import { ExcluirItemPaccDialog } from "@/components/pacc/ExcluirItemPaccDialog";
+import { ToastContainer, showToast } from "@/components/ui/Toast";
+import {
+  fetchExercicios,
+  fetchPainelPacc,
+  criarExercicioPacc,
+  gerarRevisaoPacc,
+} from "@/lib/api";
+import { formatarNomeRevisao, formatCurrency } from "@/lib/formatters";
+import type {
+  PaccExercicio,
+  PaccPainelResponse,
+  PaccItemComAcao,
+  PaccItem,
+} from "@/types/pacc";
+
+/* ── Tipos ────────────────────────────────────────────────────────────── */
+
+type FiltroAuditoria = "vigentes" | "todas" | "adicionadas" | "removidas";
+
+const FILTRO_OPTIONS: { value: FiltroAuditoria; label: string }[] = [
+  { value: "vigentes", label: "Visão Consolidada" },
+  { value: "todas", label: "Histórico Completo" },
+  { value: "adicionadas", label: "Adicionados nesta Revisão" },
+  { value: "removidas", label: "Removidos nesta Revisão" },
+];
+
+/* ── Dropdown de ações administrativas ────────────────────────────────── */
+
+function AdminDropdown({
+  onNovoExercicio,
+  onGerarRevisao,
+  hasRevisao,
+}: {
+  onNovoExercicio: () => void;
+  onGerarRevisao: () => void;
+  hasRevisao: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-border
+                   bg-background-card text-foreground-muted shadow-sm transition-all
+                   hover:bg-background-secondary hover:text-foreground"
+        title="Ações administrativas"
+      >
+        <Settings size={15} />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full z-50 mt-1.5 w-52 overflow-hidden rounded-xl border border-border
+                     bg-background-card shadow-xl"
+          style={{ animation: "modalIn 0.15s ease-out" }}
+        >
+          <button
+            onClick={() => { onNovoExercicio(); setOpen(false); }}
+            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm text-foreground
+                       transition-colors hover:bg-background-secondary"
+          >
+            <FolderPlus size={15} className="text-foreground-muted" />
+            Novo Exercício
+          </button>
+          {hasRevisao && (
+            <button
+              onClick={() => { onGerarRevisao(); setOpen(false); }}
+              className="flex w-full items-center gap-2.5 border-t border-border px-3.5 py-2.5 text-left text-sm text-foreground
+                         transition-colors hover:bg-background-secondary"
+            >
+              <GitBranchPlus size={15} className="text-foreground-muted" />
+              Gerar Nova Revisão
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Modal de Novo Exercício ──────────────────────────────────────────── */
+
+function NovoExercicioModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const currentYear = new Date().getFullYear();
+  const [ano, setAno] = useState(currentYear);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await criarExercicioPacc({ ano });
+      showToast("success", `Exercício ${ano} criado com Versão Inicial!`);
+      onSuccess();
+      onClose();
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Erro ao criar exercício.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xs rounded-2xl border border-border bg-background-card p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+        style={{ animation: "modalIn 0.25s ease-out" }}
+      >
+        <h3 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
+          <FolderPlus size={18} className="text-teal-500" />
+          Novo Exercício PACC
+        </h3>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-foreground-muted">
+              Ano
+            </label>
+            <input
+              type="number"
+              value={ano}
+              onChange={(e) => setAno(Number(e.target.value))}
+              className="mt-1 h-9 w-full rounded-lg border border-border bg-background-card px-3 text-sm text-foreground outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+            />
+          </div>
+          <p className="text-[11px] text-foreground-muted">
+            Uma <strong>Versão Inicial</strong> será criada automaticamente.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-8 rounded-lg border border-border px-3 text-xs font-medium text-foreground-muted hover:bg-background-secondary"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="h-8 rounded-lg bg-teal-500 px-4 text-xs font-bold text-white hover:bg-teal-600 disabled:opacity-50"
+            >
+              {submitting ? "Criando..." : "Criar Exercício"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── Página principal ──────────────────────────────────────────────────── */
+
+export default function PaccPage() {
+  const [exercicios, setExercicios] = useState<PaccExercicio[]>([]);
+  const [selectedExercicioId, setSelectedExercicioId] = useState<number | null>(null);
+  const [painel, setPainel] = useState<PaccPainelResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Modais
+  const [fetchKey, setFetchKey] = useState(0);
+  const [showNovoModal, setShowNovoModal] = useState(false);
+  const [showNovoExercicioModal, setShowNovoExercicioModal] = useState(false);
+  const [editandoItem, setEditandoItem] = useState<PaccItemComAcao | PaccItem | null>(null);
+  const [excluindoItem, setExcluindoItem] = useState<PaccItemComAcao | PaccItem | null>(null);
+
+  // Filtros
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filtroAuditoria, setFiltroAuditoria] = useState<FiltroAuditoria>("vigentes");
+  const [selectedRevisaoId, setSelectedRevisaoId] = useState<number | null>(null);
+
+  // Fetch exercícios
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await fetchExercicios();
+        setExercicios(data);
+        if (data.length > 0) {
+          const ativo = data.find((e) => e.ativo) ?? data[0];
+          setSelectedExercicioId(ativo.id);
+        } else {
+          setLoading(false);
+        }
+      } catch {
+        setError("Erro ao carregar exercícios.");
+        setLoading(false);
+      }
+    }
+    load();
+  }, [fetchKey]);
+
+  // Fetch painel
+  useEffect(() => {
+    if (selectedExercicioId === null) return;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchPainelPacc(
+          selectedExercicioId!,
+          selectedRevisaoId ?? undefined,
+          filtroAuditoria
+        );
+        setPainel(data);
+        if (selectedRevisaoId === null && data.revisoes.length > 0) {
+          setSelectedRevisaoId(data.revisoes[data.revisoes.length - 1].id);
+        }
+      } catch {
+        setError("Erro ao carregar painel.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [selectedExercicioId, selectedRevisaoId, filtroAuditoria, fetchKey]);
+
+  const refresh = useCallback(() => setFetchKey((k) => k + 1), []);
+
+  // Filtro local (busca)
+  const itensFiltrados = useMemo(() => {
+    if (!painel) return [];
+    const todos = [...painel.itens_ativos, ...painel.itens_excluidos] as (PaccItemComAcao | PaccItem)[];
+    if (!searchTerm.trim()) return todos;
+    const term = searchTerm.toLowerCase();
+    return todos.filter((item) => {
+      const desc = item.descricao_demanda.toLowerCase();
+      const num = item.numero_item.toLowerCase();
+      const sei = (item.processo_sei ?? "").toLowerCase();
+      const acaoPdtic = "acao_pdtic" in item ? (item as PaccItemComAcao).acao_pdtic : null;
+      const acaoCodigo = acaoPdtic ? acaoPdtic.codigo_acao.toLowerCase() : "";
+      return desc.includes(term) || num.includes(term) || sei.includes(term) || acaoCodigo.includes(term);
+    });
+  }, [painel, searchTerm]);
+
+  // Stats
+  const totalAtivos = painel?.itens_ativos.length ?? 0;
+  const totalExcluidos = painel?.itens_excluidos.length ?? 0;
+  const totalRevisoes = painel?.revisoes.length ?? 0;
+  const valorTotal = (painel?.itens_ativos ?? []).reduce(
+    (acc, item) => acc + item.valor_estimado, 0
+  );
+
+  // Gerar nova revisão
+  async function handleGerarRevisao() {
+    if (!selectedExercicioId) return;
+    try {
+      const novaRev = await gerarRevisaoPacc(selectedExercicioId);
+      showToast("success", `${formatarNomeRevisao(novaRev.numero_revisao)} gerada com sucesso!`);
+      setSelectedRevisaoId(novaRev.id);
+      refresh();
+    } catch (err) {
+      showToast("error", err instanceof Error ? err.message : "Erro ao gerar revisão.");
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/10 to-cyan-500/5 text-teal-600 dark:from-teal-500/20 dark:to-cyan-500/10 dark:text-teal-400">
+            <ClipboardList size={20} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">PACC</h1>
+            <p className="text-sm text-foreground-muted">Plano Anual de Contratações</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Seletor de exercício */}
+          {exercicios.length > 0 && (
+            <div className="relative">
+              <select
+                value={selectedExercicioId ?? ""}
+                onChange={(e) => {
+                  setSelectedExercicioId(Number(e.target.value));
+                  setSelectedRevisaoId(null);
+                }}
+                className="h-9 appearance-none rounded-lg border border-border bg-background-card
+                           pl-3 pr-7 text-xs font-medium text-foreground shadow-sm outline-none
+                           transition-all focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+              >
+                {exercicios.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.ano}{e.ativo ? " ✦" : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground-muted" />
+            </div>
+          )}
+
+          {/* Botão primário: Novo Item */}
+          <button
+            onClick={() => setShowNovoModal(true)}
+            disabled={!painel || painel.revisoes.length === 0}
+            className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-primary px-4
+                       text-sm font-semibold text-white shadow-lg shadow-brand-primary/25
+                       transition-all hover:bg-brand-primary-hover hover:shadow-xl
+                       hover:shadow-brand-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus size={15} />
+            Novo Item
+          </button>
+
+          {/* Dropdown ⚙️ */}
+          <AdminDropdown
+            onNovoExercicio={() => setShowNovoExercicioModal(true)}
+            onGerarRevisao={handleGerarRevisao}
+            hasRevisao={!!selectedExercicioId && !!painel}
+          />
+        </div>
+      </div>
+
+      {/* ── KPIs ────────────────────────────────────────────────── */}
+      {painel && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-border bg-background-card px-4 py-3 shadow-sm">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">Itens Ativos</div>
+            <div className="text-xl font-bold text-foreground">{totalAtivos}</div>
+          </div>
+          <div className="rounded-lg border border-border bg-background-card px-4 py-3 shadow-sm">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">Excluídos</div>
+            <div className="text-xl font-bold text-red-500 dark:text-red-400">{totalExcluidos}</div>
+          </div>
+          <div className="rounded-lg border border-border bg-background-card px-4 py-3 shadow-sm">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">Revisões</div>
+            <div className="text-xl font-bold text-foreground">{totalRevisoes}</div>
+          </div>
+          <div className="rounded-lg border border-border bg-background-card px-4 py-3 shadow-sm">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">Valor Total</div>
+            <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(valorTotal)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Segmented Control — Revisões ────────────────────────── */}
+      {painel && painel.revisoes.length > 0 && (
+        <div className="rounded-lg border border-border bg-background-card p-1 shadow-sm">
+          <div className="flex gap-0.5 overflow-x-auto">
+            {painel.revisoes.map((rev) => {
+              const isSelected = rev.id === selectedRevisaoId;
+              return (
+                <button
+                  key={rev.id}
+                  onClick={() => setSelectedRevisaoId(rev.id)}
+                  className={`relative min-w-max rounded-md px-4 py-2 text-xs font-medium transition-all whitespace-nowrap
+                    ${isSelected
+                      ? "bg-brand-primary text-white shadow-sm"
+                      : "text-foreground-muted hover:bg-background-secondary hover:text-foreground"
+                    }`}
+                >
+                  {formatarNomeRevisao(rev.numero_revisao)}
+                  {rev.data_aprovacao && (
+                    <span className={`ml-1.5 ${isSelected ? "text-white/70" : "text-foreground-muted/60"}`}>
+                      {rev.data_aprovacao}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Barra de Filtros Unificada ──────────────────────────── */}
+      {painel && (
+        <div className="flex items-center gap-px rounded-lg border border-border bg-background-card shadow-sm overflow-hidden">
+          {/* Busca */}
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted" />
+            <input
+              type="text"
+              placeholder="Buscar itens..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-10 w-full bg-transparent pl-9 pr-4 text-sm text-foreground
+                         placeholder:text-foreground-muted/60 outline-none"
+            />
+          </div>
+
+          {/* Divisor */}
+          <div className="h-5 w-px bg-border" />
+
+          {/* Filtro de auditoria */}
+          <div className="relative">
+            <select
+              value={filtroAuditoria}
+              onChange={(e) => setFiltroAuditoria(e.target.value as FiltroAuditoria)}
+              className="h-10 appearance-none bg-transparent px-3 pr-7 text-xs font-medium
+                         text-foreground outline-none cursor-pointer"
+            >
+              {FILTRO_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <ChevronDown size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground-muted" />
+          </div>
+        </div>
+      )}
+
+      {/* ── Lista de itens ──────────────────────────────────────── */}
+      {!loading && exercicios.length === 0 ? (
+        <div className="flex h-60 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background-card text-center">
+          <ClipboardList size={36} className="text-foreground-muted mb-3 opacity-40" />
+          <p className="text-sm font-medium text-foreground-muted">Nenhum exercício PACC cadastrado</p>
+          <button
+            onClick={() => setShowNovoExercicioModal(true)}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 px-4 py-2 text-xs font-bold text-teal-700 transition-colors hover:bg-teal-100 dark:bg-teal-900/20 dark:text-teal-400"
+          >
+            <FolderPlus size={14} />
+            Criar primeiro exercício
+          </button>
+        </div>
+      ) : loading ? (
+        <div className="flex h-48 items-center justify-center">
+          <Loader2 size={32} className="animate-spin text-brand-primary" />
+        </div>
+      ) : error && !painel ? (
+        <div className="flex h-48 flex-col items-center justify-center gap-2 text-red-500">
+          <AlertCircle size={32} />
+          <p className="text-sm">{error}</p>
+        </div>
+      ) : itensFiltrados.length === 0 ? (
+        <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-border bg-background-card text-sm text-foreground-muted">
+          Nenhum item encontrado para os filtros selecionados.
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {itensFiltrados.map((item) => (
+            <PaccItemCard
+              key={item.id}
+              item={item}
+              revisoes={painel?.revisoes ?? []}
+              revisaoAtualId={selectedRevisaoId}
+              onEditar={(it) => setEditandoItem(it)}
+              onExcluir={(it) => setExcluindoItem(it)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Modais ──────────────────────────────────────────────── */}
+
+      {showNovoExercicioModal && (
+        <NovoExercicioModal
+          onClose={() => setShowNovoExercicioModal(false)}
+          onSuccess={refresh}
+        />
+      )}
+
+      {showNovoModal && painel && selectedExercicioId && (
+        <NovoItemPaccModal
+          exercicioId={selectedExercicioId}
+          revisoes={painel.revisoes}
+          onClose={() => setShowNovoModal(false)}
+          onSuccess={refresh}
+        />
+      )}
+
+      {editandoItem && painel && (
+        <EditarItemPaccModal
+          item={editandoItem}
+          revisoes={painel.revisoes}
+          onClose={() => setEditandoItem(null)}
+          onSuccess={refresh}
+        />
+      )}
+
+      {excluindoItem && painel && (
+        <ExcluirItemPaccDialog
+          item={excluindoItem}
+          revisoes={painel.revisoes}
+          onClose={() => setExcluindoItem(null)}
+          onSuccess={refresh}
+        />
+      )}
+
+      <ToastContainer />
+    </div>
+  );
+}

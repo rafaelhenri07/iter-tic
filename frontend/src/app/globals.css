@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+/* ── Tailwind v4: dark mode via class (next-themes) ────────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design Tokens ─────────────────────────────────────────────────────── */
+:root {
+  /* Background */
+  --background: #f8fafc;
+  --background-secondary: #f1f5f9;
+  --background-card: #ffffff;
+
+  /* Foreground */
+  --foreground: #0f172a;
+  --foreground-muted: #64748b;
+
+  /* Sidebar */
+  --sidebar-bg: #0f172a;
+  --sidebar-fg: #cbd5e1;
+  --sidebar-fg-active: #ffffff;
+  --sidebar-accent: #6366f1;
+  --sidebar-hover: rgba(255, 255, 255, 0.06);
+  --sidebar-section: #94a3b8;
+
+  /* Header */
+  --header-bg: rgba(255, 255, 255, 0.8);
+  --header-border: #e2e8f0;
+
+  /* Brand */
+  --brand-primary: #6366f1;
+  --brand-primary-hover: #4f46e5;
+
+  /* Borders */
+  --border: #e2e8f0;
+  --border-hover: #cbd5e1;
+
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "JetBrains Mono", monospace;
+}
+
+.dark {
+  --background: #030712;
+  --background-secondary: #111827;
+  --background-card: #1f2937;
+
+  --foreground: #f1f5f9;
+  --foreground-muted: #94a3b8;
+
+  --sidebar-bg: #030712;
+  --sidebar-fg: #94a3b8;
+  --sidebar-fg-active: #f1f5f9;
+  --sidebar-accent: #818cf8;
+  --sidebar-hover: rgba(255, 255, 255, 0.05);
+  --sidebar-section: #6b7280;
+
+  --header-bg: rgba(3, 7, 18, 0.85);
+  --header-border: #1f2937;
+
+  --brand-primary: #818cf8;
+  --brand-primary-hover: #6366f1;
+
+  --border: #1f2937;
+  --border-hover: #374151;
+}
+
+/* ── Theme Tokens → Tailwind ───────────────────────────────────────────── */
+@theme inline {
+  --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
+  --color-background-card: var(--background-card);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-fg: var(--sidebar-fg);
+  --color-sidebar-fg-active: var(--sidebar-fg-active);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-hover: var(--sidebar-hover);
+  --color-sidebar-section: var(--sidebar-section);
+  --color-header-bg: var(--header-bg);
+  --color-header-border: var(--header-border);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-primary-hover: var(--brand-primary-hover);
+  --color-border: var(--border);
+  --color-border-hover: var(--border-hover);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+/* ── Base Styles ───────────────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--foreground-muted);
+  border-radius: 9999px;
+  opacity: 0.3;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  opacity: 0.5;
+}
+
+/* ── Sidebar link animation ────────────────────────────────────────────── */
+.sidebar-link {
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 60%;
+  background: var(--sidebar-accent);
+  border-radius: 0 4px 4px 0;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-link:hover::before,
+.sidebar-link.active::before {
+  transform: translateY(-50%) scaleY(1);
+}
+
+/* ── Toast / Modal animations ──────────────────────────────────────────── */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

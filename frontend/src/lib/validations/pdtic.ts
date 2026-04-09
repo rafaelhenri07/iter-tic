@@ -1,0 +1,214 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ * ITER TIC — Schema de validação Zod v4 para Ação PDTIC
+ * Espelha as regras do Pydantic no backend (PdticAcaoCreate)
+ * ────────────────────────────────────────────────────────────────────────── */
+
+import { z } from "zod";
+
+const RE_MM_YYYY = /^(0[1-9]|1[0-2])\/\d{4}$/;
+
+export const acaoPdticSchema = z.object({
+  /* ── Campos de ciclo de vida ────────────────────────────────────────── */
+  periodo_id: z
+    .number({ error: "Período é obrigatório." })
+    .int(),
+  revisao_inclusao_id: z
+    .number({ error: "Revisão de inclusão é obrigatória." })
+    .int(),
+
+  /* ── Identificação ──────────────────────────────────────────────────── */
+  codigo_acao: z
+    .string({ error: "Código é obrigatório." })
+    .min(1, "Código não pode ser vazio.")
+    .max(20, "Código deve ter no máximo 20 caracteres."),
+
+  departamento: z
+    .string({ error: "Departamento é obrigatório." })
+    .min(1, "Departamento não pode ser vazio.")
+    .max(200),
+
+  unidade_demandante: z
+    .string({ error: "Unidade demandante é obrigatória." })
+    .min(1, "Unidade demandante não pode ser vazia.")
+    .max(200),
+
+  unidade_responsavel: z
+    .string({ error: "Unidade responsável é obrigatória." })
+    .min(1, "Unidade responsável não pode ser vazia.")
+    .max(200),
+
+  necessidade: z
+    .string({ error: "Necessidade é obrigatória." })
+    .min(1, "Necessidade não pode ser vazia.")
+    .max(20),
+
+  descricao: z
+    .string({ error: "Descrição é obrigatória." })
+    .min(1, "Descrição não pode ser vazia."),
+
+  /* ── Classificação ──────────────────────────────────────────────────── */
+  tipo_necessidade: z.enum(
+    ["hardware", "software", "servico", "comunicacao", "capacitacao", "outros"],
+    { error: "Tipo de necessidade é obrigatório." }
+  ),
+
+  status: z.enum(
+    [
+      "Não iniciada",
+      "Em andamento",
+      "Contratada",
+      "Contrato vigente",
+      "Contrato a ser renovado",
+    ],
+    { error: "Status é obrigatório." }
+  ),
+
+  /* ── Detalhes opcionais ─────────────────────────────────────────────── */
+  meta: z.string().max(500).optional().or(z.literal("")),
+  indicador: z.string().max(500).optional().or(z.literal("")),
+  quantidade: z.string().max(100).optional().or(z.literal("")),
+
+  /* ── GUT ─────────────────────────────────────────────────────────────── */
+  total_gut: z
+    .number({ error: "Total GUT é obrigatório." })
+    .int("GUT deve ser um número inteiro.")
+    .min(0, "GUT mínimo é 0.")
+    .max(125, "GUT máximo é 125."),
+
+  /* ── Previsões (MM/YYYY) ────────────────────────────────────────────── */
+  previsao_contratacao: z
+    .string()
+    .regex(RE_MM_YYYY, "Formato inválido. Use MM/YYYY (ex: 06/2025).")
+    .optional()
+    .or(z.literal("")),
+
+  previsao_renovacao: z
+    .string()
+    .regex(RE_MM_YYYY, "Formato inválido. Use MM/YYYY (ex: 01/2028).")
+    .optional()
+    .or(z.literal("")),
+
+  /* ── Valores financeiros por ano ────────────────────────────────────── */
+  valores_investimento: z.record(
+    z.string().regex(/^\d{4}$/, "Chave deve ser um ano YYYY."),
+    z.number().min(0, "Valor não pode ser negativo.")
+  ).optional(),
+
+  valores_custeio: z.record(
+    z.string().regex(/^\d{4}$/, "Chave deve ser um ano YYYY."),
+    z.number().min(0, "Valor não pode ser negativo.")
+  ).optional(),
+});
+
+export type AcaoPdticFormData = z.infer<typeof acaoPdticSchema>;
+
+/**
+ * Limpa os campos opcionais vazios antes de enviar para a API.
+ * Converte strings vazias em null/undefined.
+ */
+export function cleanPayload(data: AcaoPdticFormData): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = { ...data };
+
+  // Strings opcionais → null se vazias
+  for (const key of [
+    "meta",
+    "indicador",
+    "quantidade",
+    "previsao_contratacao",
+    "previsao_renovacao",
+  ]) {
+    if (cleaned[key] === "" || cleaned[key] === undefined) {
+      cleaned[key] = null;
+    }
+  }
+
+  // Objetos financeiros → null se vazios
+  for (const key of ["valores_investimento", "valores_custeio"]) {
+    const val = cleaned[key] as Record<string, number> | undefined;
+    if (!val || Object.keys(val).length === 0) {
+      cleaned[key] = null;
+    }
+  }
+
+  return cleaned;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Schema para EDIÇÃO (PdticAcaoUpdate — campos de negócio opcionais)
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export const acaoPdticUpdateSchema = z.object({
+  codigo_acao: z
+    .string()
+    .min(1, "Código não pode ser vazio.")
+    .max(20, "Código deve ter no máximo 20 caracteres."),
+
+  departamento: z.string().min(1, "Departamento não pode ser vazio.").max(200),
+  unidade_demandante: z.string().min(1, "Unidade demandante não pode ser vazia.").max(200),
+  unidade_responsavel: z.string().min(1, "Unidade responsável não pode ser vazia.").max(200),
+  necessidade: z.string().min(1, "Necessidade não pode ser vazia.").max(20),
+  descricao: z.string().min(1, "Descrição não pode ser vazia."),
+
+  tipo_necessidade: z.enum(
+    ["hardware", "software", "servico", "comunicacao", "capacitacao", "outros"],
+    { error: "Tipo de necessidade é obrigatório." }
+  ),
+
+  status: z.enum(
+    ["Não iniciada", "Em andamento", "Contratada", "Contrato vigente", "Contrato a ser renovado"],
+    { error: "Status é obrigatório." }
+  ),
+
+  meta: z.string().max(500).optional().or(z.literal("")),
+  indicador: z.string().max(500).optional().or(z.literal("")),
+  quantidade: z.string().max(100).optional().or(z.literal("")),
+
+  total_gut: z
+    .number({ error: "Total GUT é obrigatório." })
+    .int("GUT deve ser um número inteiro.")
+    .min(0, "GUT mínimo é 0.")
+    .max(125, "GUT máximo é 125."),
+
+  previsao_contratacao: z
+    .string()
+    .regex(RE_MM_YYYY, "Formato inválido. Use MM/YYYY (ex: 06/2025).")
+    .optional()
+    .or(z.literal("")),
+
+  previsao_renovacao: z
+    .string()
+    .regex(RE_MM_YYYY, "Formato inválido. Use MM/YYYY (ex: 01/2028).")
+    .optional()
+    .or(z.literal("")),
+
+  valores_investimento: z.record(
+    z.string().regex(/^\d{4}$/, "Chave deve ser um ano YYYY."),
+    z.number().min(0, "Valor não pode ser negativo.")
+  ).optional(),
+
+  valores_custeio: z.record(
+    z.string().regex(/^\d{4}$/, "Chave deve ser um ano YYYY."),
+    z.number().min(0, "Valor não pode ser negativo.")
+  ).optional(),
+});
+
+export type AcaoPdticUpdateFormData = z.infer<typeof acaoPdticUpdateSchema>;
+
+export function cleanUpdatePayload(data: AcaoPdticUpdateFormData): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = { ...data };
+
+  for (const key of ["meta", "indicador", "quantidade", "previsao_contratacao", "previsao_renovacao"]) {
+    if (cleaned[key] === "" || cleaned[key] === undefined) {
+      cleaned[key] = null;
+    }
+  }
+
+  for (const key of ["valores_investimento", "valores_custeio"]) {
+    const val = cleaned[key] as Record<string, number> | undefined;
+    if (!val || Object.keys(val).length === 0) {
+      cleaned[key] = null;
+    }
+  }
+
+  return cleaned;
+}

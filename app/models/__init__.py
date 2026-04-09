@@ -1,0 +1,12 @@
+# ITER TIC - Models
+from app.models.pdtic import PeriodoPdtic, RevisaoPdtic, AcaoPdtic  # noqa: F401
+from app.models.pacc import ExercicioPacc, RevisaoPacc, ItemPacc  # noqa: F401
+from app.models.projeto import (  # noqa: F401
+    Servidor,
+    Projeto,
+    Artefato,
+    HistoricoDataArtefato,
+    projeto_acao_pdtic,
+    projeto_item_pacc,
+)
+from app.models.contrato import Contrato  # noqa: F401
