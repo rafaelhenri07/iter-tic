@@ -24,7 +24,11 @@ export const projetoCreateSchema = z.object({
       "Formato inválido. Use NNNNN-NNNNNNNN/YYYY-NN (ex: 00052-00032300/2024-09)."
     ),
 
-  complexidade: z.enum(["baixa", "media", "alta"], {
+  prioridade: z.enum(["baixa", "media", "alta"], {
+    error: "Selecione a prioridade.",
+  }),
+
+  complexidade: z.enum(["Simples", "Intermediária", "Complexa"], {
     error: "Selecione a complexidade.",
   }),
 

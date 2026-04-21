@@ -5,7 +5,7 @@ ITER TIC - Configuração do Banco de Dados (PostgreSQL + SQLAlchemy V2)
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
-DATABASE_URL = "postgresql+asyncpg://postgres:Raf0710*@localhost:5432/itertic"
+DATABASE_URL = "postgresql+asyncpg://postgres:Raf0710*@127.0.0.1:5432/itertic"
 
 engine = create_async_engine(DATABASE_URL, echo=True)
 

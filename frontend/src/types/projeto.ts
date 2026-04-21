@@ -5,15 +5,13 @@
 
 /* ── Enums ──────────────────────────────────────────────────────────────── */
 
-export type ComplexidadeProjeto = "baixa" | "media" | "alta";
+export type PrioridadeProjeto = "baixa" | "media" | "alta";
+export type ComplexidadeProjeto = "Simples" | "Intermediária" | "Complexa";
 
 export type StatusProjeto =
-  | "Em elaboração"
-  | "Pronto para contratação"
-  | "Em licitação"
-  | "Licitação concluída"
-  | "Suspenso"
-  | "Cancelado";
+  | "Fase interna"
+  | "Fase externa"
+  | "Contratado";
 
 export type TipoArtefato =
   | "DFD"
@@ -28,21 +26,39 @@ export type TipoDataAlterada = "data_inicio" | "data_conclusao";
 
 /* ── Labels / Colors ───────────────────────────────────────────────────── */
 
-export const COMPLEXIDADE_CONFIG: Record<
-  ComplexidadeProjeto,
+export const PRIORIDADE_CONFIG: Record<
+  PrioridadeProjeto,
   { label: string; cls: string }
 > = {
   baixa: {
     label: "Baixa",
-    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
+    cls: "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800",
   },
   media: {
     label: "Média",
-    cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+    cls: "bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800/50",
   },
   alta: {
     label: "Alta",
-    cls: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400",
+    cls: "bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-900/40 dark:text-rose-400 dark:border-rose-800/50",
+  },
+};
+
+export const COMPLEXIDADE_CONFIG: Record<
+  ComplexidadeProjeto,
+  { label: string; cls: string }
+> = {
+  Simples: {
+    label: "Simples",
+    cls: "bg-blue-50 text-blue-700 border border-blue-200",
+  },
+  "Intermediária": {
+    label: "Intermediária",
+    cls: "bg-purple-50 text-purple-700 border border-purple-200",
+  },
+  Complexa: {
+    label: "Complexa",
+    cls: "bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200",
   },
 };
 
@@ -50,29 +66,17 @@ export const STATUS_PROJETO_CONFIG: Record<
   StatusProjeto,
   { icon: string; cls: string }
 > = {
-  "Em elaboração": {
+  "Fase interna": {
     icon: "🔧",
     cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
   },
-  "Pronto para contratação": {
-    icon: "✅",
-    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
-  },
-  "Em licitação": {
+  "Fase externa": {
     icon: "📤",
     cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-400",
   },
-  "Licitação concluída": {
-    icon: "🏆",
-    cls: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-400",
-  },
-  Suspenso: {
-    icon: "⏸️",
-    cls: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-  },
-  Cancelado: {
-    icon: "❌",
-    cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
+  "Contratado": {
+    icon: "✅",
+    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
   },
 };
 
@@ -170,6 +174,7 @@ export interface ProjetoBase {
   id: number;
   nome: string;
   processo_sei: string;
+  prioridade: PrioridadeProjeto;
   complexidade: ComplexidadeProjeto;
   status: StatusProjeto;
   catmat: string | null;
@@ -241,6 +246,7 @@ export interface ProjetoListagem {
   id: number;
   nome: string;
   processo_sei: string;
+  prioridade: PrioridadeProjeto;
   complexidade: ComplexidadeProjeto;
   status: StatusProjeto;
   criado_em: string;

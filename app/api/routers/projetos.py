@@ -289,6 +289,7 @@ async def listar_projetos(
                 id=p.id,
                 nome=p.nome,
                 processo_sei=p.processo_sei,
+                prioridade=p.prioridade,
                 complexidade=p.complexidade,
                 status=p.status,
                 criado_em=p.criado_em,

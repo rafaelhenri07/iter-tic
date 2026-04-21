@@ -336,10 +336,9 @@ export default function ProjetosPage() {
                 key={tab.value}
                 onClick={() => setStatusFilter(tab.value)}
                 className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-all
-                  ${
-                    statusFilter === tab.value
-                      ? "bg-brand-primary text-white shadow-sm"
-                      : "text-foreground-muted hover:text-foreground hover:bg-background-secondary"
+                  ${statusFilter === tab.value
+                    ? "bg-brand-primary text-white shadow-sm"
+                    : "text-foreground-muted hover:text-foreground hover:bg-background-secondary"
                   }`}
               >
                 {tab.label}

@@ -26,6 +26,7 @@ from app.models import pdtic  # noqa: E402, F401
 from app.models import pacc  # noqa: E402, F401
 from app.models import projeto  # noqa: E402, F401
 from app.models import contrato  # noqa: E402, F401
+from app.models import usuario  # noqa: E402, F401
 
 target_metadata = Base.metadata
 

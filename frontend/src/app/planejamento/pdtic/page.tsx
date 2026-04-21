@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   BookOpen,
   ChevronDown,
@@ -14,7 +15,6 @@ import {
   Trash2,
   Settings,
 } from "lucide-react";
-import { NovaAcaoModal } from "@/components/pdtic/NovaAcaoModal";
 import { EditarAcaoModal } from "@/components/pdtic/EditarAcaoModal";
 import { VisualizarAcaoModal } from "@/components/pdtic/VisualizarAcaoModal";
 import { ExcluirAcaoDialog } from "@/components/pdtic/ExcluirAcaoDialog";
@@ -245,7 +245,6 @@ export default function PdticPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Modais
-  const [modalOpen, setModalOpen] = useState(false);
   const [viewModalAcao, setViewModalAcao] = useState<PdticAcao | null>(null);
   const [editModalAcao, setEditModalAcao] = useState<PdticAcao | null>(null);
   const [deleteDialogAcao, setDeleteDialogAcao] = useState<PdticAcao | null>(null);
@@ -394,17 +393,28 @@ export default function PdticPage() {
           )}
 
           {/* Botão primário: Nova Ação */}
-          <button
-            onClick={() => setModalOpen(true)}
-            disabled={!painel || painel.revisoes.length === 0}
-            className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-primary px-4
-                       text-sm font-semibold text-white shadow-lg shadow-brand-primary/25
-                       transition-all hover:bg-brand-primary-hover hover:shadow-xl
-                       hover:shadow-brand-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus size={15} />
-            Nova Ação
-          </button>
+          {painel && painel.revisoes.length > 0 ? (
+            <Link
+              href={`/planejamento/pdtic/novo?periodoId=${selectedPeriodoId}`}
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-primary px-4
+                         text-sm font-semibold text-white shadow-lg shadow-brand-primary/25
+                         transition-all hover:bg-brand-primary-hover hover:shadow-xl
+                         hover:shadow-brand-primary/30"
+            >
+              <Plus size={15} />
+              Nova Ação
+            </Link>
+          ) : (
+            <button
+              disabled
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-primary px-4
+                         text-sm font-semibold text-white shadow-lg shadow-brand-primary/25
+                         opacity-50 cursor-not-allowed"
+            >
+              <Plus size={15} />
+              Nova Ação
+            </button>
+          )}
 
           {/* Dropdown de ações administrativas (⚙️) */}
           <AdminDropdown
@@ -650,16 +660,7 @@ export default function PdticPage() {
         />
       )}
 
-      {selectedPeriodoId && painel && (
-        <NovaAcaoModal
-          open={modalOpen}
-          onClose={() => setModalOpen(false)}
-          periodoId={selectedPeriodoId}
-          revisoes={painel.revisoes}
-          anosRange={anosRange}
-          onSuccess={refresh}
-        />
-      )}
+
 
       {viewModalAcao && painel && (
         <VisualizarAcaoModal

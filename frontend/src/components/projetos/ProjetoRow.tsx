@@ -6,18 +6,15 @@ import {
   MessageSquare,
   Pencil,
 } from "lucide-react";
-import type { ProjetoListagem, ArtefatoResumo, StatusProjeto, ComplexidadeProjeto } from "@/types/projeto";
+import type { ProjetoListagem, ArtefatoResumo, StatusProjeto, ComplexidadeProjeto, PrioridadeProjeto } from "@/types/projeto";
 import {
+  PRIORIDADE_CONFIG,
   COMPLEXIDADE_CONFIG,
 } from "@/types/projeto";
 
 /* ── Badges Sólidos Suaves ─────────────────────────────────────────────── */
 
-const PRIORIDADE_PILL: Record<ComplexidadeProjeto, string> = {
-  baixa: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800",
-  media: "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800/50",
-  alta: "bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-900/40 dark:text-rose-400 dark:border-rose-800/50",
-};
+// Removido PRIORIDADE_PILL, usando PRIORIDADE_CONFIG do types
 
 const STATUS_PILL: Record<StatusProjeto, string> = {
   "Em elaboração": "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800/50",
@@ -300,7 +297,8 @@ export function ProjetoRow({
   onEditProjeto,
   onArtefatoClick,
 }: ProjetoRowProps) {
-  const complexidade = COMPLEXIDADE_CONFIG[projeto.complexidade];
+  const prioridade = PRIORIDADE_CONFIG[projeto.prioridade] ?? PRIORIDADE_CONFIG["media"];
+  const complexidade = COMPLEXIDADE_CONFIG[projeto.complexidade] ?? COMPLEXIDADE_CONFIG["Simples"];
 
   return (
     <tr className="group border-b border-slate-100 transition-colors hover:bg-slate-50/60 dark:border-slate-800 dark:hover:bg-slate-800/30">
@@ -345,7 +343,18 @@ export function ProjetoRow({
       <td className="px-4 py-3.5 align-middle">
         <div className="flex items-center justify-center">
           <span
-            className={`inline-block border rounded-full py-0.5 px-2.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${PRIORIDADE_PILL[projeto.complexidade]}`}
+            className={`inline-block rounded-full py-0.5 px-2.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${prioridade.cls}`}
+          >
+            {prioridade.label}
+          </span>
+        </div>
+      </td>
+
+      {/* COMPLEXIDADE */}
+      <td className="px-4 py-3.5 align-middle">
+        <div className="flex items-center justify-center">
+          <span
+            className={`inline-block rounded-full py-0.5 px-2.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${complexidade.cls}`}
           >
             {complexidade.label}
           </span>

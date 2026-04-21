@@ -98,7 +98,8 @@ export default function NovoProjetoPage() {
     defaultValues: {
       nome: "",
       processo_sei: "",
-      complexidade: "media",
+      prioridade: "media",
+      complexidade: "Simples",
       catmat: "",
       catser: "",
       integrante_requisitante_id: 0,
@@ -221,11 +222,19 @@ export default function NovoProjetoPage() {
               />
             </Field>
 
-            <Field label="Complexidade" required error={errors.complexidade?.message}>
-              <select {...register("complexidade")} className={selectCls}>
+            <Field label="Prioridade" required error={errors.prioridade?.message}>
+              <select {...register("prioridade")} className={selectCls}>
                 <option value="baixa">Baixa</option>
                 <option value="media">Média</option>
                 <option value="alta">Alta</option>
+              </select>
+            </Field>
+
+            <Field label="Complexidade" required error={errors.complexidade?.message}>
+              <select {...register("complexidade")} className={selectCls}>
+                <option value="Simples">Simples</option>
+                <option value="Intermediária">Intermediária</option>
+                <option value="Complexa">Complexa</option>
               </select>
             </Field>
 

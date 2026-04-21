@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   ClipboardList,
   ChevronDown,
@@ -14,7 +15,6 @@ import {
   Trash2,
   Settings,
 } from "lucide-react";
-import { NovoItemPaccModal } from "@/components/pacc/NovoItemPaccModal";
 import { EditarItemPaccModal } from "@/components/pacc/EditarItemPaccModal";
 import { ExcluirItemPaccDialog } from "@/components/pacc/ExcluirItemPaccDialog";
 import { ToastContainer, showToast } from "@/components/ui/Toast";
@@ -198,7 +198,6 @@ export default function PaccPage() {
 
   // Modais
   const [fetchKey, setFetchKey] = useState(0);
-  const [showNovoModal, setShowNovoModal] = useState(false);
   const [showNovoExercicioModal, setShowNovoExercicioModal] = useState(false);
   const [editandoItem, setEditandoItem] = useState<PaccItemComAcao | PaccItem | null>(null);
   const [excluindoItem, setExcluindoItem] = useState<PaccItemComAcao | PaccItem | null>(null);
@@ -331,17 +330,28 @@ export default function PaccPage() {
           )}
 
           {/* Botão primário: Novo Item */}
-          <button
-            onClick={() => setShowNovoModal(true)}
-            disabled={!painel || painel.revisoes.length === 0}
-            className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-primary px-4
-                       text-sm font-semibold text-white shadow-lg shadow-brand-primary/25
-                       transition-all hover:bg-brand-primary-hover hover:shadow-xl
-                       hover:shadow-brand-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus size={15} />
-            Novo Item
-          </button>
+          {painel && painel.revisoes.length > 0 ? (
+            <Link
+              href={`/planejamento/pacc/novo?exercicioId=${selectedExercicioId}`}
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-primary px-4
+                         text-sm font-semibold text-white shadow-lg shadow-brand-primary/25
+                         transition-all hover:bg-brand-primary-hover hover:shadow-xl
+                         hover:shadow-brand-primary/30"
+            >
+              <Plus size={15} />
+              Novo Item
+            </Link>
+          ) : (
+            <button
+              disabled
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-brand-primary px-4
+                         text-sm font-semibold text-white shadow-lg shadow-brand-primary/25
+                         opacity-50 cursor-not-allowed"
+            >
+              <Plus size={15} />
+              Novo Item
+            </button>
+          )}
 
           {/* Dropdown ⚙️ */}
           <AdminDropdown
@@ -589,14 +599,7 @@ export default function PaccPage() {
         />
       )}
 
-      {showNovoModal && painel && selectedExercicioId && (
-        <NovoItemPaccModal
-          exercicioId={selectedExercicioId}
-          revisoes={painel.revisoes}
-          onClose={() => setShowNovoModal(false)}
-          onSuccess={refresh}
-        />
-      )}
+
 
       {editandoItem && painel && (
         <EditarItemPaccModal

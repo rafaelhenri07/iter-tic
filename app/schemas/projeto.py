@@ -17,7 +17,6 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.projeto import (
-    ComplexidadeProjetoEnum,
     StatusProjetoEnum,
     TipoArtefatoEnum,
     StatusArtefatoEnum,
@@ -193,7 +192,14 @@ class ProjetoBase(BaseModel):
         ..., max_length=50,
         examples=["00052-00032300/2024-09"],
     )
-    complexidade: ComplexidadeProjetoEnum = ComplexidadeProjetoEnum.MEDIA
+    prioridade: str = Field(
+        default="media",
+        examples=["baixa", "media", "alta"]
+    )
+    complexidade: str = Field(
+        default="Simples",
+        examples=["Simples", "Intermediária", "Complexa"]
+    )
     catmat: Optional[str] = Field(None, max_length=50, examples=["443811"])
     catser: Optional[str] = Field(None, max_length=50, examples=["27502"])
 
@@ -239,7 +245,8 @@ class ProjetoUpdate(BaseModel):
     """Atualização parcial de projeto."""
     nome: Optional[str] = Field(None, min_length=1, max_length=500)
     processo_sei: Optional[str] = Field(None, max_length=50)
-    complexidade: Optional[ComplexidadeProjetoEnum] = None
+    prioridade: Optional[str] = None
+    complexidade: Optional[str] = None
     catmat: Optional[str] = Field(None, max_length=50)
     catser: Optional[str] = Field(None, max_length=50)
     status: Optional[StatusProjetoEnum] = None
@@ -389,7 +396,8 @@ class ProjetoListagemResponse(BaseModel):
     id: int
     nome: str
     processo_sei: str
-    complexidade: ComplexidadeProjetoEnum
+    prioridade: str
+    complexidade: str
     status: StatusProjetoEnum
     criado_em: datetime
 

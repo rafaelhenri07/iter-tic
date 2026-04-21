@@ -1,16 +1,44 @@
 /* ──────────────────────────────────────────────────────────────────────────
  * ITER TIC — API Client
+ *
+ * Todas as requisições incluem automaticamente o token JWT do cookie
+ * e redirecionam para /login quando recebem 401 (sessão expirada).
  * ────────────────────────────────────────────────────────────────────────── */
 
+import Cookies from "js-cookie";
 import type { ComentarioArtefato } from "@/types/projeto";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
+/**
+ * Retorna os headers de autenticação com o token JWT.
+ * Se não houver token, retorna headers vazios (a API retornará 401).
+ */
+function getAuthHeaders(): Record<string, string> {
+  const token = Cookies.get("itertic_token");
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
+/**
+ * Trata respostas 401 (não autorizado) removendo cookies e
+ * redirecionando para a tela de login.
+ */
+function handleUnauthorized(res: Response): void {
+  if (res.status === 401 && typeof window !== "undefined") {
+    Cookies.remove("itertic_token");
+    Cookies.remove("itertic_user");
+    window.location.href = "/login";
+  }
+}
+
 async function fetcher<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     cache: "no-store",
+    headers: { ...getAuthHeaders() },
   });
   if (!res.ok) {
+    handleUnauthorized(res);
     throw new Error(`API error ${res.status}: ${res.statusText}`);
   }
   return res.json() as Promise<T>;
@@ -19,10 +47,11 @@ async function fetcher<T>(path: string): Promise<T> {
 async function poster<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
+    handleUnauthorized(res);
     const detail = await res.text().catch(() => res.statusText);
     throw new Error(`API error ${res.status}: ${detail}`);
   }
@@ -32,10 +61,11 @@ async function poster<T>(path: string, body: unknown): Promise<T> {
 async function patcher<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
+    handleUnauthorized(res);
     const detail = await res.text().catch(() => res.statusText);
     throw new Error(`API error ${res.status}: ${detail}`);
   }
@@ -87,7 +117,7 @@ export async function atualizarAcaoPdtic(
     `${API_BASE}/pdtic/acoes/${acaoId}?revisao_id=${revisaoId}`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       body: JSON.stringify(payload),
     }
   );
@@ -104,7 +134,7 @@ export async function excluirAcaoPdtic(
 ): Promise<PdticAcao> {
   const res = await fetch(`${API_BASE}/pdtic/acoes/${acaoId}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({ revisao_exclusao_id: revisaoExclusaoId }),
   });
   if (!res.ok) {
@@ -161,7 +191,7 @@ export async function atualizarItemPacc(
     `${API_BASE}/pacc/itens/${itemId}?revisao_id=${revisaoId}`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       body: JSON.stringify(payload),
     }
   );
@@ -178,7 +208,7 @@ export async function excluirItemPacc(
 ): Promise<PaccItem> {
   const res = await fetch(`${API_BASE}/pacc/itens/${itemId}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({ revisao_exclusao_id: revisaoExclusaoId }),
   });
   if (!res.ok) {
@@ -244,6 +274,7 @@ export async function atualizarServidor(
 export async function excluirServidor(id: number): Promise<void> {
   const res = await fetch(`${API_BASE}/projetos/servidores/${id}`, {
     method: "DELETE",
+    headers: { ...getAuthHeaders() },
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
@@ -265,7 +296,7 @@ export async function atualizarArtefato(
     `${API_BASE}/projetos/artefatos/${artefatoId}`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       body: JSON.stringify(payload),
     }
   );
@@ -433,7 +464,27 @@ export async function atualizarFabricante(
 }
 
 export async function excluirFabricante(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/fabricantes/${id}`, { method: "DELETE" });
+  const res = await fetch(`${API_BASE}/fabricantes/${id}`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
   if (!res.ok) throw new Error(`API error ${res.status}`);
+}
+
+/* ── CONFIGURAÇÕES (White Label) ───────────────────────────────────────── */
+
+export interface Configuracao {
+  id: number;
+  nome_orgao: string;
+  cor_primaria: string;
+  logo_url: string | null;
+}
+
+export async function fetchConfiguracao(): Promise<Configuracao> {
+  return fetcher<Configuracao>("/configuracoes");
+}
+
+export async function updateConfiguracao(payload: Partial<Configuracao>): Promise<Configuracao> {
+  return patcher<Configuracao>("/configuracoes", payload);
 }
 
