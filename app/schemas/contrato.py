@@ -54,12 +54,42 @@ class _ServidorResumo(BaseModel):
     matricula: str
 
 
-class _EquipeFiscalizacao(BaseModel):
-    """Equipe completa de fiscalização do contrato."""
-    gestor: Optional[_ServidorResumo] = None
-    fiscal_requisitante: Optional[_ServidorResumo] = None
-    fiscal_tecnico: Optional[_ServidorResumo] = None
-    fiscal_administrativo: Optional[_ServidorResumo] = None
+# ── Schemas de Equipe (novo modelo: Titular + Substitutos) ──────────────
+
+class EquipePapelInput(BaseModel):
+    """Entrada para um papel específico da equipe."""
+    titular_id: Optional[int] = None
+    substitutos_ids: list[int] = []
+
+
+class EquipeInput(BaseModel):
+    """Entrada completa da equipe de fiscalização."""
+    gestor: Optional[EquipePapelInput] = None
+    fiscal_requisitante: Optional[EquipePapelInput] = None
+    fiscal_tecnico: Optional[EquipePapelInput] = None
+    fiscal_administrativo: Optional[EquipePapelInput] = None
+
+
+class EquipeMembroResponse(BaseModel):
+    """Um membro individual da equipe de fiscalização (response)."""
+    id: int
+    papel: str
+    is_titular: bool
+    servidor: _ServidorResumo
+
+
+class EquipePapelResponse(BaseModel):
+    """Resposta agrupada de um papel (titular + substitutos)."""
+    titular: Optional[_ServidorResumo] = None
+    substitutos: list[_ServidorResumo] = []
+
+
+class EquipeFiscalizacaoResponse(BaseModel):
+    """Equipe completa de fiscalização (response)."""
+    gestor: Optional[EquipePapelResponse] = None
+    fiscal_requisitante: Optional[EquipePapelResponse] = None
+    fiscal_tecnico: Optional[EquipePapelResponse] = None
+    fiscal_administrativo: Optional[EquipePapelResponse] = None
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -103,7 +133,7 @@ class ContratoCreate(BaseModel):
         ..., min_length=1, max_length=500,
         examples=["Tech Solutions Ltda."],
     )
-    fabricante: Optional[str] = Field(None, max_length=300, examples=["Cisco"])
+    fabricante_id: Optional[int] = Field(None, description="ID do fabricante (FK para tabela fabricantes)")
     tipo_contrato: TipoContratoEnum
     quantidade: int = Field(..., ge=1, examples=[50])
     tecnologia_utilizada: Optional[str] = Field(
@@ -127,11 +157,8 @@ class ContratoCreate(BaseModel):
     situacao_atual: SituacaoContratoEnum = SituacaoContratoEnum.VIGENTE
     observacoes: Optional[str] = None
 
-    # Equipe de fiscalização (IDs)
-    gestor_id: Optional[int] = None
-    fiscal_requisitante_id: Optional[int] = None
-    fiscal_tecnico_id: Optional[int] = None
-    fiscal_administrativo_id: Optional[int] = None
+    # Equipe de fiscalização (novo formato: Titular + Substitutos)
+    equipe: Optional[EquipeInput] = None
 
     @field_validator("numero_contrato", mode="before")
     @classmethod
@@ -166,7 +193,7 @@ class ContratoUpdate(BaseModel):
 
     numero_contrato: Optional[str] = Field(None, max_length=20)
     empresa_contratada: Optional[str] = Field(None, min_length=1, max_length=500)
-    fabricante: Optional[str] = Field(None, max_length=300)
+    fabricante_id: Optional[int] = None
     tipo_contrato: Optional[TipoContratoEnum] = None
     quantidade: Optional[int] = Field(None, ge=1)
     tecnologia_utilizada: Optional[str] = Field(None, max_length=500)
@@ -181,10 +208,8 @@ class ContratoUpdate(BaseModel):
     situacao_atual: Optional[SituacaoContratoEnum] = None
     observacoes: Optional[str] = None
 
-    gestor_id: Optional[int] = None
-    fiscal_requisitante_id: Optional[int] = None
-    fiscal_tecnico_id: Optional[int] = None
-    fiscal_administrativo_id: Optional[int] = None
+    # Equipe (novo formato)
+    equipe: Optional[EquipeInput] = None
 
     @field_validator("numero_contrato", mode="before")
     @classmethod
@@ -213,7 +238,8 @@ class ContratoResponse(BaseModel):
     numero_contrato: str
     projeto_id: int
     empresa_contratada: str
-    fabricante: Optional[str] = None
+    fabricante_id: Optional[int] = None
+    fabricante_nome: Optional[str] = None
     tipo_contrato: TipoContratoEnum
     quantidade: int
     tecnologia_utilizada: Optional[str] = None
@@ -231,19 +257,13 @@ class ContratoResponse(BaseModel):
     criado_em: datetime
     atualizado_em: datetime
 
-    # Equipe IDs
-    gestor_id: Optional[int] = None
-    fiscal_requisitante_id: Optional[int] = None
-    fiscal_tecnico_id: Optional[int] = None
-    fiscal_administrativo_id: Optional[int] = None
-
     # Computed field
     valor_total: Decimal = Field(default=Decimal(0))
 
     # Aninhados (populados na rota)
     projeto_origem: Optional[_ProjetoOrigemResumo] = None
     acoes_pdtic_vinculadas: list[_AcaoPdticResumo] = []
-    equipe: Optional[_EquipeFiscalizacao] = None
+    equipe: Optional[EquipeFiscalizacaoResponse] = None
     historico: list[HistoricoContratoResponse] = []
 
 

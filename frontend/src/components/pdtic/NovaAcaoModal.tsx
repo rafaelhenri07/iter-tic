@@ -7,13 +7,6 @@ import {
   X,
   Loader2,
   Save,
-  Hash,
-  Building2,
-  FileText,
-  Tag,
-  Gauge,
-  Calendar,
-  DollarSign,
   AlertCircle,
 } from "lucide-react";
 import type { PdticRevisao } from "@/types/pdtic";
@@ -58,19 +51,16 @@ function FormField({
   label,
   error,
   required,
-  icon,
   children,
 }: {
   label: string;
   error?: string;
   required?: boolean;
-  icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div>
       <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-foreground-muted">
-        {icon}
         {label}
         {required && <span className="text-red-500">*</span>}
       </label>
@@ -119,7 +109,7 @@ export function NovaAcaoModal({
     resolver: zodResolver(acaoPdticSchema),
     defaultValues: {
       periodo_id: periodoId,
-      revisao_inclusao_id: revisoes.length > 0 ? revisoes[revisoes.length - 1].id : undefined,
+      revisao_inclusao_id: revisoes.length > 0 ? revisoes[0].id : undefined,
       codigo_acao: "",
       departamento: "",
       unidade_demandante: "",
@@ -191,13 +181,11 @@ export function NovaAcaoModal({
 
   return (
     <>
-      {/* Overlay */}
       <div
         className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
         onClick={handleClose}
       />
 
-      {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-8 sm:pt-16">
         <div
           className="relative w-full max-w-3xl rounded-2xl border border-border
@@ -209,11 +197,8 @@ export function NovaAcaoModal({
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
             <div>
               <h2 className="text-lg font-bold text-foreground">
-                Nova Ação PDTIC
+                Nova Ação PDTIC {anosRange.length > 0 ? `${anosRange[0]} - ${anosRange[anosRange.length - 1]}` : ""}
               </h2>
-              <p className="text-xs text-foreground-muted">
-                Preencha os dados para registrar uma nova ação no planejamento.
-              </p>
             </div>
             <button
               onClick={handleClose}
@@ -226,387 +211,199 @@ export function NovaAcaoModal({
 
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-6">
-            {/* ── Seção 1: Identificação ────────────────────────────── */}
-            <div>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
-                <Hash size={14} className="text-brand-primary" />
-                Identificação
-              </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <FormField
-                  label="Código"
-                  error={errors.codigo_acao?.message}
-                  required
-                  icon={<Hash size={10} />}
-                >
-                  <input
-                    {...register("codigo_acao")}
-                    placeholder="Ex: A6"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
-
-                <FormField
-                  label="Necessidade"
-                  error={errors.necessidade?.message}
-                  required
-                  icon={<Tag size={10} />}
-                >
-                  <input
-                    {...register("necessidade")}
-                    placeholder="Ex: N6"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
-
-                <FormField
-                  label="Revisão de Inclusão"
-                  error={errors.revisao_inclusao_id?.message}
-                  required
-                  icon={<FileText size={10} />}
-                >
-                  <select
-                    {...register("revisao_inclusao_id", { valueAsNumber: true })}
-                    className={selectCls}
-                    disabled={submitting}
-                  >
-                    <option value="">Selecione...</option>
-                    {revisoes.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        Rev {r.numero_revisao}
-                        {r.descricao ? ` — ${r.descricao}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              </div>
-            </div>
-
-            {/* ── Seção 2: Unidades ────────────────────────────────── */}
-            <div>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
-                <Building2 size={14} className="text-brand-primary" />
-                Unidades
-              </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <FormField
-                  label="Departamento"
-                  error={errors.departamento?.message}
-                  required
-                  icon={<Building2 size={10} />}
-                >
-                  <input
-                    {...register("departamento")}
-                    placeholder="Ex: DTI"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
-
-                <FormField
-                  label="Unidade Demandante"
-                  error={errors.unidade_demandante?.message}
-                  required
-                  icon={<Building2 size={10} />}
-                >
-                  <input
-                    {...register("unidade_demandante")}
-                    placeholder="Ex: Divisão de Infraestrutura"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
-
-                <FormField
-                  label="Unidade Responsável"
-                  error={errors.unidade_responsavel?.message}
-                  required
-                  icon={<Building2 size={10} />}
-                >
-                  <input
-                    {...register("unidade_responsavel")}
-                    placeholder="Ex: Seção de Redes"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
-              </div>
-            </div>
-
-            {/* ── Seção 3: Descrição ───────────────────────────────── */}
-            <div>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
-                <FileText size={14} className="text-brand-primary" />
-                Descrição e Classificação
-              </h3>
-
-              <FormField
-                label="Descrição da Ação"
-                error={errors.descricao?.message}
-                required
-                icon={<FileText size={10} />}
-              >
-                <textarea
-                  {...register("descricao")}
-                  rows={3}
-                  placeholder="Descreva a ação de forma clara e objetiva..."
-                  className={`${inputCls} h-auto py-2 resize-none`}
-                  disabled={submitting}
-                />
+            
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <FormField label="Código" error={errors.codigo_acao?.message} required>
+                <input {...register("codigo_acao")} placeholder="Ex: A6" className={inputCls} disabled={submitting} />
               </FormField>
 
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormField
-                  label="Tipo de Necessidade"
-                  error={errors.tipo_necessidade?.message}
-                  required
-                  icon={<Tag size={10} />}
-                >
-                  <select
-                    {...register("tipo_necessidade")}
-                    className={selectCls}
-                    disabled={submitting}
-                  >
-                    <option value="">Selecione...</option>
-                    {TIPOS_NECESSIDADE.map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
+              <FormField label="Necessidade" error={errors.necessidade?.message} required>
+                <input {...register("necessidade")} placeholder="Ex: N6" className={inputCls} disabled={submitting} />
+              </FormField>
 
-                <FormField
-                  label="Status"
-                  error={errors.status?.message}
-                  required
-                  icon={<Tag size={10} />}
-                >
-                  <select
-                    {...register("status")}
-                    className={selectCls}
-                    disabled={submitting}
-                  >
-                    {STATUS_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-              </div>
+              <FormField label="Inclusão" error={errors.revisao_inclusao_id?.message} required>
+                <select {...register("revisao_inclusao_id", { valueAsNumber: true })} className={selectCls} disabled={submitting}>
+                  {revisoes.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.numero_revisao === 0 ? "Aprovação Inicial" : (r.descricao || `Revisão ${r.numero_revisao}`)}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="Departamento" error={errors.departamento?.message} required>
+                <input {...register("departamento")} placeholder="Ex: DTI" className={inputCls} disabled={submitting} />
+              </FormField>
+
+              <FormField label="Unidade Demandante" error={errors.unidade_demandante?.message} required>
+                <input {...register("unidade_demandante")} placeholder="Ex: Divisão de Infraestrutura" className={inputCls} disabled={submitting} />
+              </FormField>
+
+              <FormField label="Unidade Responsável" error={errors.unidade_responsavel?.message} required>
+                <input {...register("unidade_responsavel")} placeholder="Ex: Seção de Redes" className={inputCls} disabled={submitting} />
+              </FormField>
             </div>
 
-            {/* ── Seção 4: Metas e GUT ─────────────────────────────── */}
-            <div>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
-                <Gauge size={14} className="text-brand-primary" />
-                Metas, Indicadores e GUT
-              </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <FormField
-                  label="Meta"
-                  error={errors.meta?.message}
-                  icon={<Tag size={10} />}
-                >
-                  <input
-                    {...register("meta")}
-                    placeholder="Ex: 100% até 2025"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
+            <FormField label="Descrição da Ação" error={errors.descricao?.message} required>
+              <textarea
+                {...register("descricao")}
+                rows={2}
+                placeholder="Descreva a ação de forma clara e objetiva..."
+                className={`${inputCls} h-auto py-2 resize-none`}
+                disabled={submitting}
+              />
+            </FormField>
 
-                <FormField
-                  label="Indicador"
-                  error={errors.indicador?.message}
-                  icon={<Gauge size={10} />}
-                >
-                  <input
-                    {...register("indicador")}
-                    placeholder="Ex: % de avanço"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
+            <FormField label="Meta" error={errors.meta?.message}>
+              <textarea
+                {...register("meta")}
+                rows={2}
+                placeholder="Ex: Aprimorar a Estrutura de Rede..."
+                className={`${inputCls} h-auto py-2 resize-none`}
+                disabled={submitting}
+              />
+            </FormField>
 
-                <FormField
-                  label="Quantidade"
-                  error={errors.quantidade?.message}
-                  icon={<Hash size={10} />}
-                >
-                  <input
-                    {...register("quantidade")}
-                    placeholder="Ex: 24"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
+            <FormField label="Indicador" error={errors.indicador?.message}>
+              <textarea
+                {...register("indicador")}
+                rows={2}
+                placeholder="Ex: Índice de disponibilidade..."
+                className={`${inputCls} h-auto py-2 resize-none`}
+                disabled={submitting}
+              />
+            </FormField>
 
-                <FormField
-                  label="Total GUT (0–125)"
-                  error={errors.total_gut?.message}
-                  required
-                  icon={<Gauge size={10} />}
-                >
-                  <input
-                    type="number"
-                    {...register("total_gut", { valueAsNumber: true })}
-                    min={0}
-                    max={125}
-                    placeholder="0"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
-              </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField label="Tipo de Necessidade" error={errors.tipo_necessidade?.message} required>
+                <select {...register("tipo_necessidade")} className={selectCls} disabled={submitting}>
+                  <option value="">Selecione...</option>
+                  {TIPOS_NECESSIDADE.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="Status" error={errors.status?.message} required>
+                <select {...register("status")} className={selectCls} disabled={submitting}>
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </FormField>
             </div>
 
-            {/* ── Seção 5: Previsões ───────────────────────────────── */}
-            <div>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
-                <Calendar size={14} className="text-brand-primary" />
-                Previsões
-              </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormField
-                  label="Previsão de Contratação"
-                  error={errors.previsao_contratacao?.message}
-                  icon={<Calendar size={10} />}
-                >
-                  <input
-                    {...register("previsao_contratacao")}
-                    placeholder="MM/YYYY (ex: 06/2025)"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 border-t border-border pt-4 mt-4">
+              <FormField label="Quantidade" error={errors.quantidade?.message}>
+                <input {...register("quantidade")} placeholder="Ex: 24" className={inputCls} disabled={submitting} />
+              </FormField>
 
-                <FormField
-                  label="Previsão de Renovação"
-                  error={errors.previsao_renovacao?.message}
-                  icon={<Calendar size={10} />}
-                >
-                  <input
-                    {...register("previsao_renovacao")}
-                    placeholder="MM/YYYY (ex: 01/2028)"
-                    className={inputCls}
-                    disabled={submitting}
-                  />
-                </FormField>
-              </div>
+              <FormField label="Total GUT (0–125)" error={errors.total_gut?.message} required>
+                <input type="number" {...register("total_gut", { valueAsNumber: true })} min={0} max={125} placeholder="0" className={inputCls} disabled={submitting} />
+              </FormField>
             </div>
 
-            {/* ── Seção 6: Valores financeiros ─────────────────────── */}
-            <div>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground">
-                <DollarSign size={14} className="text-brand-primary" />
-                Valores Financeiros por Ano
-              </h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 border-t border-border pt-4 mt-4">
+              <FormField label="Previsão de Contratação" error={errors.previsao_contratacao?.message}>
+                <input {...register("previsao_contratacao")} placeholder="ex: 06/2025" className={inputCls} disabled={submitting} />
+              </FormField>
 
-              <div className="space-y-4">
-                {/* Investimento (Capital) */}
-                <div className="rounded-xl border border-border bg-background-secondary/50 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
-                      Investimento (Capital)
+              <FormField label="Previsão de Renovação" error={errors.previsao_renovacao?.message}>
+                <input {...register("previsao_renovacao")} placeholder="ex: 01/2028" className={inputCls} disabled={submitting} />
+              </FormField>
+            </div>
+
+            <div className="space-y-4 border-t border-border pt-4 mt-4">
+              {/* Investimento (Capital) */}
+              <div className="rounded-xl border border-border bg-background-secondary/50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+                    Investimento (Capital)
+                  </span>
+                  <span className="text-xs font-medium text-foreground-muted">
+                    Total:{" "}
+                    <span className="font-bold text-foreground">
+                      {totalInv.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
                     </span>
-                    <span className="text-xs font-medium text-foreground-muted">
-                      Total:{" "}
-                      <span className="font-bold text-foreground">
-                        {totalInv.toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {anosRange.map((ano) => (
-                      <div key={`inv-${ano}`}>
-                        <label className="mb-1 block text-[10px] font-medium text-foreground-muted">
-                          {ano}
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-foreground-muted">
-                            R$
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="0,00"
-                            value={investimento[String(ano)] ?? ""}
-                            onChange={(e) =>
-                              handleValorChange(
-                                "valores_investimento",
-                                String(ano),
-                                e.target.value
-                              )
-                            }
-                            className={`${inputCls} pl-9`}
-                            disabled={submitting}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  </span>
                 </div>
-
-                {/* Custeio */}
-                <div className="rounded-xl border border-border bg-background-secondary/50 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
-                      Custeio
-                    </span>
-                    <span className="text-xs font-medium text-foreground-muted">
-                      Total:{" "}
-                      <span className="font-bold text-foreground">
-                        {totalCus.toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    {anosRange.map((ano) => (
-                      <div key={`cus-${ano}`}>
-                        <label className="mb-1 block text-[10px] font-medium text-foreground-muted">
-                          {ano}
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-foreground-muted">
-                            R$
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="0,00"
-                            value={custeio[String(ano)] ?? ""}
-                            onChange={(e) =>
-                              handleValorChange(
-                                "valores_custeio",
-                                String(ano),
-                                e.target.value
-                              )
-                            }
-                            className={`${inputCls} pl-9`}
-                            disabled={submitting}
-                          />
-                        </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {anosRange.map((ano) => (
+                    <div key={`inv-${ano}`}>
+                      <label className="mb-1 block text-[10px] font-medium text-foreground-muted">
+                        {ano}
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-foreground-muted">
+                          R$
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0,00"
+                          value={investimento[String(ano)] ?? ""}
+                          onChange={(e) =>
+                            handleValorChange("valores_investimento", String(ano), e.target.value)
+                          }
+                          className={`${inputCls} pl-9`}
+                          disabled={submitting}
+                        />
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custeio */}
+              <div className="rounded-xl border border-border bg-background-secondary/50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+                    Custeio
+                  </span>
+                  <span className="text-xs font-medium text-foreground-muted">
+                    Total:{" "}
+                    <span className="font-bold text-foreground">
+                      {totalCus.toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                    </span>
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {anosRange.map((ano) => (
+                    <div key={`cus-${ano}`}>
+                      <label className="mb-1 block text-[10px] font-medium text-foreground-muted">
+                        {ano}
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-foreground-muted">
+                          R$
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0,00"
+                          value={custeio[String(ano)] ?? ""}
+                          onChange={(e) =>
+                            handleValorChange("valores_custeio", String(ano), e.target.value)
+                          }
+                          className={`${inputCls} pl-9`}
+                          disabled={submitting}
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* ── Rodapé do formulário ──────────────────────────────── */}
-            <div className="flex items-center justify-end gap-3 border-t border-border pt-5">
+            <div className="flex items-center justify-end gap-3 border-t border-border pt-5 mt-4">
               <button
                 type="button"
                 onClick={handleClose}

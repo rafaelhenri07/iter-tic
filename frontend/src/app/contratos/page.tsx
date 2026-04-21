@@ -1,22 +1,56 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import {
   FileSignature,
   Search,
   Plus,
-  Loader2,
   AlertCircle,
   Inbox,
   Filter,
+  Pencil,
 } from "lucide-react";
-import { ContratoCard } from "@/components/contratos/ContratoCard";
 import { NovoContratoModal } from "@/components/contratos/NovoContratoModal";
 import { DetalheContratoModal } from "@/components/contratos/DetalheContratoModal";
 import { ToastContainer } from "@/components/ui/Toast";
 import { fetchContratos, fetchContrato } from "@/lib/api";
 import { formatarMoedaBRL } from "@/lib/formatters";
-import type { ContratoListagem, ContratoResponse, SituacaoContrato } from "@/types/contrato";
+import type { ContratoListagem, ContratoResponse } from "@/types/contrato";
+import { CardListSkeleton } from "@/components/ui/Skeleton";
+
+/* ── Helpers ───────────────────────────────────────────────────────────── */
+
+function fmtDate(d: string | null): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("pt-BR");
+}
+
+const A_VENCER_DAYS = 180;
+
+function diasAteVencimento(dataFim: string): number {
+  const fim = new Date(dataFim + "T00:00:00");
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  return Math.ceil((fim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function isAVencer(c: ContratoListagem): boolean {
+  return c.situacao_atual === "Vigente" && diasAteVencimento(c.data_fim_vigencia) <= A_VENCER_DAYS && diasAteVencimento(c.data_fim_vigencia) > 0;
+}
+
+const SITUACAO_PILL: Record<string, string> = {
+  Vigente: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-400",
+  "A Vencer": "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
+  Extinto: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+  "Extinto, mas suporte vigente": "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+};
+
+const TIPO_PILL: Record<string, string> = {
+  "Aquisição": "bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+  "Serviço continuado": "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400",
+  "Subscrição": "bg-purple-50 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400",
+};
 
 /* ── Página ────────────────────────────────────────────────────────────── */
 
@@ -31,7 +65,6 @@ export default function ContratosPage() {
   const [filterSituacao, setFilterSituacao] = useState<string>("todos");
 
   // Modals
-  const [showNovo, setShowNovo] = useState(false);
   const [selectedContratoId, setSelectedContratoId] = useState<number | null>(null);
   const [editContratoData, setEditContratoData] = useState<ContratoResponse | null>(null);
 
@@ -81,7 +114,9 @@ export default function ContratosPage() {
     }
 
     // Filtro por situação
-    if (filterSituacao !== "todos") {
+    if (filterSituacao === "a_vencer") {
+      result = result.filter((c) => isAVencer(c));
+    } else if (filterSituacao !== "todos") {
       result = result.filter((c) => c.situacao_atual === filterSituacao);
     }
 
@@ -90,6 +125,7 @@ export default function ContratosPage() {
 
   // ── Métricas rápidas ──────────────────────────────────────────────────
   const totalVigentes = contratos.filter((c) => c.situacao_atual === "Vigente").length;
+  const totalAVencer = contratos.filter((c) => isAVencer(c)).length;
   const totalValor = contratos.reduce((sum, c) => sum + c.valor_total, 0);
 
   return (
@@ -110,13 +146,13 @@ export default function ContratosPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => setShowNovo(true)}
+        <Link
+          href="/execucao/contratos/novo"
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-xl hover:shadow-cyan-500/30 hover:brightness-110"
         >
           <Plus size={16} />
           Novo Contrato
-        </button>
+        </Link>
       </div>
 
       {/* Mock Banner */}
@@ -128,7 +164,7 @@ export default function ContratosPage() {
       )}
 
       {/* KPI Mini Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
         <div className="rounded-xl border border-border bg-background-card px-4 py-3">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
             Total de Contratos
@@ -151,6 +187,14 @@ export default function ContratosPage() {
           </div>
           <div className="mt-1 text-lg font-bold text-foreground font-mono">
             {formatarMoedaBRL(totalValor)}
+          </div>
+        </div>
+        <div className="rounded-xl border border-border bg-background-card px-4 py-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+            A Vencer ({'<'} 180 dias)
+          </div>
+          <div className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">
+            {totalAVencer}
           </div>
         </div>
         <div className="rounded-xl border border-border bg-background-card px-4 py-3">
@@ -187,18 +231,17 @@ export default function ContratosPage() {
             className="h-10 appearance-none rounded-xl border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-colors focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
           >
             <option value="todos">Todas as situações</option>
-            <option value="Vigente">✅ Vigente</option>
-            <option value="Extinto">⛔ Extinto</option>
-            <option value="Extinto, mas suporte vigente">⚠️ Ext. c/ suporte</option>
+            <option value="Vigente">Vigente</option>
+            <option value="a_vencer">A Vencer (180 dias)</option>
+            <option value="Extinto">Extinto</option>
+            <option value="Extinto, mas suporte vigente">Ext. c/ suporte</option>
           </select>
         </div>
       </div>
 
-      {/* Contratos Grid */}
+      {/* ── Data Table ────────────────────────────────────────────── */}
       {loading ? (
-        <div className="flex h-60 items-center justify-center">
-          <Loader2 size={28} className="animate-spin text-cyan-500" />
-        </div>
+        <CardListSkeleton cards={6} />
       ) : filtered.length === 0 ? (
         <div className="flex h-60 flex-col items-center justify-center rounded-xl border border-dashed border-border text-center">
           <Inbox size={36} className="text-foreground-muted mb-2" />
@@ -208,35 +251,121 @@ export default function ContratosPage() {
               : "Nenhum contrato encontrado com os filtros aplicados"}
           </p>
           {contratos.length === 0 && (
-            <button
-              onClick={() => setShowNovo(true)}
+            <Link
+              href="/execucao/contratos/novo"
               className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-4 py-2 text-xs font-bold text-cyan-700 transition-colors hover:bg-cyan-100 dark:bg-cyan-900/20 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
             >
               <Plus size={14} />
               Cadastrar primeiro contrato
-            </button>
+            </Link>
           )}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filtered.map((c) => (
-            <ContratoCard
-              key={c.id}
-              contrato={c}
-              onVerDetalhes={(id) => setSelectedContratoId(id)}
-              onEditar={handleEditar}
-            />
-          ))}
+        <div className="rounded-xl border border-border bg-background-card shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-slate-50/60 dark:bg-slate-800/40">
+                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Contrato e Fornecedor
+                </th>
+                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Projeto de Origem
+                </th>
+                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Vigência
+                </th>
+                <th className="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Valor Total
+                </th>
+                <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Status
+                </th>
+                <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {filtered.map((c) => (
+                <tr
+                  key={c.id}
+                  className="transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-800/20"
+                >
+                  {/* Contrato e Fornecedor */}
+                  <td className="px-5 py-3.5">
+                    <button
+                      onClick={() => setSelectedContratoId(c.id)}
+                      className="text-left"
+                    >
+                      <div className="text-sm font-semibold text-slate-800 hover:text-teal-600 hover:underline cursor-pointer transition-colors dark:text-slate-200">
+                        {c.numero_contrato}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {c.empresa_contratada}
+                      </div>
+                    </button>
+                  </td>
+
+                  {/* Projeto de Origem */}
+                  <td className="px-5 py-3.5">
+                    <span className="text-sm text-slate-700 dark:text-slate-300">
+                      {c.projeto_nome || "—"}
+                    </span>
+                  </td>
+
+                  {/* Vigência */}
+                  <td className="px-5 py-3.5">
+                    <span className="text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                      {fmtDate(c.data_assinatura)} a {fmtDate(c.data_fim_vigencia)}
+                    </span>
+                  </td>
+
+                  {/* Valor Total */}
+                  <td className="px-5 py-3.5 text-right">
+                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200 font-mono">
+                      {formatarMoedaBRL(c.valor_total)}
+                    </span>
+                  </td>
+
+                  {/* Status */}
+                  <td className="px-5 py-3.5 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      {(() => {
+                        const aVencer = isAVencer(c);
+                        const label = aVencer ? "A VENCER" : c.situacao_atual.toUpperCase();
+                        const pillCls = aVencer
+                          ? SITUACAO_PILL["A Vencer"]
+                          : (SITUACAO_PILL[c.situacao_atual] ?? "bg-slate-100 text-slate-600");
+                        return (
+                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${pillCls}`}>
+                            {label}
+                          </span>
+                        );
+                      })()}
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${TIPO_PILL[c.tipo_contrato] ?? "bg-slate-100 text-slate-600"}`}>
+                        {c.tipo_contrato.toUpperCase()}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Ações */}
+                  <td className="px-5 py-3.5 text-center">
+                    <button
+                      onClick={() => handleEditar(c.id)}
+                      className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-600 dark:hover:bg-teal-900/20"
+                      title="Editar contrato"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Modal Novo Contrato */}
-      {showNovo && (
-        <NovoContratoModal
-          onClose={() => setShowNovo(false)}
-          onSuccess={refresh}
-        />
-      )}
+      {/* Criação via página dedicada: /execucao/contratos/novo */}
 
       {/* Modal Detalhe do Contrato */}
       {selectedContratoId !== null && (

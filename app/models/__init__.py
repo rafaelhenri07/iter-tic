@@ -9,4 +9,6 @@ from app.models.projeto import (  # noqa: F401
     projeto_acao_pdtic,
     projeto_item_pacc,
 )
-from app.models.contrato import Contrato  # noqa: F401
+from app.models.contrato import Contrato, ContratoEquipe  # noqa: F401
+from app.models.fabricante import Fabricante  # noqa: F401
+

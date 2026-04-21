@@ -3,20 +3,27 @@ ITER TIC - Rotas do Módulo 3: Execução e Fiscalização (Contratos)
 
 Regra de Ouro: Um contrato SÓ PODE ser criado se o projeto_id referenciado
 estiver com status 'Licitação concluída'.
+
+Equipe de Fiscalização: cada papel (gestor, fiscal_requisitante,
+fiscal_tecnico, fiscal_administrativo) pode ter 1 Titular + N Substitutos,
+gerenciados via tabela contrato_equipe.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.contrato import (
     Contrato,
+    ContratoEquipe,
     ContratoHistorico,
+    PapelEquipeEnum,
+    SituacaoContratoEnum,
     TipoRegistroHistoricoEnum,
 )
 from app.models.projeto import Projeto, StatusProjetoEnum
@@ -25,6 +32,9 @@ from app.schemas.contrato import (
     ContratoListagemResponse,
     ContratoResponse,
     ContratoUpdate,
+    EquipeFiscalizacaoResponse,
+    EquipeMembroResponse,
+    EquipePapelResponse,
     HistoricoContratoResponse,
     ObservacaoContratoCreate,
 )
@@ -36,7 +46,7 @@ router = APIRouter(prefix="/contratos", tags=["Contratos e Fiscalização"])
 _FIELD_LABELS: dict[str, str] = {
     "numero_contrato": "Número do Contrato",
     "empresa_contratada": "Empresa Contratada",
-    "fabricante": "Fabricante",
+    "fabricante_id": "Fabricante",
     "tipo_contrato": "Tipo de Contrato",
     "quantidade": "Quantidade",
     "tecnologia_utilizada": "Tecnologia Utilizada",
@@ -47,10 +57,14 @@ _FIELD_LABELS: dict[str, str] = {
     "data_fim_vigencia": "Data Fim de Vigência",
     "situacao_atual": "Situação",
     "observacoes": "Observações",
-    "gestor_id": "Gestor",
-    "fiscal_requisitante_id": "Fiscal Requisitante",
-    "fiscal_tecnico_id": "Fiscal Técnico",
-    "fiscal_administrativo_id": "Fiscal Administrativo",
+}
+
+# ── Labels dos papéis para auditoria ───────────────────────────────────────
+_PAPEL_LABELS: dict[str, str] = {
+    "gestor": "Gestor",
+    "fiscal_requisitante": "Fiscal Requisitante",
+    "fiscal_tecnico": "Fiscal Técnico",
+    "fiscal_administrativo": "Fiscal Administrativo",
 }
 
 
@@ -68,6 +82,94 @@ def _format_value(v) -> str:
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  HELPERS DE EQUIPE                                                      ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+async def _salvar_equipe(
+    db: AsyncSession,
+    contrato_id: int,
+    equipe_input,
+) -> None:
+    """Cria registros ContratoEquipe a partir do EquipeInput."""
+    if equipe_input is None:
+        return
+
+    papel_map = {
+        "gestor": PapelEquipeEnum.GESTOR,
+        "fiscal_requisitante": PapelEquipeEnum.FISCAL_REQUISITANTE,
+        "fiscal_tecnico": PapelEquipeEnum.FISCAL_TECNICO,
+        "fiscal_administrativo": PapelEquipeEnum.FISCAL_ADMINISTRATIVO,
+    }
+
+    for campo, papel_enum in papel_map.items():
+        papel_input = getattr(equipe_input, campo, None)
+        if papel_input is None:
+            continue
+
+        # Titular
+        if papel_input.titular_id:
+            db.add(ContratoEquipe(
+                contrato_id=contrato_id,
+                servidor_id=papel_input.titular_id,
+                papel=papel_enum,
+                is_titular=True,
+            ))
+
+        # Substitutos
+        for sub_id in (papel_input.substitutos_ids or []):
+            db.add(ContratoEquipe(
+                contrato_id=contrato_id,
+                servidor_id=sub_id,
+                papel=papel_enum,
+                is_titular=False,
+            ))
+
+    await db.flush()
+
+
+async def _substituir_equipe(
+    db: AsyncSession,
+    contrato_id: int,
+    equipe_input,
+) -> None:
+    """Remove equipe existente e insere a nova."""
+    await db.execute(
+        delete(ContratoEquipe).where(ContratoEquipe.contrato_id == contrato_id)
+    )
+    await db.flush()
+    await _salvar_equipe(db, contrato_id, equipe_input)
+
+
+def _montar_equipe_response(membros: list[ContratoEquipe]) -> EquipeFiscalizacaoResponse:
+    """Agrupa membros por papel e monta o response estruturado."""
+    from collections import defaultdict
+    agrupado: dict[str, dict] = {}
+
+    for papel_enum in PapelEquipeEnum:
+        agrupado[papel_enum.value] = {"titular": None, "substitutos": []}
+
+    for m in membros:
+        srv = {
+            "id": m.servidor.id,
+            "nome": m.servidor.nome,
+            "cargo": m.servidor.cargo,
+            "matricula": m.servidor.matricula,
+        }
+        if m.is_titular:
+            agrupado[m.papel.value]["titular"] = srv
+        else:
+            agrupado[m.papel.value]["substitutos"].append(srv)
+
+    return EquipeFiscalizacaoResponse(
+        gestor=EquipePapelResponse(**agrupado["gestor"]),
+        fiscal_requisitante=EquipePapelResponse(**agrupado["fiscal_requisitante"]),
+        fiscal_tecnico=EquipePapelResponse(**agrupado["fiscal_tecnico"]),
+        fiscal_administrativo=EquipePapelResponse(**agrupado["fiscal_administrativo"]),
+    )
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  LISTAGEM (GET /contratos)                                             ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
@@ -77,19 +179,51 @@ def _format_value(v) -> str:
     response_model=list[ContratoListagemResponse],
     summary="Listar todos os contratos",
 )
-async def listar_contratos(db: AsyncSession = Depends(get_db)):
+async def listar_contratos(
+    situacao: str | None = Query(
+        None,
+        description=(
+            "Filtrar por situação. Valores aceitos: Vigente, Extinto, "
+            "'Extinto, mas suporte vigente', ou 'a_vencer' (vigentes com "
+            "data_fim_vigencia nos próximos 180 dias)."
+        ),
+    ),
+    db: AsyncSession = Depends(get_db),
+):
     stmt = (
         select(Contrato)
         .options(
             selectinload(Contrato.projeto),
-            selectinload(Contrato.gestor),
+            selectinload(Contrato.fabricante_rel),
+            selectinload(Contrato.equipe_membros).selectinload(ContratoEquipe.servidor),
         )
         .order_by(Contrato.criado_em.desc())
     )
+
+    # ── Filtro por situação ─────────────────────────────────────────────
+    if situacao == "a_vencer":
+        hoje = date.today()
+        limite = hoje + timedelta(days=180)
+        stmt = stmt.where(
+            Contrato.situacao_atual == SituacaoContratoEnum.VIGENTE,
+            Contrato.data_fim_vigencia > hoje,
+            Contrato.data_fim_vigencia <= limite,
+        )
+    elif situacao and situacao != "todos":
+        stmt = stmt.where(Contrato.situacao_atual == situacao)
+
     contratos = (await db.execute(stmt)).scalars().all()
 
-    return [
-        ContratoListagemResponse(
+    result = []
+    for c in contratos:
+        # Buscar nome do gestor titular na equipe
+        nome_gestor = None
+        for m in (c.equipe_membros or []):
+            if m.papel == PapelEquipeEnum.GESTOR and m.is_titular:
+                nome_gestor = m.servidor.nome
+                break
+
+        result.append(ContratoListagemResponse(
             id=c.id,
             numero_contrato=c.numero_contrato,
             empresa_contratada=c.empresa_contratada,
@@ -103,10 +237,10 @@ async def listar_contratos(db: AsyncSession = Depends(get_db)):
             quantidade=c.quantidade,
             projeto_nome=c.projeto.nome if c.projeto else None,
             projeto_processo_sei=c.projeto.processo_sei if c.projeto else None,
-            nome_gestor=c.gestor.nome if c.gestor else None,
-        )
-        for c in contratos
-    ]
+            nome_gestor=nome_gestor,
+        ))
+
+    return result
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -165,12 +299,17 @@ async def criar_contrato(
             ),
         )
 
+    # ── Separar equipe do payload principal ───────────────────────────────
+    contrato_data = payload.model_dump(exclude={"equipe"})
+    equipe_input = payload.equipe
+
     # ── Criar contrato ───────────────────────────────────────────────────
-    contrato = Contrato(
-        **payload.model_dump(),
-    )
+    contrato = Contrato(**contrato_data)
     db.add(contrato)
     await db.flush()
+
+    # ── Criar membros da equipe ──────────────────────────────────────────
+    await _salvar_equipe(db, contrato.id, equipe_input)
 
     # ── Registro de criação no histórico ─────────────────────────────────
     historico = ContratoHistorico(
@@ -206,6 +345,9 @@ async def atualizar_contrato(
 
     update_data = payload.model_dump(exclude_unset=True)
 
+    # ── Separar equipe dos demais campos ─────────────────────────────────
+    equipe_input = update_data.pop("equipe", None)
+
     # ── Detectar mudanças e gerar log ────────────────────────────────────
     mudancas: list[str] = []
     for campo, novo_valor in update_data.items():
@@ -222,11 +364,19 @@ async def atualizar_contrato(
                 f"{label}: {_format_value(valor_atual)} → {_format_value(novo_valor)}"
             )
 
-    # ── Aplicar mudanças ─────────────────────────────────────────────────
+    # ── Aplicar mudanças dos campos escalares ────────────────────────────
     for campo, valor in update_data.items():
         setattr(contrato, campo, valor)
 
     await db.flush()
+
+    # ── Atualizar equipe (se enviada) ────────────────────────────────────
+    if equipe_input is not None:
+        mudancas.append("Equipe de Fiscalização atualizada")
+        # Reconstruir o objeto EquipeInput do dict
+        from app.schemas.contrato import EquipeInput
+        equipe_obj = EquipeInput(**equipe_input)
+        await _substituir_equipe(db, contrato_id, equipe_obj)
 
     # ── Registrar no histórico (se houve mudança real) ───────────────────
     if mudancas:
@@ -300,11 +450,9 @@ async def _carregar_contrato_completo(
         select(Contrato)
         .options(
             selectinload(Contrato.projeto).selectinload(Projeto.acoes_pdtic),
-            selectinload(Contrato.gestor),
-            selectinload(Contrato.fiscal_requisitante),
-            selectinload(Contrato.fiscal_tecnico),
-            selectinload(Contrato.fiscal_administrativo),
+            selectinload(Contrato.equipe_membros).selectinload(ContratoEquipe.servidor),
             selectinload(Contrato.historico),
+            selectinload(Contrato.fabricante_rel),
         )
         .where(Contrato.id == contrato_id)
     )
@@ -315,18 +463,6 @@ async def _carregar_contrato_completo(
             detail=f"Contrato {contrato_id} não encontrado.",
         )
     return contrato
-
-
-def _servidor_resumo(servidor) -> dict | None:
-    """Converte um Servidor ORM em dict resumido, ou None."""
-    if not servidor:
-        return None
-    return {
-        "id": servidor.id,
-        "nome": servidor.nome,
-        "cargo": servidor.cargo,
-        "matricula": servidor.matricula,
-    }
 
 
 def _montar_response(contrato: Contrato) -> ContratoResponse:
@@ -350,12 +486,8 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
             for a in (projeto.acoes_pdtic or [])
         ]
 
-    equipe = {
-        "gestor": _servidor_resumo(contrato.gestor),
-        "fiscal_requisitante": _servidor_resumo(contrato.fiscal_requisitante),
-        "fiscal_tecnico": _servidor_resumo(contrato.fiscal_tecnico),
-        "fiscal_administrativo": _servidor_resumo(contrato.fiscal_administrativo),
-    }
+    # ── Equipe de Fiscalização (agrupada por papel) ──────────────────────
+    equipe = _montar_equipe_response(contrato.equipe_membros or [])
 
     historico = [
         HistoricoContratoResponse.model_validate(h)
@@ -367,7 +499,8 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
         numero_contrato=contrato.numero_contrato,
         projeto_id=contrato.projeto_id,
         empresa_contratada=contrato.empresa_contratada,
-        fabricante=contrato.fabricante,
+        fabricante_id=contrato.fabricante_id,
+        fabricante_nome=contrato.fabricante_rel.nome if contrato.fabricante_rel else None,
         tipo_contrato=contrato.tipo_contrato,
         quantidade=contrato.quantidade,
         tecnologia_utilizada=contrato.tecnologia_utilizada,
@@ -381,10 +514,6 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
         observacoes=contrato.observacoes,
         criado_em=contrato.criado_em,
         atualizado_em=contrato.atualizado_em,
-        gestor_id=contrato.gestor_id,
-        fiscal_requisitante_id=contrato.fiscal_requisitante_id,
-        fiscal_tecnico_id=contrato.fiscal_tecnico_id,
-        fiscal_administrativo_id=contrato.fiscal_administrativo_id,
         projeto_origem=projeto_origem,
         acoes_pdtic_vinculadas=acoes_pdtic,
         equipe=equipe,

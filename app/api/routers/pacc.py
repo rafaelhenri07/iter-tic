@@ -404,7 +404,6 @@ async def obter_painel_exercicio(
     else:  # "vigentes" (default)
         itens_ativos = [i for i in todos_itens if i.revisao_exclusao_id is None]
         itens_excluidos = []
-
     return PaccPainelResponse(
         exercicio=exercicio,
         revisoes=revisoes,

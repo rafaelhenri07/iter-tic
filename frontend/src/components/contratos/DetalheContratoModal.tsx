@@ -26,7 +26,7 @@ import {
   Cog,
 } from "lucide-react";
 import { fetchContrato, adicionarObservacaoContrato } from "@/lib/api";
-import type { ContratoResponse, ServidorResumo, HistoricoContrato } from "@/types/contrato";
+import type { ContratoResponse, ServidorResumo, EquipePapelResponse, HistoricoContrato } from "@/types/contrato";
 import {
   TIPO_CONTRATO_CONFIG,
   SITUACAO_CONTRATO_CONFIG,
@@ -77,34 +77,75 @@ function InfoField({
   );
 }
 
-/* ── ServidorField — exibe nome, cargo e matrícula ─────────────────────── */
+/* ── ServidorCard — exibe nome, cargo e matrícula com badge ─────────────── */
 
-function ServidorField({
-  label,
+function ServidorCard({
   servidor,
+  badge,
+  badgeCls,
+}: {
+  servidor: ServidorResumo;
+  badge: string;
+  badgeCls: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-background-secondary px-3 py-2 flex items-center justify-between gap-2">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-foreground">{servidor.nome}</div>
+        <div className="mt-0.5 flex items-center gap-3 text-xs text-foreground-muted">
+          <span>{servidor.cargo}</span>
+          <span className="font-mono text-[11px]">Mat. {servidor.matricula}</span>
+        </div>
+      </div>
+      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeCls}`}>
+        {badge}
+      </span>
+    </div>
+  );
+}
+
+/* ── EquipePapelField — exibe titular + substitutos de um papel ────────── */
+
+function EquipePapelField({
+  label,
+  papel,
   icon,
 }: {
   label: string;
-  servidor: ServidorResumo | null | undefined;
+  papel: EquipePapelResponse | null | undefined;
   icon?: React.ReactNode;
 }) {
+  const titular = papel?.titular;
+  const substitutos = papel?.substitutos ?? [];
+  const vazio = !titular && substitutos.length === 0;
+
   return (
-    <div>
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700/60 p-3 space-y-2 bg-slate-50/30 dark:bg-slate-900/20">
       <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
         {icon}
         {label}
       </div>
-      {servidor ? (
-        <div className="rounded-lg border border-border bg-background-secondary px-3 py-2">
-          <div className="text-sm font-semibold text-foreground">{servidor.nome}</div>
-          <div className="mt-0.5 flex items-center gap-3 text-xs text-foreground-muted">
-            <span>{servidor.cargo}</span>
-            <span className="font-mono text-[11px]">Mat. {servidor.matricula}</span>
-          </div>
-        </div>
-      ) : (
+      {vazio ? (
         <div className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-foreground-muted italic">
           Não designado
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {titular && (
+            <ServidorCard
+              servidor={titular}
+              badge="Titular"
+              badgeCls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+            />
+          )}
+          {substitutos.map((sub) => (
+            <ServidorCard
+              key={sub.id}
+              servidor={sub}
+              badge="Substituto"
+              badgeCls="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+            />
+          ))}
         </div>
       )}
     </div>
@@ -245,7 +286,7 @@ export function DetalheContratoModal({
                 />
                 <InfoField
                   label="Fabricante"
-                  value={contrato.fabricante}
+                  value={contrato.fabricante_nome}
                   icon={<Layers size={10} />}
                 />
                 <InfoField
@@ -381,24 +422,24 @@ export function DetalheContratoModal({
                 Equipe de Fiscalização
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <ServidorField
+                <EquipePapelField
                   label="Gestor do Contrato"
-                  servidor={contrato.equipe?.gestor}
+                  papel={contrato.equipe?.gestor}
                   icon={<User size={10} />}
                 />
-                <ServidorField
+                <EquipePapelField
                   label="Fiscal Requisitante"
-                  servidor={contrato.equipe?.fiscal_requisitante}
+                  papel={contrato.equipe?.fiscal_requisitante}
                   icon={<Users size={10} />}
                 />
-                <ServidorField
+                <EquipePapelField
                   label="Fiscal Técnico"
-                  servidor={contrato.equipe?.fiscal_tecnico}
+                  papel={contrato.equipe?.fiscal_tecnico}
                   icon={<Users size={10} />}
                 />
-                <ServidorField
+                <EquipePapelField
                   label="Fiscal Administrativo"
-                  servidor={contrato.equipe?.fiscal_administrativo}
+                  papel={contrato.equipe?.fiscal_administrativo}
                   icon={<Users size={10} />}
                 />
               </div>

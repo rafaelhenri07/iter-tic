@@ -7,12 +7,7 @@ import {
   X,
   Plus,
   Loader2,
-  Hash,
-  FileText,
-  DollarSign,
-  Package,
-  Link2,
-  Layers,
+  Trash2,
 } from "lucide-react";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
 import {
@@ -41,6 +36,7 @@ export function NovoItemPaccModal({
   const [submitting, setSubmitting] = useState(false);
   const [acoesPdtic, setAcoesPdtic] = useState<PdticAcao[]>([]);
   const [loadingAcoes, setLoadingAcoes] = useState(true);
+  const [seiList, setSeiList] = useState<string[]>([""]);
 
   const {
     register,
@@ -82,6 +78,12 @@ export function NovoItemPaccModal({
     loadAcoes();
   }, []);
 
+  useEffect(() => {
+    const joined = seiList.map((s) => s.trim()).filter(Boolean).join("\n");
+    setValue("processo_sei", joined);
+    // Let validation run on submit instead of every keystroke to avoid spam
+  }, [seiList, setValue]);
+
   const onSubmit = async (data: ItemPaccCreateFormData) => {
     setSubmitting(true);
     try {
@@ -113,17 +115,9 @@ export function NovoItemPaccModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 to-cyan-400 text-white">
-              <Plus size={16} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-foreground">
-                Novo Item PACC
-              </h2>
-              <p className="text-xs text-foreground-muted">
-                Incluir nova contratação no exercício
-              </p>
-            </div>
+            <h2 className="text-lg font-bold text-foreground">
+              Novo Item PACC
+            </h2>
           </div>
           <button
             onClick={onClose}
@@ -138,35 +132,13 @@ export function NovoItemPaccModal({
           {/* Ciclo de vida */}
           <div className="grid grid-cols-2 gap-4">
             <FormField
-              label="Revisão de Inclusão"
-              required
-              icon={<Layers size={10} />}
-              error={errors.revisao_inclusao_id?.message}
-            >
-              <select
-                {...register("revisao_inclusao_id", { valueAsNumber: true })}
-                className={selectCls}
-              >
-                {revisoes.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    Rev {r.numero_revisao}
-                    {r.data_aprovacao
-                      ? ` (${new Date(r.data_aprovacao + "T00:00:00").toLocaleDateString("pt-BR")})`
-                      : ""}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-
-            <FormField
               label="Ação PDTIC Vinculada"
               required
-              icon={<Link2 size={10} />}
               error={errors.acao_pdtic_id?.message}
             >
               <select
                 {...register("acao_pdtic_id", { valueAsNumber: true })}
-                className={`${selectCls} border-indigo-300 dark:border-indigo-700`}
+                className={selectCls}
               >
                 <option value={0}>
                   {loadingAcoes ? "Carregando ações..." : "Selecione uma ação PDTIC..."}
@@ -179,6 +151,25 @@ export function NovoItemPaccModal({
                 ))}
               </select>
             </FormField>
+
+            <FormField
+              label="Inclusão"
+              required
+              error={errors.revisao_inclusao_id?.message}
+            >
+              <select
+                {...register("revisao_inclusao_id", { valueAsNumber: true })}
+                className={selectCls}
+              >
+                {revisoes.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.numero_revisao === 0
+                      ? "Aprovação Inicial"
+                      : r.descricao || `Revisão ${r.numero_revisao}`}
+                  </option>
+                ))}
+              </select>
+            </FormField>
           </div>
 
           {/* Número + Quantidade */}
@@ -186,7 +177,6 @@ export function NovoItemPaccModal({
             <FormField
               label="Número do Item"
               required
-              icon={<Hash size={10} />}
               error={errors.numero_item?.message}
             >
               <input
@@ -199,7 +189,6 @@ export function NovoItemPaccModal({
             <FormField
               label="Quantidade"
               required
-              icon={<Package size={10} />}
               error={errors.quantidade?.message}
             >
               <input
@@ -214,7 +203,6 @@ export function NovoItemPaccModal({
           <FormField
             label="Descrição da Demanda"
             required
-            icon={<FileText size={10} />}
             error={errors.descricao_demanda?.message}
           >
             <textarea
@@ -230,7 +218,6 @@ export function NovoItemPaccModal({
             <FormField
               label="Valor Estimado (R$)"
               required
-              icon={<DollarSign size={10} />}
               error={errors.valor_estimado?.message}
             >
               <input
@@ -244,15 +231,41 @@ export function NovoItemPaccModal({
             </FormField>
 
             <FormField
-              label="Processo SEI"
-              icon={<FileText size={10} />}
+              label="Processos SEI"
               error={errors.processo_sei?.message}
             >
-              <input
-                {...register("processo_sei")}
-                placeholder="00052-00032300/2024-09"
-                className={inputCls}
-              />
+              <div className="space-y-2">
+                {seiList.map((sei, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      value={sei}
+                      onChange={(e) => {
+                        const newList = [...seiList];
+                        newList[idx] = e.target.value;
+                        setSeiList(newList);
+                      }}
+                      placeholder="Ex: 00052-00032300/2024-09"
+                      className={inputCls}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSeiList(seiList.filter((_, i) => i !== idx))}
+                      className="shrink-0 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg dark:hover:bg-red-900/20 transition-colors"
+                      title="Remover processo SEI"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSeiList([...seiList, ""])}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                >
+                  <Plus size={14} />
+                  Adicionar outro processo SEI
+                </button>
+              </div>
             </FormField>
           </div>
 

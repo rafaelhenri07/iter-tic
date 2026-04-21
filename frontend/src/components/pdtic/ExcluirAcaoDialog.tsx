@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Loader2, Trash2, X, FileText } from "lucide-react";
+import { Loader2, Trash2, X } from "lucide-react";
 import type { PdticAcao, PdticRevisao } from "@/types/pdtic";
-import { FormField, selectCls } from "@/components/ui/FormField";
+import { selectCls } from "@/components/ui/FormField";
 import { excluirAcaoPdtic } from "@/lib/api";
 import { showToast } from "@/components/ui/Toast";
 
@@ -15,6 +15,18 @@ interface ExcluirAcaoDialogProps {
   onSuccess?: () => void;
 }
 
+/* ── Helper ────────────────────────────────────────────────────────────── */
+
+function getRevisaoLabel(id: number, revisoes: PdticRevisao[]) {
+  const rev = revisoes.find((r) => r.id === id);
+  if (!rev) return `#${id}`;
+  return rev.numero_revisao === 0
+    ? "Aprovação Inicial"
+    : rev.descricao || `Revisão ${rev.numero_revisao}`;
+}
+
+/* ── Componente ────────────────────────────────────────────────────────── */
+
 export function ExcluirAcaoDialog({
   open,
   onClose,
@@ -25,9 +37,10 @@ export function ExcluirAcaoDialog({
   const [submitting, setSubmitting] = useState(false);
   const [selectedRevisaoId, setSelectedRevisaoId] = useState<number | "">("");
 
-  // Revisões válidas para exclusão
+  // Revisões válidas para exclusão: somente revisões POSTERIORES à de inclusão
+  const revisaoInclusao = revisoes.find((r) => r.id === acao.revisao_inclusao_id);
   const revisoesDisponiveis = revisoes.filter(
-    (r) => r.id !== acao.revisao_inclusao_id
+    (r) => r.numero_revisao > (revisaoInclusao?.numero_revisao ?? -1)
   );
 
   const handleConfirm = async () => {
@@ -41,7 +54,7 @@ export function ExcluirAcaoDialog({
       await excluirAcaoPdtic(acao.id, Number(selectedRevisaoId));
       showToast(
         "success",
-        `Ação ${acao.codigo_acao} excluída logicamente com sucesso.`
+        `Ação ${acao.codigo_acao} excluída com sucesso.`
       );
       onSuccess?.();
       onClose();
@@ -65,13 +78,11 @@ export function ExcluirAcaoDialog({
 
   return (
     <>
-      {/* Overlay */}
       <div
         className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
         onClick={handleClose}
       />
 
-      {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           className="relative w-full max-w-md rounded-2xl border border-border bg-background-card shadow-2xl"
@@ -80,19 +91,7 @@ export function ExcluirAcaoDialog({
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400">
-                <AlertTriangle size={16} />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-foreground">
-                  Excluir Ação
-                </h2>
-                <p className="text-xs text-foreground-muted">
-                  Exclusão lógica — a ação permanecerá no histórico.
-                </p>
-              </div>
-            </div>
+            <h2 className="text-lg font-bold text-foreground">Excluir Ação</h2>
             <button
               onClick={handleClose}
               disabled={submitting}
@@ -105,17 +104,17 @@ export function ExcluirAcaoDialog({
           {/* Body */}
           <div className="px-6 py-5 space-y-5">
             {/* Resumo da ação */}
-            <div className="rounded-lg border border-red-200 bg-red-50/50 p-4 dark:border-red-900 dark:bg-red-950/20">
+            <div className="rounded-xl border border-border bg-background-secondary/50 p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 text-sm font-bold text-red-600 dark:bg-red-900/50 dark:text-red-400">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100 text-xs font-bold text-red-600 dark:bg-red-900/50 dark:text-red-400">
                   {acao.codigo_acao}
-                </div>
+                </span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">
                     {acao.descricao}
                   </p>
                   <p className="text-xs text-foreground-muted">
-                    {acao.unidade_demandante} · GUT {acao.total_gut}/125
+                    Inclusão: {getRevisaoLabel(acao.revisao_inclusao_id, revisoes)}
                   </p>
                 </div>
               </div>
@@ -128,20 +127,14 @@ export function ExcluirAcaoDialog({
               <strong className="text-red-600 dark:text-red-400">
                 marcada como excluída
               </strong>{" "}
-              no histórico e aparecerá riscada na timeline.
+              e permanecerá no histórico para rastreabilidade.
             </p>
 
             {/* Seletor de revisão */}
-            <FormField
-              label="Revisão da Exclusão"
-              required
-              error={
-                selectedRevisaoId === ""
-                  ? undefined // Só mostra erro ao tentar confirmar
-                  : undefined
-              }
-              icon={<FileText size={10} />}
-            >
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+                Em qual revisão essa ação foi excluída? <span className="text-red-500">*</span>
+              </label>
               <select
                 value={selectedRevisaoId}
                 onChange={(e) =>
@@ -155,12 +148,13 @@ export function ExcluirAcaoDialog({
                 <option value="">Selecione a revisão...</option>
                 {revisoesDisponiveis.map((r) => (
                   <option key={r.id} value={r.id}>
-                    Rev {r.numero_revisao}
-                    {r.descricao ? ` — ${r.descricao}` : ""}
+                    {r.numero_revisao === 0
+                      ? "Aprovação Inicial"
+                      : r.descricao || `Revisão ${r.numero_revisao}`}
                   </option>
                 ))}
               </select>
-            </FormField>
+            </div>
           </div>
 
           {/* Footer */}
@@ -169,7 +163,7 @@ export function ExcluirAcaoDialog({
               type="button"
               onClick={handleClose}
               disabled={submitting}
-              className="h-10 rounded-lg border border-border px-5 text-sm font-medium text-foreground-muted transition-all hover:bg-background-secondary hover:text-foreground disabled:opacity-50"
+              className="h-9 rounded-lg border border-border px-5 text-sm font-medium text-foreground-muted transition-all hover:bg-background-secondary hover:text-foreground disabled:opacity-50"
             >
               Cancelar
             </button>
@@ -177,7 +171,7 @@ export function ExcluirAcaoDialog({
               type="button"
               onClick={handleConfirm}
               disabled={submitting || selectedRevisaoId === ""}
-              className="flex h-10 items-center gap-2 rounded-lg bg-red-600 px-6 text-sm font-semibold text-white shadow-lg shadow-red-600/25 transition-all hover:bg-red-700 hover:shadow-xl hover:shadow-red-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex h-9 items-center gap-2 rounded-lg bg-red-600 px-5 text-sm font-semibold text-white shadow-lg shadow-red-600/25 transition-all hover:bg-red-700 hover:shadow-xl hover:shadow-red-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <>

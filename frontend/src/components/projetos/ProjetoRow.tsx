@@ -14,18 +14,18 @@ import {
 /* ── Badges Sólidos Suaves ─────────────────────────────────────────────── */
 
 const PRIORIDADE_PILL: Record<ComplexidadeProjeto, string> = {
-  baixa: "bg-slate-100 text-slate-600 border-slate-200",
-  media: "bg-amber-50 text-amber-700 border-amber-200",
-  alta: "bg-rose-100 text-rose-700 border-rose-200",
+  baixa: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800",
+  media: "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800/50",
+  alta: "bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-900/40 dark:text-rose-400 dark:border-rose-800/50",
 };
 
 const STATUS_PILL: Record<StatusProjeto, string> = {
-  "Em elaboração": "bg-indigo-50 text-indigo-700 border-indigo-200",
-  "Pronto para contratação": "bg-blue-50 text-blue-700 border-blue-200",
-  "Em licitação": "bg-teal-50 text-teal-700 border-teal-200",
-  "Licitação concluída": "bg-emerald-100 text-emerald-800 border-emerald-200",
-  Suspenso: "bg-slate-100 text-slate-600 border-slate-200",
-  Cancelado: "bg-rose-100 text-rose-700 border-rose-200",
+  "Em elaboração": "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800/50",
+  "Pronto para contratação": "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800/50",
+  "Em licitação": "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300 dark:bg-fuchsia-900/40 dark:text-fuchsia-400 dark:border-fuchsia-800/50",
+  "Licitação concluída": "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800/50",
+  Suspenso: "bg-neutral-100 text-neutral-700 border-neutral-300 dark:bg-neutral-900/40 dark:text-neutral-400 dark:border-neutral-800/50",
+  Cancelado: "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800/50",
 };
 
 /* ── Mapeamento curto de tipos de artefato ─────────────────────────────── */

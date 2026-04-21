@@ -175,9 +175,9 @@ class ItemPacc(Base):
         comment="Valor estimado da contratação em R$",
     )
     processo_sei: Mapped[Optional[str]] = mapped_column(
-        String(50),
+        String(500),
         nullable=True,
-        comment='Número do processo SEI (ex: "00052-00032300/2024-09")',
+        comment='Números dos processos SEI (ex: "00052-00032300/2024-09")',
     )
 
     # ── Timestamps ──────────────────────────────────────────────────────────

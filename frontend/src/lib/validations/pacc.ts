@@ -43,12 +43,18 @@ export const itemPaccCreateSchema = z.object({
 
   processo_sei: z
     .string()
-    .regex(
-      RE_PROCESSO_SEI,
-      "Formato inválido. Use NNNNN-NNNNNNNN/YYYY-NN (ex: 00052-00032300/2024-09)."
-    )
     .optional()
-    .or(z.literal("")),
+    .or(z.literal(""))
+    .refine(
+      (val) => {
+        if (!val) return true;
+        const parts = val.split(/[,\s;]+/).filter((p) => p.trim() !== "");
+        return parts.every((p) => RE_PROCESSO_SEI.test(p));
+      },
+      {
+        message: "Formato inválido. Use NNNNN-NNNNNNNN/YYYY-NN.",
+      }
+    ),
 });
 
 export type ItemPaccCreateFormData = z.infer<typeof itemPaccCreateSchema>;
@@ -76,12 +82,18 @@ export const itemPaccUpdateSchema = z.object({
 
   processo_sei: z
     .string()
-    .regex(
-      RE_PROCESSO_SEI,
-      "Formato inválido. Use NNNNN-NNNNNNNN/YYYY-NN (ex: 00052-00032300/2024-09)."
-    )
     .optional()
-    .or(z.literal("")),
+    .or(z.literal(""))
+    .refine(
+      (val) => {
+        if (!val) return true;
+        const parts = val.split(/[,\s;]+/).filter((p) => p.trim() !== "");
+        return parts.every((p) => RE_PROCESSO_SEI.test(p));
+      },
+      {
+        message: "Formato inválido. Use NNNNN-NNNNNNNN/YYYY-NN.",
+      }
+    ),
 
   acao_pdtic_id: z
     .number({ error: "Ação PDTIC vinculada é obrigatória." })

@@ -117,9 +117,9 @@ class PaccItemBase(BaseModel):
     )
     processo_sei: Optional[str] = Field(
         None,
-        max_length=50,
-        examples=["00052-00032300/2024-09"],
-        description="Número do processo SEI.",
+        max_length=500,
+        examples=["00052-00032300/2024-09", "00052-00032300/2024-09\n00052-12345678/2025-10"],
+        description="Números dos processos SEI.",
     )
 
     # ── Validadores ─────────────────────────────────────────────────────────
@@ -127,15 +127,25 @@ class PaccItemBase(BaseModel):
     @field_validator("processo_sei", mode="before")
     @classmethod
     def validar_processo_sei(cls, v: Optional[str]) -> Optional[str]:
-        """Valida o formato do número do processo SEI, se fornecido."""
-        if v is None or v.strip() == "":
+        """Valida o formato de um ou mais números do processo SEI."""
+        if v is None or str(v).strip() == "":
             return None
-        if not _RE_PROCESSO_SEI.match(v.strip()):
-            raise ValueError(
-                f"Formato do processo SEI inválido: '{v}'. "
-                "Use o formato NNNNN-NNNNNNNN/YYYY-NN (ex: 00052-00032300/2024-09)."
-            )
-        return v.strip()
+            
+        raw_parts = [p.strip() for p in re.split(r'[,\s;]+', str(v)) if p.strip()]
+        
+        valid_seis = []
+        for part in raw_parts:
+            if not _RE_PROCESSO_SEI.match(part):
+                raise ValueError(
+                    f"Formato de processo SEI inválido: '{part}'. "
+                    "Use o formato NNNNN-NNNNNNNN/YYYY-NN."
+                )
+            valid_seis.append(part)
+            
+        if not valid_seis:
+            return None
+            
+        return "\n".join(valid_seis)
 
     @field_validator("valor_estimado", mode="before")
     @classmethod
@@ -173,7 +183,7 @@ class PaccItemUpdate(BaseModel):
     descricao_demanda: Optional[str] = Field(None, min_length=1)
     quantidade: Optional[str] = Field(None, min_length=1, max_length=100)
     valor_estimado: Optional[Decimal] = Field(None, ge=0)
-    processo_sei: Optional[str] = Field(None, max_length=50)
+    processo_sei: Optional[str] = Field(None, max_length=500)
     acao_pdtic_id: Optional[int] = None
 
 

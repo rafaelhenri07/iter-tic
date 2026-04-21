@@ -70,11 +70,32 @@ export interface ServidorResumo {
   matricula: string;
 }
 
+/* ── Equipe de Fiscalização (novo: Titular + Substitutos) ──────────────── */
+
+export interface EquipePapelResponse {
+  titular: ServidorResumo | null;
+  substitutos: ServidorResumo[];
+}
+
 export interface EquipeFiscalizacao {
-  gestor: ServidorResumo | null;
-  fiscal_requisitante: ServidorResumo | null;
-  fiscal_tecnico: ServidorResumo | null;
-  fiscal_administrativo: ServidorResumo | null;
+  gestor: EquipePapelResponse | null;
+  fiscal_requisitante: EquipePapelResponse | null;
+  fiscal_tecnico: EquipePapelResponse | null;
+  fiscal_administrativo: EquipePapelResponse | null;
+}
+
+/* ── Equipe de Fiscalização (input para criação/edição) ────────────────── */
+
+export interface EquipePapelInput {
+  titular_id: number | null;
+  substitutos_ids: number[];
+}
+
+export interface EquipeInput {
+  gestor?: EquipePapelInput;
+  fiscal_requisitante?: EquipePapelInput;
+  fiscal_tecnico?: EquipePapelInput;
+  fiscal_administrativo?: EquipePapelInput;
 }
 
 /* ── Histórico / Auditoria ─────────────────────────────────────────────── */
@@ -97,7 +118,8 @@ export interface ContratoResponse {
   numero_contrato: string;
   projeto_id: number;
   empresa_contratada: string;
-  fabricante: string | null;
+  fabricante_id: number | null;
+  fabricante_nome: string | null;
   tipo_contrato: TipoContrato;
   quantidade: number;
   tecnologia_utilizada: string | null;
@@ -115,11 +137,6 @@ export interface ContratoResponse {
 
   criado_em: string;
   atualizado_em: string;
-
-  gestor_id: number | null;
-  fiscal_requisitante_id: number | null;
-  fiscal_tecnico_id: number | null;
-  fiscal_administrativo_id: number | null;
 
   projeto_origem: ProjetoOrigemResumo | null;
   acoes_pdtic_vinculadas: AcaoPdticResumo[];
@@ -152,7 +169,7 @@ export interface ContratoCreatePayload {
   projeto_id: number;
   numero_contrato: string;
   empresa_contratada: string;
-  fabricante?: string | null;
+  fabricante_id?: number | null;
   tipo_contrato: TipoContrato;
   quantidade: number;
   tecnologia_utilizada?: string | null;
@@ -163,8 +180,5 @@ export interface ContratoCreatePayload {
   data_fim_vigencia: string;
   situacao_atual: SituacaoContrato;
   observacoes?: string | null;
-  gestor_id?: number | null;
-  fiscal_requisitante_id?: number | null;
-  fiscal_tecnico_id?: number | null;
-  fiscal_administrativo_id?: number | null;
+  equipe?: EquipeInput | null;
 }

@@ -10,9 +10,10 @@ import {
   Plus,
   GitBranchPlus,
   FolderPlus,
+  Pencil,
+  Trash2,
   Settings,
 } from "lucide-react";
-import { PaccItemCard } from "@/components/pacc/PaccItemCard";
 import { NovoItemPaccModal } from "@/components/pacc/NovoItemPaccModal";
 import { EditarItemPaccModal } from "@/components/pacc/EditarItemPaccModal";
 import { ExcluirItemPaccDialog } from "@/components/pacc/ExcluirItemPaccDialog";
@@ -30,6 +31,7 @@ import type {
   PaccItemComAcao,
   PaccItem,
 } from "@/types/pacc";
+import { PaccSkeleton } from "@/components/ui/Skeleton";
 
 /* ── Tipos ────────────────────────────────────────────────────────────── */
 
@@ -274,7 +276,7 @@ export default function PaccPage() {
   const totalExcluidos = painel?.itens_excluidos.length ?? 0;
   const totalRevisoes = painel?.revisoes.length ?? 0;
   const valorTotal = (painel?.itens_ativos ?? []).reduce(
-    (acc, item) => acc + item.valor_estimado, 0
+    (acc, item) => acc + Number(item.valor_estimado || 0), 0
   );
 
   // Gerar nova revisão
@@ -320,7 +322,7 @@ export default function PaccPage() {
               >
                 {exercicios.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.ano}{e.ativo ? " ✦" : ""}
+                    {e.ano}
                   </option>
                 ))}
               </select>
@@ -437,7 +439,7 @@ export default function PaccPage() {
         </div>
       )}
 
-      {/* ── Lista de itens ──────────────────────────────────────── */}
+      {/* ── Data Table ────────────────────────────────────────── */}
       {!loading && exercicios.length === 0 ? (
         <div className="flex h-60 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background-card text-center">
           <ClipboardList size={36} className="text-foreground-muted mb-3 opacity-40" />
@@ -451,9 +453,7 @@ export default function PaccPage() {
           </button>
         </div>
       ) : loading ? (
-        <div className="flex h-48 items-center justify-center">
-          <Loader2 size={32} className="animate-spin text-brand-primary" />
-        </div>
+        <PaccSkeleton />
       ) : error && !painel ? (
         <div className="flex h-48 flex-col items-center justify-center gap-2 text-red-500">
           <AlertCircle size={32} />
@@ -464,17 +464,119 @@ export default function PaccPage() {
           Nenhum item encontrado para os filtros selecionados.
         </div>
       ) : (
-        <div className="space-y-2.5">
-          {itensFiltrados.map((item) => (
-            <PaccItemCard
-              key={item.id}
-              item={item}
-              revisoes={painel?.revisoes ?? []}
-              revisaoAtualId={selectedRevisaoId}
-              onEditar={(it) => setEditandoItem(it)}
-              onExcluir={(it) => setExcluindoItem(it)}
-            />
-          ))}
+        <div className="rounded-xl border border-border bg-background-card shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-slate-50/60 dark:bg-slate-800/40">
+                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Item</th>
+                <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Quantidade</th>
+                <th className="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">Valor Estimado</th>
+                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Processo SEI</th>
+                <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Vínculo PDTIC</th>
+                <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {itensFiltrados.map((item) => {
+                const isExcluido = item.revisao_exclusao_id !== null;
+                const acaoPdtic = "acao_pdtic" in item ? (item as PaccItemComAcao).acao_pdtic : null;
+                return (
+                  <tr
+                    key={item.id}
+                    className={`transition-colors ${
+                      isExcluido
+                        ? "bg-red-50/40 dark:bg-red-950/10"
+                        : "hover:bg-slate-50/60 dark:hover:bg-slate-800/20"
+                    }`}
+                  >
+                    {/* Item */}
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                          isExcluido
+                            ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
+                            : "bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400"
+                        }`}>
+                          {item.numero_item}
+                        </span>
+                        <button
+                          onClick={() => setEditandoItem(item)}
+                          className={`text-left text-sm font-medium transition-colors ${
+                            isExcluido
+                              ? "text-red-600 line-through cursor-default dark:text-red-400"
+                              : "text-slate-800 hover:text-indigo-600 hover:underline cursor-pointer dark:text-slate-200"
+                          }`}
+                          disabled={isExcluido}
+                        >
+                          {item.descricao_demanda}
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* Quantidade */}
+                    <td className="px-5 py-3.5 text-center">
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{item.quantidade || "—"}</span>
+                    </td>
+
+                    {/* Valor Estimado */}
+                    <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                        {item.valor_estimado > 0 ? formatCurrency(item.valor_estimado) : "—"}
+                      </span>
+                    </td>
+
+                    {/* Processo SEI */}
+                    <td className="px-5 py-3.5">
+                      {item.processo_sei ? (
+                        <div className="flex flex-col gap-0.5">
+                          {item.processo_sei.split("\n").map((sei, idx) => (
+                            <span key={idx} className="text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                              {sei}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+
+                    {/* Vínculo PDTIC */}
+                    <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                      {acaoPdtic ? (
+                        <span className="inline-block rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400">
+                          {acaoPdtic.codigo_acao}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </td>
+
+                    {/* Ações */}
+                    <td className="px-5 py-3.5 text-center">
+                      {!isExcluido && (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => setEditandoItem(item)}
+                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20"
+                            title="Editar item"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            onClick={() => setExcluindoItem(item)}
+                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                            title="Desativar item"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 

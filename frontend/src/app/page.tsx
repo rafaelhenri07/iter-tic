@@ -1,285 +1,404 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import {
-  FileText,
-  TrendingUp,
-  FolderKanban,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  BarChart3,
-  Shield,
   AlertTriangle,
+  FolderKanban,
+  Hourglass,
+  CheckCircle2,
+  BarChart3,
+  Users,
+  TrendingUp,
+  Clock,
 } from "lucide-react";
-import { StatusChart } from "@/components/dashboard/StatusChart";
-import { ComplexidadeChart } from "@/components/dashboard/ComplexidadeChart";
-import { GargalosChart } from "@/components/dashboard/GargalosChart";
-import { fetchDashboard } from "@/lib/api";
-import type { DashboardResponse } from "@/types/dashboard";
+import dynamic from "next/dynamic";
 
-/* ── Dados mock para fallback ──────────────────────────────────────────── */
+/* ── Lazy-load dos gráficos (SSR off) ─────────────────────────────────── */
 
-const MOCK_DATA: DashboardResponse = {
-  pdtic: {
-    periodo_vigente: "2024-2027",
-    total_acoes_ativas: 24,
-    distribuicao_status: {
-      "Não iniciada": 5,
-      "Em andamento": 9,
-      "Contratada": 4,
-      "Contrato vigente": 4,
-      "Contrato a ser renovado": 2,
-    },
-  },
-  pacc: {
-    exercicio_vigente: 2025,
-    total_itens_ativos: 18,
-    valor_total_estimado: 5325000.0,
-  },
-  projetos: {
-    total_projetos_ativos: 7,
-    total_artefatos: 35,
-    artefatos_concluidos: 19,
-    distribuicao_complexidade: { baixa: 2, media: 3, alta: 2 },
-    gargalos_artefatos: [
-      { tipo: "ETP", quantidade: 3 },
-      { tipo: "TR", quantidade: 2 },
-      { tipo: "DFD", quantidade: 1 },
-      { tipo: "Estimativa de Custos e Orçamento", quantidade: 1 },
-    ],
-  },
+const EfetividadeFinanceiraChart = dynamic(
+  () => import("@/components/dashboard/EfetividadeFinanceiraChart"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[320px] items-center justify-center text-xs text-slate-400">
+        Carregando gráfico…
+      </div>
+    ),
+  }
+);
+
+const DistribuicaoContratosChart = dynamic(
+  () => import("@/components/dashboard/DistribuicaoContratosChart"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[320px] items-center justify-center text-xs text-slate-400">
+        Carregando gráfico…
+      </div>
+    ),
+  }
+);
+
+const TempoArtefatosChart = dynamic(
+  () => import("@/components/dashboard/TempoArtefatosChart"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[300px] items-center justify-center text-xs text-slate-400">
+        Carregando gráfico…
+      </div>
+    ),
+  }
+);
+
+const CargaEquipeChart = dynamic(
+  () => import("@/components/dashboard/CargaEquipeChart"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[340px] items-center justify-center text-xs text-slate-400">
+        Carregando gráfico…
+      </div>
+    ),
+  }
+);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DADOS MOCK — serão substituídos pelo backend
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export const MOCK_KPI = {
+  contratosAVencer: 4,
+  diasMaisProximo: 32,
+  projetosFaseInterna: 8,
+  projetosEmLicitacao: 4,
+  acoesPdticConcluidas: 14,
+  acoesPdticTotal: 20,
 };
 
-/* ── Formatação de valor monetário ─────────────────────────────────────── */
+export const MOCK_EFETIVIDADE = [
+  { acao: "A1", estimativa: 350000, efetivo: 310000 },
+  { acao: "A2", estimativa: 890000, efetivo: 872000 },
+  { acao: "A3", estimativa: 2700000, efetivo: 2450000 },
+  { acao: "A4", estimativa: 2400000, efetivo: 2520000 },
+  { acao: "A6", estimativa: 3600000, efetivo: 3600000 },
+  { acao: "A7", estimativa: 4320000, efetivo: 3980000 },
+  { acao: "A9", estimativa: 540000, efetivo: 540000 },
+  { acao: "A11", estimativa: 225000, efetivo: 218000 },
+];
 
-function formatCurrency(value: number): string {
-  if (value >= 1_000_000) {
-    return `R$ ${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    return `R$ ${(value / 1_000).toFixed(0)}K`;
-  }
-  return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-}
+export const MOCK_DISTRIBUICAO_CONTRATOS = {
+  porTipo: [
+    { name: "Aquisição", value: 8, color: "#6366f1" },
+    { name: "Serviço Continuado", value: 7, color: "#06b6d4" },
+    { name: "Subscrição", value: 5, color: "#f59e0b" },
+  ],
+  porSituacao: [
+    { label: "Vigentes", qtd: 16, color: "#10b981" },
+    { label: "Extintos", qtd: 2, color: "#94a3b8" },
+    { label: "Extintos c/ Suporte", qtd: 2, color: "#f97316" },
+  ],
+};
 
-/* ── Página ────────────────────────────────────────────────────────────── */
+export const MOCK_TEMPO_ARTEFATOS = [
+  { artefato: "DFD", dias: 18 },
+  { artefato: "ETP", dias: 42 },
+  { artefato: "Riscos", dias: 12 },
+  { artefato: "Custos", dias: 25 },
+  { artefato: "TR", dias: 35 },
+];
+
+export const MOCK_CARGA_EQUIPE = [
+  { nome: "Carlos Eduardo", planejamento: 3, fiscalizacao: 5 },
+  { nome: "Fernanda Rocha", planejamento: 4, fiscalizacao: 3 },
+  { nome: "Roberto Silva", planejamento: 5, fiscalizacao: 2 },
+  { nome: "Ana Beatriz", planejamento: 6, fiscalizacao: 1 },
+  { nome: "Juliana Costa", planejamento: 2, fiscalizacao: 6 },
+  { nome: "Marcos Vinícius", planejamento: 3, fiscalizacao: 4 },
+  { nome: "Ricardo Oliveira", planejamento: 4, fiscalizacao: 5 },
+  { nome: "Tatiana Gomes", planejamento: 5, fiscalizacao: 2 },
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTE — PÁGINA
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [usingMock, setUsingMock] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetchDashboard();
-        setData(res);
-      } catch {
-        console.warn("Backend indisponível — usando dados mock");
-        setData(MOCK_DATA);
-        setUsingMock(true);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-violet-500" />
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
-  const progressoPct =
-    data.projetos.total_artefatos > 0
-      ? Math.round(
-          (data.projetos.artefatos_concluidos / data.projetos.total_artefatos) *
-            100
-        )
-      : 0;
+  const kpi = MOCK_KPI;
+  const pctPdtic = Math.round((kpi.acoesPdticConcluidas / kpi.acoesPdticTotal) * 100);
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-500 text-white shadow-lg shadow-violet-500/25">
-          <BarChart3 size={20} />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Visão Geral</h1>
-          <p className="text-sm text-foreground-muted">
-            Painel de indicadores do sistema ITER TIC
-          </p>
-        </div>
-      </div>
-
-      {/* Mock banner */}
-      {usingMock && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-          <AlertCircle size={16} />
-          Back-end indisponível — exibindo dados de demonstração.
-        </div>
-      )}
-
-      {/* ═══ KPI Cards ═══ */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          title="Ações PDTIC"
-          value={String(data.pdtic.total_acoes_ativas)}
-          subtitle={
-            data.pdtic.periodo_vigente
-              ? `Período ${data.pdtic.periodo_vigente}`
-              : "Sem período ativo"
-          }
-          icon={<FileText size={20} />}
-          gradient="from-indigo-500 to-blue-500"
-          iconBg="from-indigo-500/10 to-indigo-500/5 dark:from-indigo-500/20 dark:to-indigo-500/10"
-        />
-        <KpiCard
-          title="Valor Total PACC"
-          value={formatCurrency(data.pacc.valor_total_estimado)}
-          subtitle={
-            data.pacc.exercicio_vigente
-              ? `Exercício ${data.pacc.exercicio_vigente} • ${data.pacc.total_itens_ativos} itens`
-              : "Sem exercício ativo"
-          }
-          icon={<TrendingUp size={20} />}
-          gradient="from-emerald-500 to-teal-500"
-          iconBg="from-emerald-500/10 to-emerald-500/5 dark:from-emerald-500/20 dark:to-emerald-500/10"
-        />
-        <KpiCard
-          title="Projetos Ativos"
-          value={String(data.projetos.total_projetos_ativos)}
-          subtitle="Em elaboração ou prontos"
-          icon={<FolderKanban size={20} />}
-          gradient="from-violet-500 to-purple-500"
-          iconBg="from-violet-500/10 to-violet-500/5 dark:from-violet-500/20 dark:to-violet-500/10"
-        />
-        <KpiCard
-          title="Artefatos Concluídos"
-          value={`${data.projetos.artefatos_concluidos}/${data.projetos.total_artefatos}`}
-          subtitle={`${progressoPct}% completo`}
-          icon={<CheckCircle2 size={20} />}
-          gradient="from-amber-500 to-orange-500"
-          iconBg="from-amber-500/10 to-amber-500/5 dark:from-amber-500/20 dark:to-amber-500/10"
-          progress={progressoPct}
-        />
-      </div>
-
-      {/* ═══ Charts Row ═══ */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Bar Chart - PDTIC Status */}
-        <div className="rounded-xl border border-border bg-background-card p-5 shadow-sm transition-shadow hover:shadow-md">
-          <div className="flex items-center gap-2 mb-1">
-            <BarChart3 size={14} className="text-blue-500" />
-            <h2 className="text-sm font-bold text-foreground">
-              Distribuição de Status — PDTIC
-            </h2>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto max-w-[1440px] space-y-6 p-6 lg:p-8">
+        {/* ── Header ──────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-500 text-white shadow-lg shadow-indigo-500/25">
+            <BarChart3 size={20} />
           </div>
-          <p className="text-xs text-foreground-muted mb-4">
-            Ações ativas no período{" "}
-            {data.pdtic.periodo_vigente ?? "vigente"}
-          </p>
-          <StatusChart data={data.pdtic.distribuicao_status} />
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              Painel de Indicadores
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Visão executiva — ITER TIC / DITEC / PCDF
+            </p>
+          </div>
         </div>
 
-        {/* Donut Chart - Complexidade */}
-        <div className="rounded-xl border border-border bg-background-card p-5 shadow-sm transition-shadow hover:shadow-md">
-          <div className="flex items-center gap-2 mb-1">
-            <Shield size={14} className="text-violet-500" />
-            <h2 className="text-sm font-bold text-foreground">
-              Complexidade dos Projetos
-            </h2>
-          </div>
-          <p className="text-xs text-foreground-muted mb-4">
-            Distribuição por classificação de risco
-          </p>
-          <ComplexidadeChart
-            data={data.projetos.distribuicao_complexidade}
+        {/* ═══════ LINHA 1 — KPIs Críticos ═══════ */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {/* Card 1 — Ações PDTIC */}
+          <KpiCard
+            title="Ações PDTIC"
+            value={`${kpi.acoesPdticConcluidas}/${kpi.acoesPdticTotal}`}
+            subtitle={`${pctPdtic}% concluídas`}
+            icon={<CheckCircle2 size={20} />}
+            accentColor="emerald"
+            progress={pctPdtic}
+          />
+
+          {/* Card 2 — Projetos Fase Interna */}
+          <KpiCard
+            title="Projetos — Fase Interna"
+            value={String(kpi.projetosFaseInterna)}
+            subtitle="Em elaboração de artefatos"
+            icon={<FolderKanban size={20} />}
+            accentColor="indigo"
+          />
+
+          {/* Card 3 — Em Licitação */}
+          <KpiCard
+            title="Em Licitação"
+            value={String(kpi.projetosEmLicitacao)}
+            subtitle="Projetos na fase externa"
+            icon={<Hourglass size={20} />}
+            accentColor="cyan"
+          />
+
+          {/* Card 4 — Contratos a Vencer (ALERTA) */}
+          <KpiCard
+            title="Contratos a Vencer"
+            value={String(kpi.contratosAVencer)}
+            subtitle={`Próximo vencimento em ${kpi.diasMaisProximo} dias`}
+            icon={<AlertTriangle size={20} />}
+            accentColor="rose"
+            pulse
           />
         </div>
-      </div>
 
-      {/* ═══ Gargalos Section ═══ */}
-      <div className="rounded-xl border border-border bg-background-card p-5 shadow-sm transition-shadow hover:shadow-md">
-        <div className="flex items-center gap-2 mb-1">
-          <AlertTriangle size={14} className="text-amber-500" />
-          <h2 className="text-sm font-bold text-foreground">
-            Gargalos de Artefatos
-          </h2>
+        {/* ═══════ LINHA 2 — Financeiro e Contratos ═══════ */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Efetividade Financeira */}
+          <ChartCard
+            title="Efetividade Financeira (PDTIC vs Contratos)"
+            subtitle="Comparação entre estimativa inicial e custo efetivo por ação"
+            icon={<TrendingUp size={14} className="text-emerald-500" />}
+          >
+            {mounted && (
+              <EfetividadeFinanceiraChart data={MOCK_EFETIVIDADE} />
+            )}
+          </ChartCard>
+
+          {/* Distribuição de Contratos */}
+          <ChartCard
+            title="Distribuição de Contratos"
+            subtitle="Por tipo de contratação e situação atual"
+            icon={<BarChart3 size={14} className="text-indigo-500" />}
+          >
+            {mounted && (
+              <DistribuicaoContratosChart data={MOCK_DISTRIBUICAO_CONTRATOS} />
+            )}
+          </ChartCard>
         </div>
-        <p className="text-xs text-foreground-muted mb-4">
-          Artefatos com status &quot;Iniciado&quot; — identifica onde os projetos
-          estão travando na fase interna
-        </p>
-        <GargalosChart data={data.projetos.gargalos_artefatos} />
+
+        {/* ═══════ LINHA 3 — Gargalos Operacionais ═══════ */}
+        <ChartCard
+          title="Tempo Médio de Elaboração de Artefatos (Dias)"
+          subtitle="Identifica as etapas mais demoradas na fase interna dos projetos"
+          icon={<Clock size={14} className="text-amber-500" />}
+        >
+          {mounted && (
+            <TempoArtefatosChart data={MOCK_TEMPO_ARTEFATOS} />
+          )}
+          {/* Mini-cards com médias */}
+          <div className="mt-4 flex flex-wrap gap-3">
+            <MiniStat label="Média Fase Interna" value="45 dias" color="indigo" />
+            <MiniStat label="Média Licitação" value="90 dias" color="violet" />
+          </div>
+        </ChartCard>
+
+        {/* ═══════ LINHA 4 — Carga de Trabalho ═══════ */}
+        <ChartCard
+          title="Participação da Equipe (Planejamento vs Fiscalização)"
+          subtitle="Carga de trabalho distribuída entre fase de planejamento e gestão de contratos"
+          icon={<Users size={14} className="text-blue-500" />}
+        >
+          {mounted && (
+            <CargaEquipeChart data={MOCK_CARGA_EQUIPE} />
+          )}
+        </ChartCard>
       </div>
     </div>
   );
 }
 
-/* ── KPI Card ──────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   SUB-COMPONENTES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── KPI Card ─────────────────────────────────────────────────────────── */
+
+const ACCENT_MAP: Record<string, { gradient: string; glow: string; bg: string; text: string; border: string }> = {
+  rose: {
+    gradient: "from-rose-500 to-pink-500",
+    glow: "shadow-rose-500/25",
+    bg: "bg-rose-50 dark:bg-rose-950/30",
+    text: "text-rose-600 dark:text-rose-400",
+    border: "border-rose-200 dark:border-rose-800/50",
+  },
+  indigo: {
+    gradient: "from-indigo-500 to-blue-500",
+    glow: "shadow-indigo-500/25",
+    bg: "bg-indigo-50 dark:bg-indigo-950/30",
+    text: "text-indigo-600 dark:text-indigo-400",
+    border: "border-indigo-200 dark:border-indigo-800/50",
+  },
+  cyan: {
+    gradient: "from-cyan-500 to-teal-500",
+    glow: "shadow-cyan-500/25",
+    bg: "bg-cyan-50 dark:bg-cyan-950/30",
+    text: "text-cyan-600 dark:text-cyan-400",
+    border: "border-cyan-200 dark:border-cyan-800/50",
+  },
+  emerald: {
+    gradient: "from-emerald-500 to-green-500",
+    glow: "shadow-emerald-500/25",
+    bg: "bg-emerald-50 dark:bg-emerald-950/30",
+    text: "text-emerald-600 dark:text-emerald-400",
+    border: "border-emerald-200 dark:border-emerald-800/50",
+  },
+};
 
 function KpiCard({
   title,
   value,
   subtitle,
   icon,
-  gradient,
-  iconBg,
+  accentColor,
   progress,
+  pulse,
 }: {
   title: string;
   value: string;
   subtitle: string;
   icon: React.ReactNode;
-  gradient: string;
-  iconBg: string;
+  accentColor: string;
   progress?: number;
+  pulse?: boolean;
 }) {
+  const accent = ACCENT_MAP[accentColor] ?? ACCENT_MAP.indigo;
+
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-border bg-background-card p-5 shadow-sm transition-all duration-300 hover:shadow-md hover:border-border-hover">
-      {/* Decorative gradient glow */}
+    <div
+      className={`group relative overflow-hidden rounded-xl border bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-md dark:bg-slate-900 ${accent.border}`}
+    >
+      {/* Decorative glow */}
       <div
-        className={`absolute -right-6 -top-6 h-28 w-28 rounded-full bg-gradient-to-br ${iconBg} opacity-60 transition-transform duration-500 group-hover:scale-125`}
+        className={`absolute -right-6 -top-6 h-24 w-24 rounded-full ${accent.bg} opacity-70 transition-transform duration-500 group-hover:scale-150`}
       />
 
       <div className="relative flex items-start justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             {title}
           </p>
-          <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
-          <p className="mt-1 text-[11px] text-foreground-muted">{subtitle}</p>
+          <p className="mt-2 text-3xl font-extrabold text-slate-900 dark:text-white tabular-nums">
+            {value}
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            {subtitle}
+          </p>
 
-          {/* Mini progress bar */}
           {progress !== undefined && (
-            <div className="mt-2 h-1.5 w-full max-w-[120px] rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+            <div className="mt-3 h-1.5 w-full max-w-[120px] overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
               <div
-                className={`h-full rounded-full transition-all duration-700 ${
-                  progress === 100
-                    ? "bg-emerald-500"
-                    : progress >= 50
-                      ? "bg-amber-400"
-                      : "bg-blue-400"
-                }`}
+                className={`h-full rounded-full transition-all duration-700 bg-gradient-to-r ${accent.gradient}`}
                 style={{ width: `${progress}%` }}
               />
             </div>
           )}
         </div>
         <div
-          className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} text-white shadow-md`}
+          className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${accent.gradient} text-white shadow-lg ${accent.glow}`}
         >
+          {pulse && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-rose-500" />
+            </span>
+          )}
           {icon}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Chart Card Wrapper ───────────────────────────────────────────────── */
+
+function ChartCard({
+  title,
+  subtitle,
+  icon,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-center gap-2 mb-1">
+        {icon}
+        <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+          {title}
+        </h2>
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
+        {subtitle}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+/* ── MiniStat badge ───────────────────────────────────────────────────── */
+
+function MiniStat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
+  const colorMap: Record<string, string> = {
+    indigo: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-400 dark:border-indigo-800/50",
+    violet: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800/50",
+    amber: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/50",
+  };
+
+  return (
+    <div
+      className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold ${colorMap[color] ?? colorMap.indigo}`}
+    >
+      <span className="text-slate-500 dark:text-slate-400 font-normal">{label}:</span>
+      <span>{value}</span>
     </div>
   );
 }

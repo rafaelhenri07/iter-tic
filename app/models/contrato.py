@@ -58,6 +58,19 @@ class SituacaoContratoEnum(str, enum.Enum):
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 
+class PapelEquipeEnum(str, enum.Enum):
+    """Papel de um servidor na equipe de fiscalização."""
+    GESTOR = "gestor"
+    FISCAL_REQUISITANTE = "fiscal_requisitante"
+    FISCAL_TECNICO = "fiscal_tecnico"
+    FISCAL_ADMINISTRATIVO = "fiscal_administrativo"
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  CONTRATO (entidade central do Módulo 3)                               ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
 class Contrato(Base):
     __tablename__ = "contratos"
 
@@ -81,9 +94,11 @@ class Contrato(Base):
         String(500), nullable=False,
         comment="Razão social da empresa contratada.",
     )
-    fabricante: Mapped[Optional[str]] = mapped_column(
-        String(300), nullable=True,
-        comment="Fabricante do produto/solução, se aplicável.",
+    fabricante_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("fabricantes.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Fabricante do produto/solução (FK para fabricantes).",
     )
     tipo_contrato: Mapped[TipoContratoEnum] = mapped_column(
         Enum(
@@ -138,32 +153,6 @@ class Contrato(Base):
     )
     observacoes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # ── Equipe de Fiscalização (FKs para Servidor) ──────────────────────────
-    gestor_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("servidores.id", ondelete="SET NULL"),
-        nullable=True,
-        comment="Gestor do contrato.",
-    )
-    fiscal_requisitante_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("servidores.id", ondelete="SET NULL"),
-        nullable=True,
-        comment="Fiscal requisitante do contrato.",
-    )
-    fiscal_tecnico_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("servidores.id", ondelete="SET NULL"),
-        nullable=True,
-        comment="Fiscal técnico do contrato.",
-    )
-    fiscal_administrativo_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("servidores.id", ondelete="SET NULL"),
-        nullable=True,
-        comment="Fiscal administrativo do contrato.",
-    )
-
     # ── Timestamps ──────────────────────────────────────────────────────────
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -178,17 +167,16 @@ class Contrato(Base):
     # ── Relationships ───────────────────────────────────────────────────────
     projeto: Mapped["Projeto"] = relationship("Projeto", lazy="selectin")
 
-    gestor: Mapped[Optional["Servidor"]] = relationship(
-        "Servidor", foreign_keys=[gestor_id],
+    fabricante_rel: Mapped[Optional["Fabricante"]] = relationship(
+        "Fabricante", foreign_keys=[fabricante_id], lazy="selectin",
     )
-    fiscal_requisitante: Mapped[Optional["Servidor"]] = relationship(
-        "Servidor", foreign_keys=[fiscal_requisitante_id],
-    )
-    fiscal_tecnico: Mapped[Optional["Servidor"]] = relationship(
-        "Servidor", foreign_keys=[fiscal_tecnico_id],
-    )
-    fiscal_administrativo: Mapped[Optional["Servidor"]] = relationship(
-        "Servidor", foreign_keys=[fiscal_administrativo_id],
+
+    # Equipe de Fiscalização (1:N via tabela contrato_equipe)
+    equipe_membros: Mapped[list["ContratoEquipe"]] = relationship(
+        "ContratoEquipe",
+        back_populates="contrato",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     # Histórico / Auditoria (1:N)
@@ -211,6 +199,52 @@ class Contrato(Base):
 
     def __repr__(self) -> str:
         return f"<Contrato #{self.id} {self.numero_contrato} situacao={self.situacao_atual.value}>"
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  CONTRATO EQUIPE (Tabela para Titular + Substitutos)                   ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+class ContratoEquipe(Base):
+    """Membro da equipe de fiscalização de um contrato.
+    Cada papel pode ter 1 Titular (is_titular=True) e N Substitutos.
+    """
+    __tablename__ = "contrato_equipe"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    contrato_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("contratos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    servidor_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("servidores.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    papel: Mapped[PapelEquipeEnum] = mapped_column(
+        Enum(
+            PapelEquipeEnum,
+            name="papel_equipe_enum",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+        comment="Papel do servidor na equipe.",
+    )
+    is_titular: Mapped[bool] = mapped_column(
+        default=False,
+        comment="True = Titular; False = Substituto.",
+    )
+
+    # ── Relationships ──────────────────────────────────────────────────────
+    contrato: Mapped["Contrato"] = relationship("Contrato", back_populates="equipe_membros")
+    servidor: Mapped["Servidor"] = relationship("Servidor", lazy="selectin")
+
+    def __repr__(self) -> str:
+        tipo = "Titular" if self.is_titular else "Substituto"
+        return f"<ContratoEquipe #{self.id} papel={self.papel.value} {tipo}>"
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -265,3 +299,4 @@ class ContratoHistorico(Base):
 
 # ── Forward reference imports ──────────────────────────────────────────────
 from app.models.projeto import Projeto, Servidor  # noqa: E402, F401
+from app.models.fabricante import Fabricante  # noqa: E402, F401

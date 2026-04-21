@@ -19,6 +19,7 @@ import { ServidorModal } from "@/components/equipe/ServidorModal";
 import { ToastContainer, showToast } from "@/components/ui/Toast";
 import { fetchServidores, excluirServidor } from "@/lib/api";
 import type { Servidor } from "@/types/projeto";
+import { CardListSkeleton } from "@/components/ui/Skeleton";
 
 /* ── Badge de perfil ──────────────────────────────────────────────────── */
 
@@ -191,9 +192,7 @@ export default function EquipePage() {
 
       {/* Table */}
       {loading ? (
-        <div className="flex h-60 items-center justify-center">
-          <Loader2 size={28} className="animate-spin text-indigo-500" />
-        </div>
+        <CardListSkeleton cards={6} />
       ) : filtered.length === 0 ? (
         <div className="flex h-60 flex-col items-center justify-center rounded-xl border border-dashed border-border text-center">
           <Inbox size={36} className="text-foreground-muted mb-2" />

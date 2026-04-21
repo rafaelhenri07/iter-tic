@@ -386,3 +386,54 @@ export async function adicionarComentarioArtefato(
     ...(autor ? { autor } : {}),
   });
 }
+
+
+/* ── FABRICANTES ────────────────────────────────────────────────────────── */
+
+export interface Fabricante {
+  id: number;
+  nome: string;
+  site: string | null;
+  contato_nome: string;
+  contato_cargo: string;
+  contato_telefone1: string;
+  contato_telefone2: string | null;
+  contato_email: string;
+  create_time: string;
+  update_time: string | null;
+}
+
+export interface FabricantePayload {
+  nome: string;
+  site?: string | null;
+  contato_nome: string;
+  contato_cargo: string;
+  contato_telefone1: string;
+  contato_telefone2?: string | null;
+  contato_email: string;
+}
+
+export async function fetchFabricantes(): Promise<Fabricante[]> {
+  return fetcher<Fabricante[]>("/fabricantes");
+}
+
+export async function fetchFabricante(id: number): Promise<Fabricante> {
+  return fetcher<Fabricante>(`/fabricantes/${id}`);
+}
+
+export async function criarFabricante(payload: FabricantePayload): Promise<Fabricante> {
+  return poster<Fabricante>("/fabricantes", payload);
+}
+
+export async function atualizarFabricante(
+  id: number,
+  payload: Partial<FabricantePayload>
+): Promise<Fabricante> {
+  return patcher<Fabricante>(`/fabricantes/${id}`, payload);
+}
+
+export async function excluirFabricante(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/fabricantes/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+}
+

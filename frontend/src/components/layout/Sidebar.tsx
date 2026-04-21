@@ -59,6 +59,7 @@ const navigation: NavSection[] = [
     icon: <ClipboardCheck size={18} />,
     items: [
       { label: "Gestão de Contratos", href: "/contratos" },
+      { label: "Fabricantes", href: "/execucao/fabricantes" },
     ],
   },
   {

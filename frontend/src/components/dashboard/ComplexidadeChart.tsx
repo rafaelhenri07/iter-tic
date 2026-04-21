@@ -26,7 +26,7 @@ interface ComplexidadeChartProps {
   data: ProjetosDistribuicaoComplexidade;
 }
 
-export function ComplexidadeChart({ data }: ComplexidadeChartProps) {
+export default function ComplexidadeChart({ data }: ComplexidadeChartProps) {
   const chartData = [
     { name: LABELS.baixa, value: data.baixa, color: COLORS.baixa },
     { name: LABELS.media, value: data.media, color: COLORS.media },

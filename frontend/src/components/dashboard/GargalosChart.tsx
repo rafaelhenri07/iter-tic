@@ -26,7 +26,7 @@ interface GargalosChartProps {
   data: GargaloArtefato[];
 }
 
-export function GargalosChart({ data }: GargalosChartProps) {
+export default function GargalosChart({ data }: GargalosChartProps) {
   if (data.length === 0) {
     return (
       <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 text-sm text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400">

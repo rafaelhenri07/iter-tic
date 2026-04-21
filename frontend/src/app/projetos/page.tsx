@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import {
   FolderKanban,
   Search,
@@ -11,12 +12,12 @@ import {
   Filter,
 } from "lucide-react";
 import { ProjetoRow } from "@/components/projetos/ProjetoRow";
-import { NovoProjetoModal } from "@/components/projetos/NovoProjetoModal";
 import { DetalhesProjetoModal } from "@/components/projetos/DetalhesProjetoModal";
 import { GerenciarArtefatoModal } from "@/components/projetos/GerenciarArtefatoModal";
 import { ToastContainer } from "@/components/ui/Toast";
 import { fetchProjetos } from "@/lib/api";
 import type { ProjetoListagem, StatusProjeto, ArtefatoResumo } from "@/types/projeto";
+import { ProjetosSkeleton } from "@/components/ui/Skeleton";
 
 /* ── Dados mock ────────────────────────────────────────────────────────── */
 
@@ -158,7 +159,9 @@ const MOCK_PROJETOS: ProjetoListagem[] = [
 const STATUS_TABS: { label: string; value: StatusProjeto | "todos" }[] = [
   { label: "Todos", value: "todos" },
   { label: "Em elaboração", value: "Em elaboração" },
-  { label: "Pronto", value: "Pronto para contratação" },
+  { label: "Pronto para contratação", value: "Pronto para contratação" },
+  { label: "Em licitação", value: "Em licitação" },
+  { label: "Licitação concluída", value: "Licitação concluída" },
   { label: "Suspenso", value: "Suspenso" },
   { label: "Cancelado", value: "Cancelado" },
 ];
@@ -169,7 +172,6 @@ export default function ProjetosPage() {
   const [projetos, setProjetos] = useState<ProjetoListagem[]>([]);
   const [loading, setLoading] = useState(true);
   const [usingMock, setUsingMock] = useState(false);
-  const [showNovoModal, setShowNovoModal] = useState(false);
   const [fetchKey, setFetchKey] = useState(0);
 
   // Modais
@@ -254,13 +256,13 @@ export default function ProjetosPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => setShowNovoModal(true)}
+        <Link
+          href="/projetos/novo"
           className="flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30"
         >
           <Plus size={16} />
           Novo Projeto
-        </button>
+        </Link>
       </div>
 
       {/* Banner mock */}
@@ -349,9 +351,7 @@ export default function ProjetosPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 size={32} className="animate-spin text-violet-500" />
-        </div>
+        <ProjetosSkeleton />
       ) : projetos.length === 0 ? (
         /* Empty state */
         <div className="flex h-72 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-background-card">
@@ -365,13 +365,13 @@ export default function ProjetosPage() {
             Crie seu primeiro projeto de contratação para começar a gerenciar os
             artefatos da fase interna da licitação.
           </p>
-          <button
-            disabled
-            className="mt-5 flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-5 text-sm font-semibold text-white shadow-md disabled:opacity-50"
+          <Link
+            href="/projetos/novo"
+            className="mt-5 flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-5 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg hover:shadow-violet-500/30"
           >
             <Plus size={16} />
             Criar Primeiro Projeto
-          </button>
+          </Link>
         </div>
       ) : projetosFiltrados.length === 0 ? (
         <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-border bg-background-card text-sm text-foreground-muted">
@@ -418,13 +418,6 @@ export default function ProjetosPage() {
       )}
 
       {/* Modais */}
-      {showNovoModal && (
-        <NovoProjetoModal
-          onClose={() => setShowNovoModal(false)}
-          onSuccess={() => setFetchKey((k) => k + 1)}
-        />
-      )}
-
       {selectedProjetoId !== null && (
         <DetalhesProjetoModal
           projetoId={selectedProjetoId}

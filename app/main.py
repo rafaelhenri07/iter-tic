@@ -13,6 +13,7 @@ from app.api.routers import pacc as pacc_router
 from app.api.routers import projetos as projetos_router
 from app.api.routers import dashboard as dashboard_router
 from app.api.routers import contratos as contratos_router
+from app.api.routers import fabricantes as fabricantes_router
 
 app = FastAPI(
     title="ITER TIC — API de Gestão de Licitações de TI",
@@ -43,6 +44,7 @@ app.include_router(pacc_router.router, prefix="/api/v1")
 app.include_router(projetos_router.router, prefix="/api/v1")
 app.include_router(dashboard_router.router, prefix="/api/v1")
 app.include_router(contratos_router.router, prefix="/api/v1")
+app.include_router(fabricantes_router.router, prefix="/api/v1")
 
 
 # ── Health check ───────────────────────────────────────────────────────────

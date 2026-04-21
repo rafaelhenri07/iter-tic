@@ -25,7 +25,7 @@ interface StatusChartProps {
   data: Record<string, number>;
 }
 
-export function StatusChart({ data }: StatusChartProps) {
+export default function StatusChart({ data }: StatusChartProps) {
   const chartData = Object.entries(data).map(([name, value]) => ({
     name,
     value,

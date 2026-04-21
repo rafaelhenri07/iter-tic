@@ -6,14 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   X,
   Pencil,
+  Plus,
+  Trash2,
   Loader2,
-  Hash,
-  FileText,
-  DollarSign,
-  Package,
-  Link2,
-  Layers,
-  AlertTriangle,
 } from "lucide-react";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
 import {
@@ -49,15 +44,20 @@ export function EditarItemPaccModal({
   const [revisaoAlteracaoId, setRevisaoAlteracaoId] = useState<number>(0);
   const [acoesPdtic, setAcoesPdtic] = useState<PdticAcao[]>([]);
   const [loadingAcoes, setLoadingAcoes] = useState(true);
+  const [seiList, setSeiList] = useState<string[]>(
+    item.processo_sei ? item.processo_sei.split("\n") : [""]
+  );
 
-  // Revisões filtradas: excluir a revisão de inclusão original
+  // Revisões filtradas: incluir a revisão de inclusão (pode editar na mesma) e posteriores
+  const revisaoInclusao = revisoes.find((r) => r.id === item.revisao_inclusao_id);
   const revisoesDisponiveis = revisoes.filter(
-    (r) => r.id !== item.revisao_inclusao_id
+    (r) => r.numero_revisao >= (revisaoInclusao?.numero_revisao ?? 0)
   );
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<ItemPaccUpdateFormData>({
     resolver: zodResolver(itemPaccUpdateSchema),
@@ -72,6 +72,11 @@ export function EditarItemPaccModal({
   });
 
   // Fetch ações PDTIC ativas
+  useEffect(() => {
+    const joined = seiList.map((s) => s.trim()).filter(Boolean).join("\n");
+    setValue("processo_sei", joined);
+  }, [seiList, setValue]);
+
   useEffect(() => {
     async function loadAcoes() {
       try {
@@ -126,19 +131,9 @@ export function EditarItemPaccModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-400 text-white">
-              <Pencil size={16} />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-foreground">
-                Editar Item #{item.numero_item}
-              </h2>
-              <p className="text-xs text-foreground-muted">
-                Edição SCD — cria nova versão vinculada
-              </p>
-            </div>
-          </div>
+          <h2 className="text-lg font-bold text-foreground">
+            Editar Item {item.numero_item}
+          </h2>
           <button
             onClick={onClose}
             className="rounded-lg p-1.5 text-foreground-muted transition-colors hover:bg-background-secondary hover:text-foreground"
@@ -147,28 +142,22 @@ export function EditarItemPaccModal({
           </button>
         </div>
 
-        {/* SCD Warning — Revisão da Alteração */}
-        <div className="mx-6 mt-5 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
-            <AlertTriangle size={14} />
-            Revisão da Alteração (Obrigatório)
-          </div>
-          <p className="mb-3 text-xs text-amber-600 dark:text-amber-400/80">
-            A versão atual será fechada e uma nova versão será criada com
-            os dados editados, vinculada a esta revisão.
-          </p>
+        {/* Revisão da Alteração */}
+        <div className="mx-6 mt-5">
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+            Em qual revisão essa alteração foi feita? <span className="text-red-500">*</span>
+          </label>
           <select
             value={revisaoAlteracaoId}
             onChange={(e) => setRevisaoAlteracaoId(Number(e.target.value))}
-            className={`${selectCls} border-amber-400 bg-white dark:border-amber-700 dark:bg-amber-950/50`}
+            className={selectCls}
           >
             <option value={0}>Selecione a revisão...</option>
             {revisoesDisponiveis.map((r) => (
               <option key={r.id} value={r.id}>
-                Rev {r.numero_revisao}
-                {r.data_aprovacao
-                  ? ` (${new Date(r.data_aprovacao + "T00:00:00").toLocaleDateString("pt-BR")})`
-                  : ""}
+                {r.numero_revisao === 0
+                  ? "Aprovação Inicial"
+                  : r.descricao || `Revisão ${r.numero_revisao}`}
               </option>
             ))}
           </select>
@@ -180,12 +169,11 @@ export function EditarItemPaccModal({
           <FormField
             label="Ação PDTIC Vinculada"
             required
-            icon={<Link2 size={10} />}
             error={errors.acao_pdtic_id?.message}
           >
             <select
               {...register("acao_pdtic_id", { valueAsNumber: true })}
-              className={`${selectCls} border-indigo-300 dark:border-indigo-700`}
+              className={selectCls}
             >
               <option value={0}>
                 {loadingAcoes
@@ -206,7 +194,6 @@ export function EditarItemPaccModal({
             <FormField
               label="Número do Item"
               required
-              icon={<Hash size={10} />}
               error={errors.numero_item?.message}
             >
               <input
@@ -218,7 +205,6 @@ export function EditarItemPaccModal({
             <FormField
               label="Quantidade"
               required
-              icon={<Package size={10} />}
               error={errors.quantidade?.message}
             >
               <input
@@ -232,7 +218,6 @@ export function EditarItemPaccModal({
           <FormField
             label="Descrição da Demanda"
             required
-            icon={<FileText size={10} />}
             error={errors.descricao_demanda?.message}
           >
             <textarea
@@ -247,7 +232,6 @@ export function EditarItemPaccModal({
             <FormField
               label="Valor Estimado (R$)"
               required
-              icon={<DollarSign size={10} />}
               error={errors.valor_estimado?.message}
             >
               <input
@@ -260,15 +244,41 @@ export function EditarItemPaccModal({
             </FormField>
 
             <FormField
-              label="Processo SEI"
-              icon={<FileText size={10} />}
+              label="Processos SEI"
               error={errors.processo_sei?.message}
             >
-              <input
-                {...register("processo_sei")}
-                placeholder="00052-00032300/2024-09"
-                className={inputCls}
-              />
+              <div className="space-y-2">
+                {seiList.map((sei, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      value={sei}
+                      onChange={(e) => {
+                        const newList = [...seiList];
+                        newList[idx] = e.target.value;
+                        setSeiList(newList);
+                      }}
+                      placeholder="Ex: 00052-00032300/2024-09"
+                      className={inputCls}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setSeiList(seiList.filter((_, i) => i !== idx))}
+                      className="shrink-0 p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg dark:hover:bg-red-900/20 transition-colors"
+                      title="Remover processo SEI"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setSeiList([...seiList, ""])}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                >
+                  <Plus size={14} />
+                  Adicionar outro processo SEI
+                </button>
+              </div>
             </FormField>
           </div>
 

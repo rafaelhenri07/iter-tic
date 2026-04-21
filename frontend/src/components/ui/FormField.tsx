@@ -20,7 +20,6 @@ export function FormField({
   return (
     <div>
       <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-foreground-muted">
-        {icon}
         {label}
         {required && <span className="text-red-500">*</span>}
       </label>

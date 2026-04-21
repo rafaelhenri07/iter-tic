@@ -944,7 +944,7 @@ async def enviar_para_licitacao(
     projeto_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    projeto = await _garantir_projeto_existe(projeto_id, db)
+    projeto = await _carregar_projeto_completo(projeto_id, db)
 
     if projeto.status != StatusProjetoEnum.PRONTO_PARA_CONTRATACAO:
         raise HTTPException(
@@ -953,6 +953,32 @@ async def enviar_para_licitacao(
                 f"Apenas projetos com status 'Pronto para contratação' "
                 f"podem ser enviados para licitação. "
                 f"Status atual: '{projeto.status.value}'."
+            ),
+        )
+
+    # ── Regra de negócio: todos os artefatos devem estar concluídos ───────
+    if not projeto.artefatos:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "O projeto não possui artefatos. "
+                "Crie e conclua todos os artefatos obrigatórios antes de "
+                "enviar para licitação."
+            ),
+        )
+
+    pendentes = [
+        a.tipo.value
+        for a in projeto.artefatos
+        if a.status != StatusArtefatoEnum.CONCLUIDO
+    ]
+    if pendentes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Todos os artefatos devem estar concluídos para enviar "
+                f"o projeto para licitação. "
+                f"Artefatos pendentes: {', '.join(pendentes)}."
             ),
         )
 
