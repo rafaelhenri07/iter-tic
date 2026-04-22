@@ -41,58 +41,6 @@ import {
   STATUS_PROJETO_CONFIG,
 } from "@/types/projeto";
 
-/* ── Mock ──────────────────────────────────────────────────────────────── */
-
-const MOCK_DATA: ProjetoPainelResponse = {
-  projeto: {
-    id: 1,
-    nome: "Aquisição de Switches Core Cisco Catalyst 9300 para Modernização do Datacenter Principal",
-    processo_sei: "00052-00032300/2025-01",
-    complexidade: "alta",
-    status: "Em elaboração",
-    catmat: "443811",
-    catser: null,
-    criado_em: "2025-02-10T10:00:00Z",
-    atualizado_em: "2025-06-01T14:30:00Z",
-    integrante_requisitante_id: 1,
-    integrante_tecnico_id: 2,
-    integrante_administrativo_id: 3,
-    data_envio_licitacao: null,
-    situacao_licitacao_texto: null,
-    integrante_requisitante: {
-      id: 1, matricula: "1001", nome: "Carlos Mendes", cargo: "Analista de TI",
-      funcao: "Chefe de Seção", lotacao: "DTI", perfil_acesso: null,
-      criado_em: "2025-01-01T00:00:00Z", atualizado_em: "2025-01-01T00:00:00Z",
-    },
-    integrante_tecnico: {
-      id: 2, matricula: "1002", nome: "Ana Beatriz Silva", cargo: "Engenheira de Redes",
-      funcao: null, lotacao: "DTI", perfil_acesso: null,
-      criado_em: "2025-01-01T00:00:00Z", atualizado_em: "2025-01-01T00:00:00Z",
-    },
-    integrante_administrativo: {
-      id: 3, matricula: "1003", nome: "Roberto Alves", cargo: "Analista Administrativo",
-      funcao: null, lotacao: "DAG", perfil_acesso: null,
-      criado_em: "2025-01-01T00:00:00Z", atualizado_em: "2025-01-01T00:00:00Z",
-    },
-    acoes_pdtic: [
-      { id: 1, codigo_acao: "A1", descricao: "Modernizar infraestrutura de rede", status: "Em andamento", tipo_necessidade: "hardware" },
-    ],
-    itens_pacc: [
-      { id: 1, numero_item: "001", descricao_demanda: "Switches Core Cisco Catalyst", valor_estimado: 450000, processo_sei: null },
-    ],
-    artefatos: [
-      { id: 1, projeto_id: 1, tipo: "DFD", status: "Concluído", data_inicio: "2025-03-01", data_conclusao: "2025-03-25", observacoes: "Documento aprovado pelo requisitante.", criado_em: "2025-02-10T10:00:00Z", atualizado_em: "2025-03-25T10:00:00Z" },
-      { id: 2, projeto_id: 1, tipo: "ETP", status: "Concluído", data_inicio: "2025-03-26", data_conclusao: "2025-04-20", observacoes: null, criado_em: "2025-02-10T10:00:00Z", atualizado_em: "2025-04-20T10:00:00Z" },
-      { id: 3, projeto_id: 1, tipo: "Mapa de Riscos", status: "Concluído", data_inicio: "2025-04-21", data_conclusao: "2025-05-10", observacoes: null, criado_em: "2025-02-10T10:00:00Z", atualizado_em: "2025-05-10T10:00:00Z" },
-      { id: 4, projeto_id: 1, tipo: "Estimativa de Custos e Orçamento", status: "Iniciado", data_inicio: "2025-05-11", data_conclusao: null, observacoes: "Aguardando orçamento do fornecedor.", criado_em: "2025-02-10T10:00:00Z", atualizado_em: "2025-05-11T10:00:00Z" },
-      { id: 5, projeto_id: 1, tipo: "TR", status: "Não iniciado", data_inicio: null, data_conclusao: null, observacoes: null, criado_em: "2025-02-10T10:00:00Z", atualizado_em: "2025-02-10T10:00:00Z" },
-    ],
-  },
-  total_artefatos: 5,
-  artefatos_concluidos: 3,
-  artefatos_pendentes: 2,
-  progresso_percentual: 60,
-};
 
 /* ── Página ────────────────────────────────────────────────────────────── */
 
@@ -106,7 +54,6 @@ export default function ProjetoDetalhesPage({
 
   const [data, setData] = useState<ProjetoPainelResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [usingMock, setUsingMock] = useState(false);
   const [fetchKey, setFetchKey] = useState(0);
 
   // Modal state
@@ -118,11 +65,9 @@ export default function ProjetoDetalhesPage({
       try {
         const painel = await fetchPainelProjeto(projetoId);
         setData(painel);
-        setUsingMock(false);
       } catch {
-        console.warn("Backend indisponível — usando dados mock");
-        setData(MOCK_DATA);
-        setUsingMock(true);
+        console.error("Erro ao carregar dados do projeto.");
+        setData(null);
       } finally {
         setLoading(false);
       }
@@ -200,13 +145,7 @@ export default function ProjetoDetalhesPage({
         </div>
       </div>
 
-      {/* Mock banner */}
-      {usingMock && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-          <AlertCircle size={16} />
-          Back-end indisponível — exibindo dados de demonstração.
-        </div>
-      )}
+
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -362,7 +301,6 @@ export default function ProjetoDetalhesPage({
       <FaseExternaSection
         projeto={projeto}
         onRefresh={refresh}
-        usingMock={usingMock}
       />
 
       {/* Modal de compliance */}
@@ -388,11 +326,9 @@ export default function ProjetoDetalhesPage({
 function FaseExternaSection({
   projeto,
   onRefresh,
-  usingMock,
 }: {
   projeto: ProjetoComDetalhes;
   onRefresh: () => void;
-  usingMock: boolean;
 }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [tramiteTexto, setTramiteTexto] = useState(
@@ -408,10 +344,6 @@ function FaseExternaSection({
   /* ── Handlers ────────────────────────────────────────────────────────── */
 
   async function handleEnviar() {
-    if (usingMock) {
-      showToast("info", "Ação indisponível no modo demonstração.");
-      return;
-    }
     setActionLoading(true);
     try {
       await enviarParaLicitacao(projeto.id);
@@ -429,10 +361,6 @@ function FaseExternaSection({
       showToast("error", "Preencha a situação da licitação.");
       return;
     }
-    if (usingMock) {
-      showToast("info", "Ação indisponível no modo demonstração.");
-      return;
-    }
     setSavingTramite(true);
     try {
       await atualizarTramiteLicitacao(projeto.id, tramiteTexto.trim());
@@ -446,10 +374,6 @@ function FaseExternaSection({
   }
 
   async function handleConcluir() {
-    if (usingMock) {
-      showToast("info", "Ação indisponível no modo demonstração.");
-      return;
-    }
     setActionLoading(true);
     try {
       await concluirLicitacao(projeto.id);

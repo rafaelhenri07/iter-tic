@@ -51,12 +51,9 @@ class ComplexidadeProjetoEnum(str, enum.Enum):
 
 class StatusProjetoEnum(str, enum.Enum):
     """Status macro do projeto dentro do fluxo de contratação."""
-    EM_ELABORACAO = "Em elaboração"
-    PRONTO_PARA_CONTRATACAO = "Pronto para contratação"
-    EM_LICITACAO = "Em licitação"
-    LICITACAO_CONCLUIDA = "Licitação concluída"
-    SUSPENSO = "Suspenso"
-    CANCELADO = "Cancelado"
+    FASE_INTERNA = "Fase interna"
+    FASE_EXTERNA = "Fase externa"
+    CONTRATADO = "Contratado"
 
 
 class TipoArtefatoEnum(str, enum.Enum):
@@ -180,14 +177,13 @@ class Projeto(Base):
     )
 
     # ── Classificação ───────────────────────────────────────────────────────
-    complexidade: Mapped[ComplexidadeProjetoEnum] = mapped_column(
-        Enum(
-            ComplexidadeProjetoEnum,
-            name="complexidade_projeto_enum",
-            values_callable=lambda e: [m.value for m in e],
-        ),
-        nullable=False,
-        default=ComplexidadeProjetoEnum.MEDIA,
+    prioridade: Mapped[str] = mapped_column(
+        String, nullable=False, server_default="media",
+        comment="Prioridade: baixa, media, alta",
+    )
+    complexidade: Mapped[str] = mapped_column(
+        String, nullable=False, default="Simples",
+        comment="Complexidade: Simples, Intermediária ou Complexa",
     )
     catmat: Mapped[Optional[str]] = mapped_column(
         String(50), nullable=True,
@@ -206,7 +202,7 @@ class Projeto(Base):
             values_callable=lambda e: [m.value for m in e],
         ),
         nullable=False,
-        default=StatusProjetoEnum.EM_ELABORACAO,
+        default=StatusProjetoEnum.FASE_INTERNA,
     )
 
     # ── Equipe (FKs para Servidor) ──────────────────────────────────────────

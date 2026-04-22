@@ -289,7 +289,7 @@ async def criar_contrato(
             detail=f"Projeto {payload.projeto_id} não encontrado.",
         )
 
-    if projeto.status != StatusProjetoEnum.LICITACAO_CONCLUIDA:
+    if projeto.status != StatusProjetoEnum.CONTRATADO:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(

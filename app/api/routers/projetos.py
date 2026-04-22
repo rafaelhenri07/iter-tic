@@ -947,7 +947,7 @@ async def enviar_para_licitacao(
 ):
     projeto = await _carregar_projeto_completo(projeto_id, db)
 
-    if projeto.status != StatusProjetoEnum.PRONTO_PARA_CONTRATACAO:
+    if projeto.status != StatusProjetoEnum.FASE_INTERNA:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
@@ -983,7 +983,7 @@ async def enviar_para_licitacao(
             ),
         )
 
-    projeto.status = StatusProjetoEnum.EM_LICITACAO
+    projeto.status = StatusProjetoEnum.FASE_EXTERNA
     projeto.data_envio_licitacao = date.today()
 
     await db.flush()
@@ -1008,7 +1008,7 @@ async def tramitar_licitacao(
 ):
     projeto = await _garantir_projeto_existe(projeto_id, db)
 
-    if projeto.status != StatusProjetoEnum.EM_LICITACAO:
+    if projeto.status != StatusProjetoEnum.FASE_EXTERNA:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
@@ -1039,7 +1039,7 @@ async def concluir_licitacao(
 ):
     projeto = await _garantir_projeto_existe(projeto_id, db)
 
-    if projeto.status != StatusProjetoEnum.EM_LICITACAO:
+    if projeto.status != StatusProjetoEnum.FASE_EXTERNA:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
@@ -1048,7 +1048,7 @@ async def concluir_licitacao(
             ),
         )
 
-    projeto.status = StatusProjetoEnum.LICITACAO_CONCLUIDA
+    projeto.status = StatusProjetoEnum.CONTRATADO
 
     await db.flush()
     await db.refresh(projeto)
@@ -1127,22 +1127,8 @@ async def _verificar_promocao_projeto(
     projeto_id: int, db: AsyncSession
 ) -> None:
     """
-    Verifica se TODOS os artefatos de um projeto estão concluídos.
-    Se sim, promove automaticamente o status para 'Pronto para contratação'.
-    Só promove se o status atual for 'Em elaboração'.
+    (Desativado) Auto-promoção de status baseada em artefatos não é mais 
+    necessária, pois 'Em elaboração' e 'Pronto para contratação' foram 
+    unificados em 'Fase interna'.
     """
-    stmt = (
-        select(Projeto)
-        .options(selectinload(Projeto.artefatos))
-        .where(Projeto.id == projeto_id)
-    )
-    projeto = (await db.execute(stmt)).scalar_one_or_none()
-    if not projeto:
-        return
-
-    if projeto.status != StatusProjetoEnum.EM_ELABORACAO:
-        return
-
-    if projeto.todos_artefatos_concluidos:
-        projeto.status = StatusProjetoEnum.PRONTO_PARA_CONTRATACAO
-        await db.flush()
+    pass

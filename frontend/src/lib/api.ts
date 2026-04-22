@@ -245,8 +245,16 @@ export async function fetchProjetos(): Promise<ProjetoListagem[]> {
   return fetcher<ProjetoListagem[]>("/projetos");
 }
 
+export async function obterProjeto(projetoId: number): Promise<ProjetoBase> {
+  return fetcher<ProjetoBase>(`/projetos/${projetoId}`);
+}
+
 export async function criarProjeto(payload: unknown): Promise<ProjetoBase> {
   return poster<ProjetoBase>("/projetos", payload);
+}
+
+export async function atualizarProjeto(projetoId: number, payload: unknown): Promise<ProjetoBase> {
+  return patcher<ProjetoBase>(`/projetos/${projetoId}`, payload);
 }
 
 export async function inicializarArtefatos(
@@ -327,8 +335,19 @@ export async function alterarDataArtefato(
 
 import type { DashboardResponse } from "@/types/dashboard";
 
+export interface KpisDashboard {
+  total_pdtic: number;
+  projetos_fase_interna: number;
+  projetos_fase_externa: number;
+  contratos_ativos: number;
+}
+
 export async function fetchDashboard(): Promise<DashboardResponse> {
-  return fetcher<DashboardResponse>("/dashboard/visaogeral");
+  return fetcher<DashboardResponse>("/dashboard/painel-indicadores");
+}
+
+export async function fetchKpis(): Promise<KpisDashboard> {
+  return fetcher<KpisDashboard>("/dashboard/kpis");
 }
 
 /* ── LICITAÇÃO (Fase Externa) ──────────────────────────────────────────── */

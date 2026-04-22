@@ -63,61 +63,7 @@ const CargaEquipeChart = dynamic(
   }
 );
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   DADOS MOCK — serão substituídos pelo backend
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-export const MOCK_KPI = {
-  contratosAVencer: 4,
-  diasMaisProximo: 32,
-  projetosFaseInterna: 8,
-  projetosEmLicitacao: 4,
-  acoesPdticConcluidas: 14,
-  acoesPdticTotal: 20,
-};
-
-export const MOCK_EFETIVIDADE = [
-  { acao: "A1", estimativa: 350000, efetivo: 310000 },
-  { acao: "A2", estimativa: 890000, efetivo: 872000 },
-  { acao: "A3", estimativa: 2700000, efetivo: 2450000 },
-  { acao: "A4", estimativa: 2400000, efetivo: 2520000 },
-  { acao: "A6", estimativa: 3600000, efetivo: 3600000 },
-  { acao: "A7", estimativa: 4320000, efetivo: 3980000 },
-  { acao: "A9", estimativa: 540000, efetivo: 540000 },
-  { acao: "A11", estimativa: 225000, efetivo: 218000 },
-];
-
-export const MOCK_DISTRIBUICAO_CONTRATOS = {
-  porTipo: [
-    { name: "Aquisição", value: 8, color: "#6366f1" },
-    { name: "Serviço Continuado", value: 7, color: "#06b6d4" },
-    { name: "Subscrição", value: 5, color: "#f59e0b" },
-  ],
-  porSituacao: [
-    { label: "Vigentes", qtd: 16, color: "#10b981" },
-    { label: "Extintos", qtd: 2, color: "#94a3b8" },
-    { label: "Extintos c/ Suporte", qtd: 2, color: "#f97316" },
-  ],
-};
-
-export const MOCK_TEMPO_ARTEFATOS = [
-  { artefato: "DFD", dias: 18 },
-  { artefato: "ETP", dias: 42 },
-  { artefato: "Riscos", dias: 12 },
-  { artefato: "Custos", dias: 25 },
-  { artefato: "TR", dias: 35 },
-];
-
-export const MOCK_CARGA_EQUIPE = [
-  { nome: "Carlos Eduardo", planejamento: 3, fiscalizacao: 5 },
-  { nome: "Fernanda Rocha", planejamento: 4, fiscalizacao: 3 },
-  { nome: "Roberto Silva", planejamento: 5, fiscalizacao: 2 },
-  { nome: "Ana Beatriz", planejamento: 6, fiscalizacao: 1 },
-  { nome: "Juliana Costa", planejamento: 2, fiscalizacao: 6 },
-  { nome: "Marcos Vinícius", planejamento: 3, fiscalizacao: 4 },
-  { nome: "Ricardo Oliveira", planejamento: 4, fiscalizacao: 5 },
-  { nome: "Tatiana Gomes", planejamento: 5, fiscalizacao: 2 },
-];
+import { fetchKpis, type KpisDashboard } from "@/lib/api";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    COMPONENTE — PÁGINA
@@ -125,10 +71,23 @@ export const MOCK_CARGA_EQUIPE = [
 
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [kpis, setKpis] = useState<KpisDashboard | null>(null);
+  const [loadingKpis, setLoadingKpis] = useState(true);
 
-  const kpi = MOCK_KPI;
-  const pctPdtic = Math.round((kpi.acoesPdticConcluidas / kpi.acoesPdticTotal) * 100);
+  useEffect(() => {
+    setMounted(true);
+    async function loadKpis() {
+      try {
+        const data = await fetchKpis();
+        setKpis(data);
+      } catch (err) {
+        console.error("Erro ao carregar KPIs:", err);
+      } finally {
+        setLoadingKpis(false);
+      }
+    }
+    loadKpis();
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -143,50 +102,59 @@ export default function DashboardPage() {
               Painel de Indicadores
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Visão executiva — ITER TIC / DITEC / PCDF
+              Visão executiva
             </p>
           </div>
         </div>
 
         {/* ═══════ LINHA 1 — KPIs Críticos ═══════ */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {/* Card 1 — Ações PDTIC */}
-          <KpiCard
-            title="Ações PDTIC"
-            value={`${kpi.acoesPdticConcluidas}/${kpi.acoesPdticTotal}`}
-            subtitle={`${pctPdtic}% concluídas`}
-            icon={<CheckCircle2 size={20} />}
-            accentColor="emerald"
-            progress={pctPdtic}
-          />
+          {loadingKpis || !kpis ? (
+            <>
+              <div className="h-28 rounded-xl bg-slate-200 animate-pulse dark:bg-slate-800" />
+              <div className="h-28 rounded-xl bg-slate-200 animate-pulse dark:bg-slate-800" />
+              <div className="h-28 rounded-xl bg-slate-200 animate-pulse dark:bg-slate-800" />
+              <div className="h-28 rounded-xl bg-slate-200 animate-pulse dark:bg-slate-800" />
+            </>
+          ) : (
+            <>
+              {/* Card 1 — Ações PDTIC */}
+              <KpiCard
+                title="Ações PDTIC"
+                value={String(kpis.total_pdtic)}
+                subtitle="Ações ativas no período vigente"
+                icon={<CheckCircle2 size={20} />}
+                accentColor="emerald"
+              />
 
-          {/* Card 2 — Projetos Fase Interna */}
-          <KpiCard
-            title="Projetos — Fase Interna"
-            value={String(kpi.projetosFaseInterna)}
-            subtitle="Em elaboração de artefatos"
-            icon={<FolderKanban size={20} />}
-            accentColor="indigo"
-          />
+              {/* Card 2 — Projetos Fase Interna */}
+              <KpiCard
+                title="Fase interna"
+                value={String(kpis.projetos_fase_interna)}
+                subtitle="Em elaboração de artefatos"
+                icon={<FolderKanban size={20} />}
+                accentColor="indigo"
+              />
 
-          {/* Card 3 — Em Licitação */}
-          <KpiCard
-            title="Em Licitação"
-            value={String(kpi.projetosEmLicitacao)}
-            subtitle="Projetos na fase externa"
-            icon={<Hourglass size={20} />}
-            accentColor="cyan"
-          />
+              {/* Card 3 — Em Licitação */}
+              <KpiCard
+                title="Fase externa"
+                value={String(kpis.projetos_fase_externa)}
+                subtitle="Projetos na fase externa"
+                icon={<Hourglass size={20} />}
+                accentColor="cyan"
+              />
 
-          {/* Card 4 — Contratos a Vencer (ALERTA) */}
-          <KpiCard
-            title="Contratos a Vencer"
-            value={String(kpi.contratosAVencer)}
-            subtitle={`Próximo vencimento em ${kpi.diasMaisProximo} dias`}
-            icon={<AlertTriangle size={20} />}
-            accentColor="rose"
-            pulse
-          />
+              {/* Card 4 — Contratos Ativos */}
+              <KpiCard
+                title="Contratos Ativos"
+                value={String(kpis.contratos_ativos)}
+                subtitle="Contratos vigentes"
+                icon={<AlertTriangle size={20} />}
+                accentColor="rose"
+              />
+            </>
+          )}
         </div>
 
         {/* ═══════ LINHA 2 — Financeiro e Contratos ═══════ */}
@@ -198,7 +166,7 @@ export default function DashboardPage() {
             icon={<TrendingUp size={14} className="text-emerald-500" />}
           >
             {mounted && (
-              <EfetividadeFinanceiraChart data={MOCK_EFETIVIDADE} />
+              <EfetividadeFinanceiraChart data={[]} />
             )}
           </ChartCard>
 
@@ -209,7 +177,7 @@ export default function DashboardPage() {
             icon={<BarChart3 size={14} className="text-indigo-500" />}
           >
             {mounted && (
-              <DistribuicaoContratosChart data={MOCK_DISTRIBUICAO_CONTRATOS} />
+              <DistribuicaoContratosChart data={{ porTipo: [], porSituacao: [] }} />
             )}
           </ChartCard>
         </div>
@@ -221,23 +189,23 @@ export default function DashboardPage() {
           icon={<Clock size={14} className="text-amber-500" />}
         >
           {mounted && (
-            <TempoArtefatosChart data={MOCK_TEMPO_ARTEFATOS} />
+            <TempoArtefatosChart data={[]} />
           )}
           {/* Mini-cards com médias */}
           <div className="mt-4 flex flex-wrap gap-3">
             <MiniStat label="Média Fase Interna" value="45 dias" color="indigo" />
-            <MiniStat label="Média Licitação" value="90 dias" color="violet" />
+            <MiniStat label="Média Fase Externa" value="90 dias" color="violet" />
           </div>
         </ChartCard>
 
         {/* ═══════ LINHA 4 — Carga de Trabalho ═══════ */}
         <ChartCard
-          title="Participação da Equipe (Planejamento vs Fiscalização)"
-          subtitle="Carga de trabalho distribuída entre fase de planejamento e gestão de contratos"
+          title="Participação da Equipe (Fase interna vs Gestão de contratos)"
+          subtitle="Carga de trabalho distribuída entre fase interna e gestão de contratos"
           icon={<Users size={14} className="text-blue-500" />}
         >
           {mounted && (
-            <CargaEquipeChart data={MOCK_CARGA_EQUIPE} />
+            <CargaEquipeChart data={[]} />
           )}
         </ChartCard>
       </div>

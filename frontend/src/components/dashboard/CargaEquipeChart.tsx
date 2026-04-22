@@ -90,7 +90,7 @@ export default function CargaEquipeChart({
         />
         <Bar
           dataKey="planejamento"
-          name="Fase de Planejamento"
+          name="Fase interna"
           stackId="a"
           fill="#93c5fd"
           radius={[0, 0, 0, 0]}

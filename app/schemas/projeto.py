@@ -221,7 +221,7 @@ class ProjetoCreate(ProjetoBase):
     - As listas de vínculos (PDTIC e PACC) podem vir vazias.
     - A equipe é opcional na criação.
     """
-    status: StatusProjetoEnum = StatusProjetoEnum.EM_ELABORACAO
+    status: StatusProjetoEnum = StatusProjetoEnum.FASE_INTERNA
 
     # Equipe (opcional na criação)
     integrante_requisitante_id: Optional[int] = None

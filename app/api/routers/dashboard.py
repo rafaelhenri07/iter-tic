@@ -23,6 +23,7 @@ from app.models.projeto import (
     StatusArtefatoEnum,
     StatusProjetoEnum,
 )
+from app.models.contrato import Contrato, SituacaoContratoEnum
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -81,22 +82,84 @@ class DashboardResponse(BaseModel):
     projetos: ProjetosMetricas
 
 
+class KpisDashboard(BaseModel):
+    """KPIs rápidos para os 4 cartões superiores do Painel de Indicadores."""
+
+    total_pdtic: int
+    projetos_fase_interna: int
+    projetos_fase_externa: int
+    contratos_ativos: int
+
+
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  ROTA PRINCIPAL                                                         ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 
 @router.get(
-    "/visaogeral",
+    "/kpis",
+    response_model=KpisDashboard,
+    summary="KPIs dos cartões superiores do Painel de Indicadores",
+    description="Retorna os 4 indicadores dos cartões do dashboard via queries agregadas otimizadas.",
+)
+async def kpis_dashboard(db: AsyncSession = Depends(get_db)):
+    """
+    Executa queries agregadas em paralelo para retornar os 4 KPIs
+    dos cartões superiores do Painel de Indicadores.
+    """
+    from sqlalchemy import func, select
+
+    # 1. Total de ações PDTIC ativas no período vigente
+    stmt_periodo = (
+        select(PeriodoPdtic.id)
+        .where(PeriodoPdtic.ativo == True)  # noqa: E712
+        .order_by(PeriodoPdtic.ano_inicio.desc())
+        .limit(1)
+    )
+    periodo_id = (await db.execute(stmt_periodo)).scalar_one_or_none()
+
+    if periodo_id:
+        stmt_pdtic = select(func.count(AcaoPdtic.id)).where(
+            AcaoPdtic.periodo_id == periodo_id,
+            AcaoPdtic.revisao_exclusao_id.is_(None),
+        )
+        total_pdtic = (await db.execute(stmt_pdtic)).scalar() or 0
+    else:
+        total_pdtic = 0
+
+    # 2. Projetos por fase (single query com CASE)
+    from sqlalchemy import case
+    stmt_proj = select(
+        func.count(case((Projeto.status == StatusProjetoEnum.FASE_INTERNA, Projeto.id))).label("interna"),
+        func.count(case((Projeto.status == StatusProjetoEnum.FASE_EXTERNA, Projeto.id))).label("externa"),
+    )
+    proj_row = (await db.execute(stmt_proj)).one()
+
+    # 3. Contratos ativas (status Vigente)
+    stmt_contratos = select(func.count(Contrato.id)).where(
+        Contrato.situacao_atual == SituacaoContratoEnum.VIGENTE
+    )
+    contratos_ativos = (await db.execute(stmt_contratos)).scalar() or 0
+
+    return KpisDashboard(
+        total_pdtic=total_pdtic,
+        projetos_fase_interna=proj_row.interna,
+        projetos_fase_externa=proj_row.externa,
+        contratos_ativos=contratos_ativos,
+    )
+
+
+@router.get(
+    "/painel-indicadores",
     response_model=DashboardResponse,
-    summary="Visão Geral do Painel de Indicadores",
+    summary="Painel de Indicadores",
     description=(
         "Retorna um JSON consolidado com métricas globais dos três módulos "
         "(PDTIC, PACC e Projetos). Todas as consultas são otimizadas via "
         "func.count/func.sum do SQLAlchemy, sem carregar entidades inteiras."
     ),
 )
-async def visao_geral(db: AsyncSession = Depends(get_db)):
+async def painel_indicadores(db: AsyncSession = Depends(get_db)):
 
     pdtic = await _metricas_pdtic(db)
     pacc = await _metricas_pacc(db)
@@ -207,10 +270,9 @@ async def _metricas_projetos(db: AsyncSession) -> ProjetosMetricas:
     """
 
     statuses_ativos = [
-        StatusProjetoEnum.EM_ELABORACAO,
-        StatusProjetoEnum.PRONTO_PARA_CONTRATACAO,
-        StatusProjetoEnum.EM_LICITACAO,
-        StatusProjetoEnum.LICITACAO_CONCLUIDA,
+        StatusProjetoEnum.FASE_INTERNA,
+        StatusProjetoEnum.FASE_EXTERNA,
+        StatusProjetoEnum.CONTRATADO,
     ]
 
     # ── Distribuição por complexidade (single query) ─────────────────────────

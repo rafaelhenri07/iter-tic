@@ -9,8 +9,8 @@ import {
   Loader2,
   AlertCircle,
   Inbox,
-  Filter,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { ProjetoRow } from "@/components/projetos/ProjetoRow";
 import { DetalhesProjetoModal } from "@/components/projetos/DetalhesProjetoModal";
 import { GerenciarArtefatoModal } from "@/components/projetos/GerenciarArtefatoModal";
@@ -19,159 +19,22 @@ import { fetchProjetos } from "@/lib/api";
 import type { ProjetoListagem, StatusProjeto, ArtefatoResumo } from "@/types/projeto";
 import { ProjetosSkeleton } from "@/components/ui/Skeleton";
 
-/* ── Dados mock ────────────────────────────────────────────────────────── */
-
-const MOCK_PROJETOS: ProjetoListagem[] = [
-  {
-    id: 1,
-    nome: "Aquisição de Switches Core Cisco Catalyst 9300 para Modernização do Datacenter Principal",
-    processo_sei: "00052-00032300/2025-01",
-    complexidade: "alta",
-    status: "Em elaboração",
-    criado_em: "2025-02-10T10:00:00Z",
-    qtd_acoes_pdtic: 2,
-    qtd_itens_pacc: 1,
-    qtd_artefatos_total: 5,
-    qtd_artefatos_concluidos: 3,
-    artefatos_resumo: [
-      { id: 101, tipo: "DFD", status: "Concluído", dias_decorridos: 12, ultimo_comentario: "Validado pelo requisitante em reunião presencial.", total_comentarios: 1, data_inicio: "2025-02-12", data_conclusao: "2025-02-24", comentarios: [] },
-      { id: 102, tipo: "ETP", status: "Concluído", dias_decorridos: 18, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-02-25", data_conclusao: "2025-03-15" },
-      { id: 103, tipo: "Mapa de Riscos", status: "Concluído", dias_decorridos: 8, ultimo_comentario: "Risco de dependência de fornecedor único identificado.", total_comentarios: 1, data_inicio: "2025-03-16", data_conclusao: "2025-03-24" },
-      { id: 104, tipo: "Estimativa de Custos e Orçamento", status: "Iniciado", dias_decorridos: 5, ultimo_comentario: "Aguardando cotação da empresa X.", total_comentarios: 1, data_inicio: "2025-03-25", data_conclusao: null },
-      { id: 105, tipo: "TR", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-    ],
-    nome_requisitante: "Carlos Mendes",
-    nome_tecnico: "Ana Beatriz Silva",
-    nome_administrativo: "Roberto Alves",
-    data_envio_licitacao: null,
-    situacao_licitacao_texto: null,
-    tramitacoes_resumo: [],
-    total_tramitacoes: 0,
-  },
-  {
-    id: 2,
-    nome: "Contratação de Serviço de Sustentação e Evolução dos Sistemas Legados",
-    processo_sei: "00052-00045100/2025-03",
-    complexidade: "media",
-    status: "Pronto para contratação",
-    criado_em: "2025-01-15T10:00:00Z",
-    qtd_acoes_pdtic: 1,
-    qtd_itens_pacc: 1,
-    qtd_artefatos_total: 5,
-    qtd_artefatos_concluidos: 5,
-    artefatos_resumo: [
-      { id: 201, tipo: "DFD", status: "Concluído", dias_decorridos: 10, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-04-01", data_conclusao: "2025-04-11" },
-      { id: 202, tipo: "ETP", status: "Concluído", dias_decorridos: 14, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-04-12", data_conclusao: "2025-04-26" },
-      { id: 203, tipo: "Mapa de Riscos", status: "Concluído", dias_decorridos: 7, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-04-27", data_conclusao: "2025-05-04" },
-      { id: 204, tipo: "Estimativa de Custos e Orçamento", status: "Concluído", dias_decorridos: 9, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-05-05", data_conclusao: "2025-05-14" },
-      { id: 205, tipo: "TR", status: "Concluído", dias_decorridos: 20, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-05-15", data_conclusao: "2025-06-04" },
-    ],
-    nome_requisitante: "Fernando Costa",
-    nome_tecnico: "Juliana Martins",
-    nome_administrativo: "Patricia Rocha",
-    data_envio_licitacao: null,
-    situacao_licitacao_texto: null,
-    tramitacoes_resumo: [],
-    total_tramitacoes: 0,
-  },
-  {
-    id: 3,
-    nome: "Aquisição de Solução SIEM/SOC Gerenciado com Monitoramento 24x7",
-    processo_sei: "00052-00078900/2025-06",
-    complexidade: "alta",
-    status: "Em elaboração",
-    criado_em: "2025-06-10T10:00:00Z",
-    qtd_acoes_pdtic: 1,
-    qtd_itens_pacc: 1,
-    qtd_artefatos_total: 5,
-    qtd_artefatos_concluidos: 1,
-    artefatos_resumo: [
-      { id: 301, tipo: "DFD", status: "Concluído", dias_decorridos: 15, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-06-12", data_conclusao: "2025-06-27" },
-      { id: 302, tipo: "ETP", status: "Iniciado", dias_decorridos: 3, ultimo_comentario: "Em análise pela equipe técnica.", total_comentarios: 1, data_inicio: "2025-06-28", data_conclusao: null },
-      { id: 303, tipo: "Mapa de Riscos", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-      { id: 304, tipo: "Estimativa de Custos e Orçamento", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-      { id: 305, tipo: "TR", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-    ],
-    nome_requisitante: "Lucas Ferreira",
-    nome_tecnico: "Marcos Souza",
-    nome_administrativo: null,
-    data_envio_licitacao: null,
-    situacao_licitacao_texto: null,
-    tramitacoes_resumo: [],
-    total_tramitacoes: 0,
-  },
-  {
-    id: 4,
-    nome: "Capacitação em ITIL v4 e COBIT para Equipe de Governança de TI",
-    processo_sei: "00052-00091200/2025-08",
-    complexidade: "baixa",
-    status: "Em elaboração",
-    criado_em: "2025-08-01T10:00:00Z",
-    qtd_acoes_pdtic: 1,
-    qtd_itens_pacc: 0,
-    qtd_artefatos_total: 5,
-    qtd_artefatos_concluidos: 0,
-    artefatos_resumo: [
-      { id: 401, tipo: "DFD", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-      { id: 402, tipo: "ETP", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-      { id: 403, tipo: "Mapa de Riscos", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-      { id: 404, tipo: "Estimativa de Custos e Orçamento", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-      { id: 405, tipo: "TR", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-    ],
-    nome_requisitante: "Amanda Ribeiro",
-    nome_tecnico: null,
-    nome_administrativo: null,
-    data_envio_licitacao: null,
-    situacao_licitacao_texto: null,
-    tramitacoes_resumo: [],
-    total_tramitacoes: 0,
-  },
-  {
-    id: 5,
-    nome: "Contratação de Link MPLS Dedicado para Interligação das Unidades Remotas",
-    processo_sei: "00052-00056700/2025-04",
-    complexidade: "media",
-    status: "Suspenso",
-    criado_em: "2025-04-20T10:00:00Z",
-    qtd_acoes_pdtic: 0,
-    qtd_itens_pacc: 0,
-    qtd_artefatos_total: 5,
-    qtd_artefatos_concluidos: 2,
-    artefatos_resumo: [
-      { id: 501, tipo: "DFD", status: "Concluído", dias_decorridos: 11, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-04-22", data_conclusao: "2025-05-03" },
-      { id: 502, tipo: "ETP", status: "Concluído", dias_decorridos: 16, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-05-04", data_conclusao: "2025-05-20" },
-      { id: 503, tipo: "Mapa de Riscos", status: "Iniciado", dias_decorridos: 4, ultimo_comentario: null, total_comentarios: 0, data_inicio: "2025-05-21", data_conclusao: null },
-      { id: 504, tipo: "Estimativa de Custos e Orçamento", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-      { id: 505, tipo: "TR", status: "Não iniciado", dias_decorridos: null, ultimo_comentario: null, total_comentarios: 0, data_inicio: null, data_conclusao: null },
-    ],
-    nome_requisitante: "Diego Oliveira",
-    nome_tecnico: "Camila Nascimento",
-    nome_administrativo: "Paulo Henrique",
-    data_envio_licitacao: null,
-    situacao_licitacao_texto: null,
-    tramitacoes_resumo: [],
-    total_tramitacoes: 0,
-  },
-];
-
 /* ── Filtros de status ─────────────────────────────────────────────────── */
 
-const STATUS_TABS: { label: string; value: StatusProjeto | "todos" }[] = [
-  { label: "Todos", value: "todos" },
-  { label: "Em elaboração", value: "Em elaboração" },
-  { label: "Pronto para contratação", value: "Pronto para contratação" },
-  { label: "Em licitação", value: "Em licitação" },
-  { label: "Licitação concluída", value: "Licitação concluída" },
-  { label: "Suspenso", value: "Suspenso" },
-  { label: "Cancelado", value: "Cancelado" },
+const STATUS_OPTIONS: { label: string; value: StatusProjeto | "todos" }[] = [
+  { label: "Todos os status", value: "todos" },
+  { label: "Fase interna", value: "Fase interna" },
+  { label: "Fase externa", value: "Fase externa" },
+  { label: "Contratado", value: "Contratado" },
 ];
 
 /* ── Página principal ──────────────────────────────────────────────────── */
 
 export default function ProjetosPage() {
+  const router = useRouter();
   const [projetos, setProjetos] = useState<ProjetoListagem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usingMock, setUsingMock] = useState(false);
+  const [erro, setErro] = useState(false);
   const [fetchKey, setFetchKey] = useState(0);
 
   // Modais
@@ -188,12 +51,13 @@ export default function ProjetosPage() {
   useEffect(() => {
     async function load() {
       try {
+        setErro(false);
         const data = await fetchProjetos();
         setProjetos(data);
       } catch {
-        console.warn("Backend indisponível — usando dados mock");
-        setProjetos(MOCK_PROJETOS);
-        setUsingMock(true);
+        console.error("Erro ao carregar projetos do backend.");
+        setProjetos([]);
+        setErro(true);
       } finally {
         setLoading(false);
       }
@@ -226,16 +90,16 @@ export default function ProjetosPage() {
   // Stats
   const stats = useMemo(() => {
     const total = projetos.length;
-    const emElaboracao = projetos.filter(
-      (p) => p.status === "Em elaboração"
+    const faseInterna = projetos.filter(
+      (p) => p.status === "Fase interna"
     ).length;
-    const emLicitacao = projetos.filter(
-      (p) => p.status === "Em licitação"
+    const faseExterna = projetos.filter(
+      (p) => p.status === "Fase externa"
     ).length;
-    const licitacaoConcluida = projetos.filter(
-      (p) => p.status === "Licitação concluída"
+    const contratado = projetos.filter(
+      (p) => p.status === "Contratado"
     ).length;
-    return { total, emElaboracao, emLicitacao, licitacaoConcluida };
+    return { total, faseInterna, faseExterna, contratado };
   }, [projetos]);
 
   return (
@@ -265,11 +129,11 @@ export default function ProjetosPage() {
         </Link>
       </div>
 
-      {/* Banner mock */}
-      {usingMock && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+      {/* Banner de erro */}
+      {erro && (
+        <div className="flex items-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
           <AlertCircle size={16} />
-          Back-end indisponível — exibindo dados de demonstração.
+          Não foi possível conectar ao servidor. Verifique se o backend está ativo.
         </div>
       )}
 
@@ -286,26 +150,26 @@ export default function ProjetosPage() {
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Em Elaboração
+              Fase Interna
             </div>
-            <div className="mt-1 text-3xl font-bold text-indigo-600 dark:text-indigo-400">
-              {stats.emElaboracao}
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
-            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Em Licitação
-            </div>
-            <div className="mt-1 text-3xl font-bold text-cyan-600 dark:text-cyan-400">
-              {stats.emLicitacao}
+            <div className="mt-1 text-3xl font-bold text-blue-600 dark:text-blue-400">
+              {stats.faseInterna}
             </div>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Licitação Concluída
+              Fase Externa
+            </div>
+            <div className="mt-1 text-3xl font-bold text-violet-600 dark:text-violet-400">
+              {stats.faseExterna}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Contratado
             </div>
             <div className="mt-1 text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-              {stats.licitacaoConcluida}
+              {stats.contratado}
             </div>
           </div>
         </div>
@@ -329,22 +193,18 @@ export default function ProjetosPage() {
             />
           </div>
 
-          {/* Status tabs */}
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-background-card p-1">
-            {STATUS_TABS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => setStatusFilter(tab.value)}
-                className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-all
-                  ${statusFilter === tab.value
-                    ? "bg-brand-primary text-white shadow-sm"
-                    : "text-foreground-muted hover:text-foreground hover:bg-background-secondary"
-                  }`}
-              >
-                {tab.label}
-              </button>
+          {/* Status dropdown */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusProjeto | "todos")}
+            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
             ))}
-          </div>
+          </select>
         </div>
       )}
 
@@ -396,6 +256,9 @@ export default function ProjetosPage() {
                     Prioridade
                   </th>
                   <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Complexidade
+                  </th>
+                  <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Ações
                   </th>
                 </tr>
@@ -406,7 +269,7 @@ export default function ProjetosPage() {
                     key={p.id}
                     projeto={p}
                     onVerDetalhes={(id) => setSelectedProjetoId(id)}
-                    onEditProjeto={(proj) => alert(`Editar: ${proj.nome} (ID: ${proj.id})`)}
+                    onEditProjeto={(proj) => router.push(`/projetos/${proj.id}/editar`)}
                     onArtefatoClick={(pid, a) => setArtefatoModal({ projetoId: pid, artefato: a })}
                   />
                 ))}

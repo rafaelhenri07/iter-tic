@@ -17,12 +17,9 @@ import {
 // Removido PRIORIDADE_PILL, usando PRIORIDADE_CONFIG do types
 
 const STATUS_PILL: Record<StatusProjeto, string> = {
-  "Em elaboração": "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800/50",
-  "Pronto para contratação": "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800/50",
-  "Em licitação": "bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300 dark:bg-fuchsia-900/40 dark:text-fuchsia-400 dark:border-fuchsia-800/50",
-  "Licitação concluída": "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800/50",
-  Suspenso: "bg-neutral-100 text-neutral-700 border-neutral-300 dark:bg-neutral-900/40 dark:text-neutral-400 dark:border-neutral-800/50",
-  Cancelado: "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800/50",
+  "Fase interna": "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-400 dark:border-indigo-800/50",
+  "Fase externa": "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/40 dark:text-teal-400 dark:border-teal-800/50",
+  "Contratado": "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800/50",
 };
 
 /* ── Mapeamento curto de tipos de artefato ─────────────────────────────── */
@@ -213,7 +210,7 @@ function ArtefatoPipeline({
 
 /* ── Tooltip de status com tramitações ─────────────────────────────────── */
 
-const LICITACAO_STATUSES: StatusProjeto[] = ["Em licitação", "Licitação concluída"];
+const FASE_EXTERNA_STATUSES: StatusProjeto[] = ["Fase externa"];
 
 function StatusTooltip({
   projeto,
@@ -222,8 +219,8 @@ function StatusTooltip({
   projeto: ProjetoListagem;
   children: React.ReactNode;
 }) {
-  const isLicitacao = LICITACAO_STATUSES.includes(projeto.status);
-  if (!isLicitacao) return <>{children}</>;
+  const isFaseExterna = FASE_EXTERNA_STATUSES.includes(projeto.status);
+  if (!isFaseExterna) return <>{children}</>;
 
   const envio = fmtDate(projeto.data_envio_licitacao);
   const tramitacoes = projeto.tramitacoes_resumo ?? [];

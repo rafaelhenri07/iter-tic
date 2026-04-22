@@ -15,7 +15,7 @@ import {
   Briefcase,
   Shield,
 } from "lucide-react";
-import { ServidorModal } from "@/components/equipe/ServidorModal";
+import Link from "next/link";
 import { ToastContainer, showToast } from "@/components/ui/Toast";
 import { fetchServidores, excluirServidor } from "@/lib/api";
 import type { Servidor } from "@/types/projeto";
@@ -45,9 +45,7 @@ export default function EquipePage() {
   const [loading, setLoading] = useState(true);
   const [fetchKey, setFetchKey] = useState(0);
 
-  // Modal
-  const [showModal, setShowModal] = useState(false);
-  const [editingServidor, setEditingServidor] = useState<Servidor | null>(null);
+
 
   // Busca
   const [search, setSearch] = useState("");
@@ -102,14 +100,7 @@ export default function EquipePage() {
 
   // Open edit
   function openEdit(s: Servidor) {
-    setEditingServidor(s);
-    setShowModal(true);
-  }
-
-  // Open create
-  function openCreate() {
-    setEditingServidor(null);
-    setShowModal(true);
+    showToast("info", "A edição de servidor será implementada em breve.");
   }
 
   return (
@@ -130,13 +121,13 @@ export default function EquipePage() {
           </div>
         </div>
 
-        <button
-          onClick={openCreate}
+        <Link
+          href="/equipe/novo"
           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:shadow-indigo-500/30 hover:brightness-110"
         >
           <Plus size={16} />
           Novo Servidor
-        </button>
+        </Link>
       </div>
 
       {/* KPI */}
@@ -202,13 +193,13 @@ export default function EquipePage() {
               : "Nenhum servidor encontrado"}
           </p>
           {servidores.length === 0 && (
-            <button
-              onClick={openCreate}
+            <Link
+              href="/equipe/novo"
               className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40"
             >
               <Plus size={14} />
               Cadastrar primeiro servidor
-            </button>
+            </Link>
           )}
         </div>
       ) : (
@@ -348,17 +339,7 @@ export default function EquipePage() {
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <ServidorModal
-          servidor={editingServidor}
-          onClose={() => {
-            setShowModal(false);
-            setEditingServidor(null);
-          }}
-          onSuccess={refresh}
-        />
-      )}
+
 
       <ToastContainer />
     </div>

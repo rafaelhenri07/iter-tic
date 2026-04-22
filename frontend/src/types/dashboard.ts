@@ -1,5 +1,5 @@
 /* ──────────────────────────────────────────────────────────────────────────
- * ITER TIC — Tipagens do Dashboard (Visão Geral)
+ * ITER TIC — Tipagens do Dashboard (Painel de Indicadores)
  * Espelha DashboardResponse do backend (app/api/routers/dashboard.py)
  * ────────────────────────────────────────────────────────────────────────── */
 

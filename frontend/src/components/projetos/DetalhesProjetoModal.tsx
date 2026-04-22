@@ -197,7 +197,7 @@ export function DetalhesProjetoModal({
         {/* ── Tabs ──────────────────────────────────────────────────── */}
         <div className="flex gap-0 border-b border-border px-6 shrink-0">
           {([
-            { key: "geral" as Tab, label: "Visão Geral" },
+            { key: "geral" as Tab, label: "Dados Gerais" },
             { key: "licitacao" as Tab, label: "Fase Externa (Licitação)" },
           ]).map((tab) => (
             <button
