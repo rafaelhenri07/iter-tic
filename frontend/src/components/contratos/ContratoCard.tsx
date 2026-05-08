@@ -16,6 +16,7 @@ import type { ContratoListagem } from "@/types/contrato";
 import {
   TIPO_CONTRATO_CONFIG,
   SITUACAO_CONTRATO_CONFIG,
+  MODALIDADE_CONTRATO_CONFIG,
 } from "@/types/contrato";
 import { formatarMoedaBRL, formatDate } from "@/lib/formatters";
 
@@ -28,6 +29,8 @@ interface ContratoCardProps {
 export function ContratoCard({ contrato, onVerDetalhes, onEditar }: ContratoCardProps) {
   const tipoCfg = TIPO_CONTRATO_CONFIG[contrato.tipo_contrato];
   const sitCfg = SITUACAO_CONTRATO_CONFIG[contrato.situacao_atual];
+  const modCfg = MODALIDADE_CONTRATO_CONFIG[contrato.modalidade_contrato] ?? MODALIDADE_CONTRATO_CONFIG.CONTRATO;
+  const isARP = contrato.modalidade_contrato === 'ARP';
 
   return (
     <div className="group rounded-xl border border-border bg-background-card shadow-sm transition-all hover:shadow-md hover:border-cyan-300 dark:hover:border-cyan-700">
@@ -40,12 +43,15 @@ export function ContratoCard({ contrato, onVerDetalhes, onEditar }: ContratoCard
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-base font-bold text-foreground">
-                Contrato {contrato.numero_contrato}
+                {isARP ? 'ARP' : 'Contrato'} {String(contrato.numero).padStart(3, '0')}/{contrato.ano}
               </h3>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${modCfg.cls}`}>
+                {modCfg.icon} {modCfg.label}
+              </span>
             </div>
             <div className="mt-0.5 flex items-center gap-1.5 text-xs text-foreground-muted">
               <Building2 size={11} />
-              <span className="truncate">{contrato.empresa_contratada}</span>
+              <span className="truncate">{contrato.empresa_nome ?? "—"}</span>
             </div>
           </div>
         </div>
@@ -67,23 +73,7 @@ export function ContratoCard({ contrato, onVerDetalhes, onEditar }: ContratoCard
       {/* Body */}
       <div className="px-5 py-4 space-y-3">
         {/* Financeiro */}
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <div className="text-[9px] font-bold uppercase tracking-widest text-foreground-muted">
-              Investimento
-            </div>
-            <div className="mt-0.5 text-sm font-bold text-blue-600 dark:text-blue-400 font-mono">
-              {formatarMoedaBRL(contrato.valor_investimento)}
-            </div>
-          </div>
-          <div>
-            <div className="text-[9px] font-bold uppercase tracking-widest text-foreground-muted">
-              Custeio
-            </div>
-            <div className="mt-0.5 text-sm font-bold text-amber-600 dark:text-amber-400 font-mono">
-              {formatarMoedaBRL(contrato.valor_custeio)}
-            </div>
-          </div>
+        <div className="flex items-center justify-between">
           <div>
             <div className="text-[9px] font-bold uppercase tracking-widest text-foreground-muted">
               Valor Total
@@ -94,17 +84,13 @@ export function ContratoCard({ contrato, onVerDetalhes, onEditar }: ContratoCard
           </div>
         </div>
 
-        {/* Vigência + Quantidade */}
+        {/* Vigência */}
         <div className="flex items-center gap-4 text-xs text-foreground-muted">
           <div className="flex items-center gap-1">
             <Calendar size={11} />
             <span>
               {formatDate(contrato.data_assinatura)} → {formatDate(contrato.data_fim_vigencia)}
             </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Hash size={11} />
-            <span>{contrato.quantidade} un.</span>
           </div>
         </div>
 

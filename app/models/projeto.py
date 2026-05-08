@@ -136,14 +136,34 @@ class Servidor(Base):
         String(200), nullable=True,
         comment="Função comissionada ou de confiança, se houver.",
     )
-    lotacao: Mapped[str] = mapped_column(
-        String(200), nullable=False,
-        comment="Unidade de lotação (ex: DTI, Gabinete).",
+    departamento_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("unidades_organizacionais.id"), nullable=False,
+        comment="ID do Departamento.",
     )
-    perfil_acesso: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True,
-        comment="Perfil de acesso ao sistema (futuro RBAC).",
+    unidade_lotacao_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("unidades_organizacionais.id"), nullable=True,
+        comment="ID da Unidade de Lotação.",
     )
+    secao_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("unidades_organizacionais.id"), nullable=True,
+        comment="ID da Seção.",
+    )
+    email_funcional: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True,
+        comment="E-mail funcional do servidor.",
+    )
+
+    # ── Relationships ───────────────────────────────────────────────────────
+    departamento: Mapped["UnidadeOrganizacional"] = relationship(
+        "UnidadeOrganizacional", foreign_keys=[departamento_id]
+    )
+    unidade_lotacao: Mapped[Optional["UnidadeOrganizacional"]] = relationship(
+        "UnidadeOrganizacional", foreign_keys=[unidade_lotacao_id]
+    )
+    secao: Mapped[Optional["UnidadeOrganizacional"]] = relationship(
+        "UnidadeOrganizacional", foreign_keys=[secao_id]
+    )
+
 
     # ── Timestamps ──────────────────────────────────────────────────────────
     criado_em: Mapped[datetime] = mapped_column(
@@ -184,14 +204,6 @@ class Projeto(Base):
     complexidade: Mapped[str] = mapped_column(
         String, nullable=False, default="Simples",
         comment="Complexidade: Simples, Intermediária ou Complexa",
-    )
-    catmat: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True,
-        comment="Código CATMAT (material) do ComprasNet.",
-    )
-    catser: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True,
-        comment="Código CATSER (serviço) do ComprasNet.",
     )
 
     # ── Status ──────────────────────────────────────────────────────────────
@@ -287,6 +299,13 @@ class Projeto(Base):
         order_by="ProjetoTramitacao.data_hora.desc()",
     )
 
+    observacoes_fase_externa: Mapped[list["ObservacaoFaseExterna"]] = relationship(
+        "ObservacaoFaseExterna",
+        back_populates="projeto",
+        cascade="all, delete-orphan",
+        order_by="ObservacaoFaseExterna.criado_em.desc()",
+    )
+
     # ── Constraints ─────────────────────────────────────────────────────────
     __table_args__ = (
         UniqueConstraint("processo_sei", name="uq_projeto_processo_sei"),
@@ -340,6 +359,36 @@ class ProjetoTramitacao(Base):
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  2c. OBSERVAÇÃO FASE EXTERNA (Diário de Bordo)                         ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+class ObservacaoFaseExterna(Base):
+    """Diário de Bordo da Fase Externa do Projeto."""
+    __tablename__ = "observacoes_fase_externa"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    projeto_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("projetos.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    usuario_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+    )
+    texto: Mapped[str] = mapped_column(Text, nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # ── Relationships ───────────────────────────────────────────────────────
+    projeto: Mapped["Projeto"] = relationship(back_populates="observacoes_fase_externa")
+    usuario: Mapped[Optional["Usuario"]] = relationship(
+        "Usuario", foreign_keys=[usuario_id]
+    )
+
+    def __repr__(self) -> str:
+        return f"<ObservacaoFaseExterna #{self.id} projeto_id={self.projeto_id}>"
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  3. ARTEFATO (documentos da fase interna da licitação)                 ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
@@ -376,9 +425,17 @@ class Artefato(Base):
         Date, nullable=True,
         comment="Preenchida quando o artefato é iniciado.",
     )
+    data_fim_prevista: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True,
+        comment="Prazo calculado automaticamente (SLA) ao iniciar o artefato.",
+    )
     data_conclusao: Mapped[Optional[date]] = mapped_column(
         Date, nullable=True,
         comment="Preenchida quando o artefato é concluído.",
+    )
+    justificativa_atraso: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True,
+        comment="Obrigatória quando data_conclusao > data_fim_prevista.",
     )
     observacoes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -510,3 +567,5 @@ class HistoricoDataArtefato(Base):
 # ── Forward reference imports (resolve string annotations) ────────────────
 from app.models.pdtic import AcaoPdtic  # noqa: E402, F401
 from app.models.pacc import ItemPacc  # noqa: E402, F401
+from app.models.usuario import Usuario  # noqa: E402, F401
+from app.models.estrutura_organizacional import UnidadeOrganizacional  # noqa: E402, F401

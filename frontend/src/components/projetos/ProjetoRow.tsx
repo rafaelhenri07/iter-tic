@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   ChevronRight,
   Check,
@@ -17,8 +18,8 @@ import {
 // Removido PRIORIDADE_PILL, usando PRIORIDADE_CONFIG do types
 
 const STATUS_PILL: Record<StatusProjeto, string> = {
-  "Fase interna": "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-400 dark:border-indigo-800/50",
-  "Fase externa": "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/40 dark:text-teal-400 dark:border-teal-800/50",
+  "Fase interna": "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800/50",
+  "Fase externa": "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800/50",
   "Contratado": "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800/50",
 };
 
@@ -283,40 +284,38 @@ function StatusTooltip({
 
 interface ProjetoRowProps {
   projeto: ProjetoListagem;
-  onVerDetalhes?: (id: number) => void;
   onEditProjeto?: (projeto: ProjetoListagem) => void;
   onArtefatoClick?: (projetoId: number, artefato: ArtefatoResumo) => void;
 }
 
 export function ProjetoRow({
   projeto,
-  onVerDetalhes,
   onEditProjeto,
   onArtefatoClick,
 }: ProjetoRowProps) {
+  const router = useRouter();
   const prioridade = PRIORIDADE_CONFIG[projeto.prioridade] ?? PRIORIDADE_CONFIG["media"];
   const complexidade = COMPLEXIDADE_CONFIG[projeto.complexidade] ?? COMPLEXIDADE_CONFIG["Simples"];
 
   return (
-    <tr className="group border-b border-slate-100 transition-colors hover:bg-slate-50/60 dark:border-slate-800 dark:hover:bg-slate-800/30">
-      {/* PROJETO */}
+    <tr
+      className="group cursor-pointer border-b border-slate-100 transition-colors duration-150 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/30"
+      onClick={() => router.push(`/projetos/${projeto.id}`)}
+    >
       <td className="px-4 py-3.5 align-top">
-        <button
-          onClick={() => onVerDetalhes?.(projeto.id)}
-          className="text-left text-[13px] font-semibold text-foreground leading-snug line-clamp-2 cursor-pointer hover:text-indigo-600 hover:underline transition-colors dark:hover:text-indigo-400"
-        >
+        <span className="text-left text-[13px] font-semibold text-foreground leading-snug line-clamp-2">
           {projeto.nome}
-        </button>
-        <button
-          onClick={() => onVerDetalhes?.(projeto.id)}
-          className="mt-1 block text-[11px] font-mono text-slate-400 dark:text-slate-500 cursor-pointer hover:text-indigo-500 transition-colors"
-        >
+        </span>
+        <div className="mt-1 block text-[11px] font-mono text-slate-400 dark:text-slate-500">
           {projeto.processo_sei}
-        </button>
+        </div>
       </td>
 
-      {/* ESTEIRA DE ARTEFATOS */}
-      <td className="px-4 py-3.5 align-middle">
+      {/* ESTEIRA DE ARTEFATOS — Zona Segura: bloqueia propagação para o <tr> */}
+      <td
+        className="px-4 py-3.5 align-middle cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         <ArtefatoPipeline
           artefatos={projeto.artefatos_resumo}
           onArtefatoClick={(a) => onArtefatoClick?.(projeto.id, a)}
@@ -347,21 +346,12 @@ export function ProjetoRow({
         </div>
       </td>
 
-      {/* COMPLEXIDADE */}
-      <td className="px-4 py-3.5 align-middle">
-        <div className="flex items-center justify-center">
-          <span
-            className={`inline-block rounded-full py-0.5 px-2.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${complexidade.cls}`}
-          >
-            {complexidade.label}
-          </span>
-        </div>
-      </td>
+
 
       {/* AÇÕES — Apenas Editar */}
       <td className="px-4 py-3.5 align-middle text-center">
         <button
-          onClick={() => onEditProjeto?.(projeto)}
+          onClick={(e) => { e.stopPropagation(); onEditProjeto?.(projeto); }}
           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400"
           title="Editar projeto"
         >

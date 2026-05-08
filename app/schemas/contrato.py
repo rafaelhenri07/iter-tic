@@ -16,9 +16,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, computed_field
 
-from app.models.contrato import TipoContratoEnum, SituacaoContratoEnum, TipoRegistroHistoricoEnum
-
-_RE_NUMERO_CONTRATO = re.compile(r"^\d{2,3}/\d{4}$")
+from app.models.contrato import TipoContratoEnum, SituacaoContratoEnum, TipoRegistroHistoricoEnum, ModalidadeContratoEnum
+from app.schemas.aditivo import AditivoResponse  # noqa: E402
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -116,6 +115,29 @@ class ObservacaoContratoCreate(BaseModel):
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  ITENS DO CONTRATO                                                     ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+class ItemContratoCreate(BaseModel):
+    objeto_contratado: str = Field(..., min_length=1, max_length=500)
+    quantidade: int = Field(default=1, ge=1)
+    valor_unitario: Decimal = Field(default=Decimal(0), ge=0)
+    tipo_catalogo: Optional[str] = Field(None, max_length=10, description="CATMAT ou CATSER")
+    codigo_catalogo: Optional[str] = Field(None, max_length=50)
+
+class ItemContratoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    contrato_id: int
+    objeto_contratado: str
+    quantidade: int
+    valor_unitario: Decimal
+    valor_total: Decimal
+    tipo_catalogo: Optional[str] = None
+    codigo_catalogo: Optional[str] = None
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  CONTRATO - CREATE                                                     ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
@@ -124,32 +146,27 @@ class ContratoCreate(BaseModel):
     """Payload para criação de um novo contrato."""
 
     projeto_id: int
-    numero_contrato: str = Field(
-        ..., max_length=20,
-        examples=["42/2025"],
-        description="Formato obrigatório: NN/YYYY ou NNN/YYYY.",
-    )
-    empresa_contratada: str = Field(
-        ..., min_length=1, max_length=500,
-        examples=["Tech Solutions Ltda."],
+    modalidade_contrato: ModalidadeContratoEnum = ModalidadeContratoEnum.CONTRATO
+    numero: int = Field(..., gt=0, examples=[42])
+    ano: int = Field(..., ge=2015, le=2035, examples=[2025])
+    empresa_id: int = Field(
+        ..., description="ID da empresa contratada (FK para tabela empresas).",
     )
     fabricante_id: Optional[int] = Field(None, description="ID do fabricante (FK para tabela fabricantes)")
     tipo_contrato: TipoContratoEnum
-    quantidade: int = Field(..., ge=1, examples=[50])
-    tecnologia_utilizada: Optional[str] = Field(
-        None, max_length=500, examples=["Switches Catalyst 9300"]
-    )
+    itens: list[ItemContratoCreate] = Field(default_factory=list, description="Itens do contrato")
 
-    valor_investimento: Decimal = Field(
-        default=Decimal(0), ge=0, examples=[450000.00],
+    data_inicio_vigencia: Optional[date] = Field(
+        None, examples=["2025-06-15"],
+        description="Data de início da vigência (opcional; se omitida, usa data_assinatura).",
     )
-    valor_custeio: Decimal = Field(
-        default=Decimal(0), ge=0, examples=[120000.00],
+    vigencia_meses: Optional[int] = Field(
+        None, ge=0, examples=[12],
+        description="Quantidade de meses de vigência (calculado automaticamente).",
     )
-
-    prazo: Optional[str] = Field(
-        None, max_length=300,
-        examples=["12 meses; 24 meses com suporte"],
+    prorrogacao_meses: int = Field(
+        default=0, ge=0, le=120, examples=[0],
+        description="Prorrogação adicional em meses.",
     )
     data_assinatura: date = Field(..., examples=["2025-06-15"])
     data_fim_vigencia: date = Field(..., examples=["2026-06-14"])
@@ -160,16 +177,9 @@ class ContratoCreate(BaseModel):
     # Equipe de fiscalização (novo formato: Titular + Substitutos)
     equipe: Optional[EquipeInput] = None
 
-    @field_validator("numero_contrato", mode="before")
-    @classmethod
-    def validar_numero_contrato(cls, v: str) -> str:
-        v = v.strip()
-        if not _RE_NUMERO_CONTRATO.match(v):
-            raise ValueError(
-                f"Formato do número do contrato inválido: '{v}'. "
-                "Use o formato NN/YYYY ou NNN/YYYY (ex: 42/2025)."
-            )
-        return v
+    # Campos específicos de ARP
+    orgao_gerenciador: Optional[str] = Field(None, max_length=300)
+
 
     @field_validator("data_fim_vigencia", mode="after")
     @classmethod
@@ -191,17 +201,18 @@ class ContratoCreate(BaseModel):
 class ContratoUpdate(BaseModel):
     """Atualização parcial de contrato."""
 
-    numero_contrato: Optional[str] = Field(None, max_length=20)
-    empresa_contratada: Optional[str] = Field(None, min_length=1, max_length=500)
+    numero: Optional[int] = Field(None, gt=0)
+    ano: Optional[int] = Field(None, ge=2015, le=2035)
+    modalidade_contrato: Optional[ModalidadeContratoEnum] = None
+    orgao_gerenciador: Optional[str] = Field(None, max_length=300)
+    empresa_id: Optional[int] = Field(None, description="ID da empresa contratada")
     fabricante_id: Optional[int] = None
     tipo_contrato: Optional[TipoContratoEnum] = None
-    quantidade: Optional[int] = Field(None, ge=1)
-    tecnologia_utilizada: Optional[str] = Field(None, max_length=500)
+    itens: Optional[list[ItemContratoCreate]] = None
 
-    valor_investimento: Optional[Decimal] = Field(None, ge=0)
-    valor_custeio: Optional[Decimal] = Field(None, ge=0)
-
-    prazo: Optional[str] = Field(None, max_length=300)
+    data_inicio_vigencia: Optional[date] = None
+    vigencia_meses: Optional[int] = Field(None, ge=0)
+    prorrogacao_meses: Optional[int] = Field(None, ge=0, le=120)
     data_assinatura: Optional[date] = None
     data_fim_vigencia: Optional[date] = None
 
@@ -211,18 +222,7 @@ class ContratoUpdate(BaseModel):
     # Equipe (novo formato)
     equipe: Optional[EquipeInput] = None
 
-    @field_validator("numero_contrato", mode="before")
-    @classmethod
-    def validar_numero_contrato(cls, v: Optional[str]) -> Optional[str]:
-        if v is None:
-            return v
-        v = v.strip()
-        if not _RE_NUMERO_CONTRATO.match(v):
-            raise ValueError(
-                f"Formato do número do contrato inválido: '{v}'. "
-                "Use o formato NN/YYYY ou NNN/YYYY (ex: 42/2025)."
-            )
-        return v
+
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -235,19 +235,21 @@ class ContratoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    numero_contrato: str
+    numero: int
+    ano: int
+    modalidade_contrato: ModalidadeContratoEnum = ModalidadeContratoEnum.CONTRATO
+    orgao_gerenciador: Optional[str] = None
     projeto_id: int
-    empresa_contratada: str
+    empresa_id: Optional[int] = None
+    empresa_nome: Optional[str] = None
     fabricante_id: Optional[int] = None
     fabricante_nome: Optional[str] = None
     tipo_contrato: TipoContratoEnum
-    quantidade: int
-    tecnologia_utilizada: Optional[str] = None
+    itens: list[ItemContratoResponse] = []
 
-    valor_investimento: Decimal
-    valor_custeio: Decimal
-
-    prazo: Optional[str] = None
+    data_inicio_vigencia: Optional[date] = None
+    vigencia_meses: Optional[int] = None
+    prorrogacao_meses: int = 0
     data_assinatura: date
     data_fim_vigencia: date
 
@@ -265,6 +267,7 @@ class ContratoResponse(BaseModel):
     acoes_pdtic_vinculadas: list[_AcaoPdticResumo] = []
     equipe: Optional[EquipeFiscalizacaoResponse] = None
     historico: list[HistoricoContratoResponse] = []
+    aditivos: list[AditivoResponse] = []
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -277,16 +280,16 @@ class ContratoListagemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    numero_contrato: str
-    empresa_contratada: str
+    numero: int
+    ano: int
+    modalidade_contrato: ModalidadeContratoEnum = ModalidadeContratoEnum.CONTRATO
+    empresa_id: Optional[int] = None
+    empresa_nome: Optional[str] = None
     tipo_contrato: TipoContratoEnum
     situacao_atual: SituacaoContratoEnum
-    valor_investimento: Decimal
-    valor_custeio: Decimal
     valor_total: Decimal = Field(default=Decimal(0))
     data_assinatura: date
     data_fim_vigencia: date
-    quantidade: int
 
     # Projeto resumido
     projeto_nome: Optional[str] = None

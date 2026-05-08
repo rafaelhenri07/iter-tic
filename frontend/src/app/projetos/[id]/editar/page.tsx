@@ -104,8 +104,6 @@ export default function EditarProjetoPage({ params }: { params: Promise<{ id: st
       processo_sei: "",
       prioridade: "media",
       complexidade: "Simples",
-      catmat: "",
-      catser: "",
       integrante_requisitante_id: 0,
       integrante_tecnico_id: 0,
       integrante_administrativo_id: 0,
@@ -128,8 +126,6 @@ export default function EditarProjetoPage({ params }: { params: Promise<{ id: st
           processo_sei: data.processo_sei || "",
           prioridade: data.prioridade || "media",
           complexidade: data.complexidade || "Simples",
-          catmat: data.catmat || "",
-          catser: data.catser || "",
           integrante_requisitante_id: data.integrante_requisitante?.id || 0,
           integrante_tecnico_id: data.integrante_tecnico?.id || 0,
           integrante_administrativo_id: data.integrante_administrativo?.id || 0,
@@ -236,7 +232,7 @@ export default function EditarProjetoPage({ params }: { params: Promise<{ id: st
           {/* ══ 1. DADOS BÁSICOS ══ */}
           <SectionTitle>Dados Básicos</SectionTitle>
           <div className="grid gap-6 sm:grid-cols-2">
-            <Field label="Nome do Projeto" required error={errors.nome?.message} className="sm:col-span-2">
+            <Field label="Nome do Projeto" required error={errors.nome?.message}>
               <input
                 {...register("nome")}
                 placeholder="Ex: Aquisição de Switches Core para o Datacenter"
@@ -267,19 +263,11 @@ export default function EditarProjetoPage({ params }: { params: Promise<{ id: st
                 <option value="Complexa">Complexa</option>
               </select>
             </Field>
-
-            <Field label="CATMAT (Material)" error={errors.catmat?.message}>
-              <input {...register("catmat")} placeholder="Ex: 4501002" className={inputCls} />
-            </Field>
-
-            <Field label="CATSER (Serviço)" error={errors.catser?.message}>
-              <input {...register("catser")} placeholder="Ex: 27502" className={inputCls} />
-            </Field>
           </div>
 
           {/* ══ 2. EQUIPE ══ */}
-          <SectionTitle>Equipe de Contratação</SectionTitle>
-          <div className="grid gap-6 sm:grid-cols-2">
+          <SectionTitle>Equipe de Planejamento</SectionTitle>
+          <div className="grid gap-6 sm:grid-cols-1">
             <Field label="Integrante Requisitante">
               <select
                 {...register("integrante_requisitante_id", { valueAsNumber: true })}
@@ -306,7 +294,7 @@ export default function EditarProjetoPage({ params }: { params: Promise<{ id: st
               </select>
             </Field>
 
-            <Field label="Integrante Administrativo" className="sm:col-span-2">
+            <Field label="Integrante Administrativo">
               <select
                 {...register("integrante_administrativo_id", { valueAsNumber: true })}
                 className={selectCls}

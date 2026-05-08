@@ -20,5 +20,9 @@ class StatusAcaoEnum(str, enum.Enum):
     NAO_INICIADA = "Não iniciada"
     EM_ANDAMENTO = "Em andamento"
     CONTRATADA = "Contratada"
-    CONTRATO_VIGENTE = "Contrato vigente"
-    CONTRATO_A_SER_RENOVADO = "Contrato a ser renovado"
+
+
+class RoleUsuarioEnum(str, enum.Enum):
+    """Papel do usuário no sistema (RBAC)."""
+    ADMIN = "ADMIN"
+    COMUM = "COMUM"

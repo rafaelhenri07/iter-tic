@@ -79,7 +79,7 @@ export default function GargalosChart({ data }: GargalosChartProps) {
           }}
           labelStyle={{ fontWeight: 700, color: "#f1f5f9" }}
           cursor={{ fill: "rgba(239, 68, 68, 0.06)" }}
-          formatter={(value: number) => [`${value} artefato(s)`, "Em andamento"]}
+          formatter={(value: any) => [`${value} artefato(s)`, "Em andamento"]}
         />
         <Bar dataKey="quantidade" radius={[0, 6, 6, 0]} name="Em andamento">
           {chartData.map((entry, index) => (

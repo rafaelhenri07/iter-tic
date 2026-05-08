@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -14,6 +14,7 @@ import {
   Building,
   Shield,
   Save,
+  Mail,
 } from "lucide-react";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
 import {
@@ -21,9 +22,10 @@ import {
   type ServidorFormData,
   cleanServidorPayload,
 } from "@/lib/validations/servidor";
-import { criarServidor, atualizarServidor } from "@/lib/api";
+import { criarServidor, atualizarServidor, fetchUnidadesOrganizacionais } from "@/lib/api";
 import { showToast } from "@/components/ui/Toast";
 import type { Servidor } from "@/types/projeto";
+import type { UnidadeOrg } from "@/types/estrutura_organizacional";
 
 /* ── Componente ────────────────────────────────────────────────────────── */
 
@@ -52,11 +54,26 @@ export function ServidorModal({
       nome: servidor?.nome ?? "",
       cargo: servidor?.cargo ?? "",
       funcao: servidor?.funcao ?? "",
-      lotacao: servidor?.lotacao ?? "",
-      perfil_acesso:
-        (servidor?.perfil_acesso as "Administrador" | "Gestor" | "Visualizador") ?? "",
+      departamento_id: servidor?.departamento_id ?? 0,
+      unidade_lotacao_id: servidor?.unidade_lotacao_id ?? 0,
+      secao_id: servidor?.secao_id ?? 0,
+      email_funcional: servidor?.email_funcional ?? "",
     },
   });
+
+  const [unidades, setUnidades] = useState<UnidadeOrg[]>([]);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await fetchUnidadesOrganizacionais();
+        setUnidades(data);
+      } catch (err) {
+        showToast("error", "Erro ao carregar unidades organizacionais.");
+      }
+    }
+    load();
+  }, []);
 
   const onSubmit = async (data: ServidorFormData) => {
     setSubmitting(true);
@@ -134,16 +151,51 @@ export function ServidorModal({
             </FormField>
 
             <FormField
-              label="Lotação"
+              label="Departamento"
               required
               icon={<Building size={10} />}
-              error={errors.lotacao?.message}
+              error={errors.departamento_id?.message}
             >
-              <input
-                {...register("lotacao")}
-                placeholder="Ex: DTI, Gabinete"
-                className={inputCls}
-              />
+              <select {...register("departamento_id", { valueAsNumber: true })} className={selectCls}>
+                <option value="">Selecione...</option>
+                {unidades.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.sigla ? `${u.sigla} - ${u.nome}` : u.nome}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              label="Unidade de Lotação"
+              icon={<Building size={10} />}
+              error={errors.unidade_lotacao_id?.message}
+            >
+              <select {...register("unidade_lotacao_id", { valueAsNumber: true })} className={selectCls}>
+                <option value="">Opcional...</option>
+                {unidades.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.sigla ? `${u.sigla} - ${u.nome}` : u.nome}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField
+              label="Seção"
+              icon={<Building size={10} />}
+              error={errors.secao_id?.message}
+            >
+              <select {...register("secao_id", { valueAsNumber: true })} className={selectCls}>
+                <option value="">Opcional...</option>
+                {unidades.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.sigla ? `${u.sigla} - ${u.nome}` : u.nome}
+                  </option>
+                ))}
+              </select>
             </FormField>
           </div>
 
@@ -188,16 +240,17 @@ export function ServidorModal({
           </div>
 
           <FormField
-            label="Perfil de Acesso"
-            icon={<Shield size={10} />}
-            error={errors.perfil_acesso?.message}
+            label="E-mail Funcional"
+            required
+            icon={<Mail size={10} />}
+            error={errors.email_funcional?.message}
           >
-            <select {...register("perfil_acesso")} className={selectCls}>
-              <option value="">Selecione...</option>
-              <option value="Administrador">🔴 Administrador</option>
-              <option value="Gestor">🔵 Gestor</option>
-              <option value="Visualizador">🟢 Visualizador</option>
-            </select>
+            <input
+              {...register("email_funcional")}
+              type="email"
+              placeholder="Ex: servidor@orgao.gov.br"
+              className={inputCls}
+            />
           </FormField>
 
           {/* Actions */}

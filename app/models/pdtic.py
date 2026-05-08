@@ -26,12 +26,15 @@ from sqlalchemy import (
     CheckConstraint,
     UniqueConstraint,
     func,
+    Table,
+    Column,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
-from app.models.enums import StatusAcaoEnum, TipoNecessidadeEnum
+from app.models.enums import StatusAcaoEnum
+from app.models.estrutura_organizacional import UnidadeOrganizacional
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +121,30 @@ class RevisaoPdtic(Base):
 
 
 # ---------------------------------------------------------------------------
+# Tabelas de Associação (Many-to-Many)
+# ---------------------------------------------------------------------------
+pdtic_departamento_assoc = Table(
+    "pdtic_departamento",
+    Base.metadata,
+    Column("acao_pdtic_id", Integer, ForeignKey("pdtic_acoes.id", ondelete="CASCADE"), primary_key=True),
+    Column("unidade_org_id", Integer, ForeignKey("unidades_organizacionais.id", ondelete="CASCADE"), primary_key=True),
+)
+
+pdtic_unidade_demandante_assoc = Table(
+    "pdtic_unidade_demandante",
+    Base.metadata,
+    Column("acao_pdtic_id", Integer, ForeignKey("pdtic_acoes.id", ondelete="CASCADE"), primary_key=True),
+    Column("unidade_org_id", Integer, ForeignKey("unidades_organizacionais.id", ondelete="CASCADE"), primary_key=True),
+)
+
+pdtic_unidade_responsavel_assoc = Table(
+    "pdtic_unidade_responsavel",
+    Base.metadata,
+    Column("acao_pdtic_id", Integer, ForeignKey("pdtic_acoes.id", ondelete="CASCADE"), primary_key=True),
+    Column("unidade_org_id", Integer, ForeignKey("unidades_organizacionais.id", ondelete="CASCADE"), primary_key=True),
+)
+
+# ---------------------------------------------------------------------------
 # 3. Ação do PDTIC (tabela principal com rastreabilidade por revisão)
 # ---------------------------------------------------------------------------
 class AcaoPdtic(Base):
@@ -150,20 +177,20 @@ class AcaoPdtic(Base):
         comment="Aponta para a versão anterior quando esta ação é uma revisão de outra.",
     )
 
-    # ── Campos de negócio ───────────────────────────────────────────────────
-    departamento: Mapped[str] = mapped_column(String(200), nullable=False)
-    unidade_demandante: Mapped[str] = mapped_column(String(200), nullable=False)
-    unidade_responsavel: Mapped[str] = mapped_column(String(200), nullable=False)
+    # ── Campos de negócio (strings legadas — mantidas por compatibilidade) ──
+    departamento: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    unidade_demandante: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    unidade_responsavel: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    # As colunas singulares de FK para estrutura organizacional foram removidas para dar lugar às tabelas N:N.
+
     necessidade: Mapped[str] = mapped_column(String(20), nullable=False)
     descricao: Mapped[str] = mapped_column(Text, nullable=False)
 
-    tipo_necessidade: Mapped[TipoNecessidadeEnum] = mapped_column(
-        Enum(
-            TipoNecessidadeEnum,
-            name="tipo_necessidade_enum",
-            values_callable=lambda e: [m.value for m in e],
-        ),
+    tipo_necessidade: Mapped[list[str]] = mapped_column(
+        ARRAY(String(50)),
         nullable=False,
+        comment="Lista de tipos de necessidade: hardware, software, servico, etc.",
     )
     status: Mapped[StatusAcaoEnum] = mapped_column(
         Enum(
@@ -239,6 +266,17 @@ class AcaoPdtic(Base):
         back_populates="acao_pdtic",
     )
 
+    # Relacionamentos com Estrutura Organizacional (N:N — tabela unificada)
+    departamentos_rel: Mapped[list["UnidadeOrganizacional"]] = relationship(
+        "UnidadeOrganizacional", secondary=pdtic_departamento_assoc, lazy="selectin",
+    )
+    unidades_demandantes_rel: Mapped[list["UnidadeOrganizacional"]] = relationship(
+        "UnidadeOrganizacional", secondary=pdtic_unidade_demandante_assoc, lazy="selectin",
+    )
+    unidades_responsaveis_rel: Mapped[list["UnidadeOrganizacional"]] = relationship(
+        "UnidadeOrganizacional", secondary=pdtic_unidade_responsavel_assoc, lazy="selectin",
+    )
+
     # ── Constraints ─────────────────────────────────────────────────────────
     __table_args__ = (
         CheckConstraint(
@@ -258,3 +296,5 @@ class AcaoPdtic(Base):
     def esta_ativa(self) -> bool:
         """Retorna True se a ação não foi excluída em nenhuma revisão."""
         return self.revisao_exclusao_id is None
+
+

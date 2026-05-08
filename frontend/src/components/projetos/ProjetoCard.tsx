@@ -40,9 +40,9 @@ export function ProjetoCard({ projeto }: ProjetoCardProps) {
       {/* Barra de cor lateral (complexidade) */}
       <div
         className={`absolute left-0 top-0 h-full w-1.5 rounded-l-2xl ${
-          projeto.complexidade === "alta"
+          projeto.complexidade === "Complexa"
             ? "bg-rose-500"
-            : projeto.complexidade === "media"
+            : projeto.complexidade === "Intermediária"
               ? "bg-amber-500"
               : "bg-emerald-500"
         }`}

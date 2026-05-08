@@ -9,16 +9,18 @@ export function FormField({
   error,
   required,
   icon,
+  className,
   children,
 }: {
   label: string;
   error?: string;
   required?: boolean;
   icon?: React.ReactNode;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className={className}>
       <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-foreground-muted">
         {label}
         {required && <span className="text-red-500">*</span>}
@@ -60,6 +62,4 @@ export const STATUS_OPTIONS = [
   "Não iniciada",
   "Em andamento",
   "Contratada",
-  "Contrato vigente",
-  "Contrato a ser renovado",
 ] as const;

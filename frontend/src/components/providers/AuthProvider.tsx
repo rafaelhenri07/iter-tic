@@ -8,23 +8,31 @@ interface Usuario {
   id: number;
   nome: string;
   email: string;
+  role: string;
   is_active: boolean;
+  servidor_id: number | null;
 }
 
 interface AuthContextType {
   user: Usuario | null;
   loading: boolean;
   logout: () => void;
+  /** Atualiza o usuário no contexto (usado pelo login) */
+  setUser: (user: Usuario) => void;
+  /** Verifica se o usuário é administrador */
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   logout: () => {},
+  setUser: () => {},
+  isAdmin: false,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<Usuario | null>(null);
+  const [user, setUserState] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -34,23 +42,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (userCookie) {
       try {
         const parsedUser = JSON.parse(userCookie);
-        setUser(parsedUser);
+        setUserState(parsedUser);
       } catch (error) {
         console.error("Erro ao fazer parse do usuário do cookie", error);
+        Cookies.remove("itertic_user");
       }
     }
     setLoading(false);
   }, []);
 
+  const setUser = (newUser: Usuario) => {
+    setUserState(newUser);
+    Cookies.set("itertic_user", JSON.stringify(newUser), { expires: 7 });
+  };
+
   const logout = () => {
     Cookies.remove("itertic_token");
     Cookies.remove("itertic_user");
-    setUser(null);
+    setUserState(null);
     router.push("/login");
   };
 
+  const isAdmin = user?.role === "ADMIN";
+
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ user, loading, logout, setUser, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

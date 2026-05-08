@@ -26,17 +26,15 @@ export const servidorSchema = z.object({
     .optional()
     .or(z.literal("")),
 
-  lotacao: z
-    .string({ error: "Lotação é obrigatória." })
-    .min(1, "Lotação não pode ser vazia.")
-    .max(200, "Máximo de 200 caracteres."),
+  departamento_id: z.number({ error: "Selecione o departamento" }).min(1, "Selecione o departamento."),
+  unidade_lotacao_id: z.number().nullable().optional(),
+  secao_id: z.number().nullable().optional(),
 
-  perfil_acesso: z
-    .enum(["Administrador", "Gestor", "Visualizador"], {
-      error: "Selecione o perfil de acesso.",
-    })
-    .optional()
-    .or(z.literal("")),
+  email_funcional: z
+    .string({ error: "E-mail funcional é obrigatório." })
+    .min(1, "E-mail não pode ser vazio.")
+    .email("Formato de e-mail inválido.")
+    .max(200, "Máximo de 200 caracteres."),
 });
 
 export type ServidorFormData = z.infer<typeof servidorSchema>;
@@ -46,6 +44,7 @@ export function cleanServidorPayload(
 ): Record<string, unknown> {
   const clean: Record<string, unknown> = { ...data };
   if (clean.funcao === "") clean.funcao = null;
-  if (clean.perfil_acesso === "") clean.perfil_acesso = null;
+  if (!clean.unidade_lotacao_id) clean.unidade_lotacao_id = null;
+  if (!clean.secao_id) clean.secao_id = null;
   return clean;
 }

@@ -33,10 +33,15 @@ function handleUnauthorized(res: Response): void {
 }
 
 async function fetcher<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    cache: "no-store",
-    headers: { ...getAuthHeaders() },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      cache: "no-store",
+      headers: { ...getAuthHeaders() },
+    });
+  } catch {
+    throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente.");
+  }
   if (!res.ok) {
     handleUnauthorized(res);
     throw new Error(`API error ${res.status}: ${res.statusText}`);
@@ -45,36 +50,99 @@ async function fetcher<T>(path: string): Promise<T> {
 }
 
 async function poster<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente.");
+  }
   if (!res.ok) {
     handleUnauthorized(res);
     const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`API error ${res.status}: ${detail}`);
+    // Tentar extrair mensagem de detalhe do JSON de erro do FastAPI
+    try {
+      const parsed = JSON.parse(detail);
+      const msg = parsed?.detail ?? detail;
+      throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== detail) throw parseErr;
+      throw new Error(detail);
+    }
   }
   return res.json() as Promise<T>;
 }
 
 async function patcher<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente.");
+  }
   if (!res.ok) {
     handleUnauthorized(res);
     const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`API error ${res.status}: ${detail}`);
+    try {
+      const parsed = JSON.parse(detail);
+      const msg = parsed?.detail ?? detail;
+      throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== detail) throw parseErr;
+      throw new Error(detail);
+    }
   }
   return res.json() as Promise<T>;
 }
 
+async function deleter<T = void>(path: string, body?: unknown): Promise<T> {
+  let res: Response;
+  try {
+    const options: RequestInit = {
+      method: "DELETE",
+      headers: { ...getAuthHeaders() },
+    };
+    if (body) {
+      options.headers = { ...options.headers, "Content-Type": "application/json" };
+      options.body = JSON.stringify(body);
+    }
+    res = await fetch(`${API_BASE}${path}`, options);
+  } catch {
+    throw new Error("Não foi possível conectar ao servidor. Verifique sua conexão ou tente novamente.");
+  }
+  if (!res.ok) {
+    handleUnauthorized(res);
+    const detail = await res.text().catch(() => res.statusText);
+    try {
+      const parsed = JSON.parse(detail);
+      const msg = parsed?.detail ?? detail;
+      throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== detail) throw parseErr;
+      throw new Error(detail);
+    }
+  }
+  if (res.status === 204) return undefined as any as T;
+  return res.json() as Promise<T>;
+}
+
+
 /* ── PDTIC ──────────────────────────────────────────────────────────────── */
 
-import type { PdticPeriodo, PdticRevisao, PdticPainelResponse, PdticAcao } from "@/types/pdtic";
+import type {
+  PdticPeriodo,
+  PdticRevisao,
+  PdticPainelResponse,
+  PdticAcao,
+  PdticAcaoComHistoricoResponse,
+} from "@/types/pdtic";
 
 export async function fetchPeriodos(): Promise<PdticPeriodo[]> {
   return fetcher<PdticPeriodo[]>("/pdtic/periodos");
@@ -90,6 +158,12 @@ export async function fetchPainelPdtic(
   if (filtroAuditoria) params.set("filtro_auditoria", filtroAuditoria);
   const qs = params.toString() ? `?${params.toString()}` : "";
   return fetcher<PdticPainelResponse>(`/pdtic/${periodoId}/painel${qs}`);
+}
+
+export async function obterAcaoPdtic(
+  acaoId: number
+): Promise<PdticAcaoComHistoricoResponse> {
+  return fetcher<PdticAcaoComHistoricoResponse>(`/pdtic/acoes/${acaoId}`);
 }
 
 export async function criarPeriodoPdtic(
@@ -146,7 +220,7 @@ export async function excluirAcaoPdtic(
 
 /* ── PACC ──────────────────────────────────────────────────────────────── */
 
-import type { PaccExercicio, PaccRevisao, PaccPainelResponse as PaccPainel } from "@/types/pacc";
+import type { PaccExercicio, PaccRevisao, PaccPainelResponse as PaccPainel, PaccItemComHistoricoResponse } from "@/types/pacc";
 
 export async function fetchExercicios(): Promise<PaccExercicio[]> {
   return fetcher<PaccExercicio[]>("/pacc/exercicios");
@@ -162,6 +236,10 @@ export async function fetchPainelPacc(
   if (filtroAuditoria) params.set("filtro_auditoria", filtroAuditoria);
   const qs = params.toString() ? `?${params.toString()}` : "";
   return fetcher<PaccPainel>(`/pacc/${exercicioId}/painel${qs}`);
+}
+
+export async function obterItemPacc(itemId: number): Promise<PaccItemComHistoricoResponse> {
+  return fetcher<PaccItemComHistoricoResponse>(`/pacc/itens/${itemId}`);
 }
 
 export async function criarExercicioPacc(
@@ -350,6 +428,47 @@ export async function fetchKpis(): Promise<KpisDashboard> {
   return fetcher<KpisDashboard>("/dashboard/kpis");
 }
 
+export interface DistribuicaoTipoItem {
+  name: string;
+  value: number;
+}
+
+export interface DistribuicaoSituacaoItem {
+  label: string;
+  qtd: number;
+}
+
+export interface EfetividadeFinanceiraItem {
+  acao: string;
+  estimativa: number;
+  efetivo: number;
+}
+
+export interface TempoArtefatoItem {
+  artefato: string;
+  dias: number;
+}
+
+export interface CargaEquipeItem {
+  nome: string;
+  planejamento: number;
+  fiscalizacao: number;
+}
+
+export interface GraficosDashboard {
+  distribuicao_contratos: {
+    por_tipo: DistribuicaoTipoItem[];
+    por_situacao: DistribuicaoSituacaoItem[];
+  };
+  efetividade_financeira: EfetividadeFinanceiraItem[];
+  tempo_artefatos?: TempoArtefatoItem[];
+  carga_equipe?: CargaEquipeItem[];
+}
+
+export async function fetchGraficos(): Promise<GraficosDashboard> {
+  return fetcher<GraficosDashboard>("/dashboard/graficos");
+}
+
 /* ── LICITAÇÃO (Fase Externa) ──────────────────────────────────────────── */
 
 export async function enviarParaLicitacao(projetoId: number): Promise<ProjetoBase> {
@@ -410,10 +529,21 @@ export async function adicionarObservacaoContrato(
   return poster(`/contratos/${contratoId}/observacoes`, { conteudo });
 }
 
-/** Busca projetos e filtra apenas os com status 'Licitação concluída' */
+export async function fetchAditivos(contratoId: number): Promise<import("@/types/contrato").Aditivo[]> {
+  return fetcher(`/contratos/${contratoId}/aditivos`);
+}
+
+export async function criarAditivo(
+  contratoId: number,
+  payload: import("@/types/contrato").AditivoCreatePayload,
+): Promise<import("@/types/contrato").Aditivo> {
+  return poster(`/contratos/${contratoId}/aditivos`, payload);
+}
+
+/** Busca projetos e filtra apenas os com status 'Contratado' */
 export async function fetchProjetosLicitados(): Promise<ProjetoListagem[]> {
   const todos = await fetcher<ProjetoListagem[]>("/projetos");
-  return todos.filter((p) => p.status === "Licitação concluída");
+  return todos.filter((p) => p.status === "Contratado");
 }
 
 /* ── Comentários de Artefato ───────────────────────────────────────────── */
@@ -490,6 +620,58 @@ export async function excluirFabricante(id: number): Promise<void> {
   if (!res.ok) throw new Error(`API error ${res.status}`);
 }
 
+/* ── EMPRESAS ───────────────────────────────────────────────────────────── */
+
+export interface Empresa {
+  id: number;
+  nome: string;
+  cnpj: string;
+  site: string | null;
+  contato_nome: string;
+  telefone: string;
+  email: string;
+  servicos_ofertados: string[];
+  create_time: string;
+  update_time: string | null;
+}
+
+export interface EmpresaPayload {
+  nome: string;
+  cnpj: string;
+  site?: string | null;
+  contato_nome: string;
+  telefone: string;
+  email: string;
+  servicos_ofertados?: string[];
+}
+
+export async function fetchEmpresas(): Promise<Empresa[]> {
+  return fetcher<Empresa[]>("/empresas");
+}
+
+export async function fetchEmpresa(id: number): Promise<Empresa> {
+  return fetcher<Empresa>(`/empresas/${id}`);
+}
+
+export async function criarEmpresa(payload: EmpresaPayload): Promise<Empresa> {
+  return poster<Empresa>("/empresas", payload);
+}
+
+export async function atualizarEmpresa(
+  id: number,
+  payload: Partial<EmpresaPayload>
+): Promise<Empresa> {
+  return patcher<Empresa>(`/empresas/${id}`, payload);
+}
+
+export async function excluirEmpresa(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/empresas/${id}`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+}
+
 /* ── CONFIGURAÇÕES (White Label) ───────────────────────────────────────── */
 
 export interface Configuracao {
@@ -505,5 +687,173 @@ export async function fetchConfiguracao(): Promise<Configuracao> {
 
 export async function updateConfiguracao(payload: Partial<Configuracao>): Promise<Configuracao> {
   return patcher<Configuracao>("/configuracoes", payload);
+}
+
+// ── Admin: Gestão de Usuários ──────────────────────────────────────────────
+
+export interface UsuarioAdmin {
+  id: number;
+  nome: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  servidor_id: number | null;
+  servidor: {
+    id: number;
+    nome: string;
+    matricula: string;
+    cargo: string;
+    lotacao: string;
+  } | null;
+}
+
+export interface UsuarioCreatePayload {
+  nome: string;
+  email: string;
+  senha: string;
+  role: string;
+  servidor_id?: number | null;
+}
+
+export interface UsuarioUpdatePayload {
+  nome?: string;
+  role?: string;
+  is_active?: boolean;
+  servidor_id?: number | null;
+}
+
+export async function getUsuarios(): Promise<UsuarioAdmin[]> {
+  return fetcher<UsuarioAdmin[]>("/usuarios");
+}
+
+export async function criarUsuario(payload: UsuarioCreatePayload): Promise<UsuarioAdmin> {
+  const res = await fetch(`${API_BASE}/usuarios`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  });
+  handleUnauthorized(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Erro ao criar usuário" }));
+    throw new Error(err.detail ?? "Erro ao criar usuário");
+  }
+  return res.json();
+}
+
+export async function atualizarUsuario(id: number, payload: UsuarioUpdatePayload): Promise<UsuarioAdmin> {
+  const res = await fetch(`${API_BASE}/usuarios/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  });
+  handleUnauthorized(res);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Erro ao atualizar usuário" }));
+    throw new Error(err.detail ?? "Erro ao atualizar usuário");
+  }
+  return res.json();
+}
+
+export async function desativarUsuario(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/usuarios/${id}`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  handleUnauthorized(res);
+  if (!res.ok && res.status !== 204) {
+    const err = await res.json().catch(() => ({ detail: "Erro ao desativar usuário" }));
+    throw new Error(err.detail ?? "Erro ao desativar usuário");
+  }
+}
+
+// ── Admin: Auditoria ───────────────────────────────────────────────────────
+
+export interface AuditoriaLog {
+  id: number;
+  user_id: number | null;
+  user_email: string | null;
+  acao: string;
+  entidade: string;
+  entidade_id: number | null;
+  detalhes: string | null;
+  ip_address: string | null;
+  rota: string | null;
+  metodo_http: string | null;
+  timestamp: string;
+}
+
+export interface PaginatedAuditoria {
+  total: number;
+  skip: number;
+  limit: number;
+  items: AuditoriaLog[];
+}
+
+export async function getAuditoriaLogs(skip = 0, limit = 100): Promise<PaginatedAuditoria> {
+  return fetcher<PaginatedAuditoria>(`/auditoria?skip=${skip}&limit=${limit}`);
+}
+
+// ── Servidores (lista para selects) ───────────────────────────────────────
+
+export interface ServidorItem {
+  id: number;
+  nome: string;
+  matricula: string;
+  cargo: string;
+  lotacao: string;
+}
+
+export async function getServidores(): Promise<ServidorItem[]> {
+  return fetcher<ServidorItem[]>("/projetos/servidores");
+}
+
+// ── Histórico e Diário de Bordo da Fase Externa ─────────────────────────────
+
+export interface HistoricoEvento {
+  id: string;
+  data_evento: string;
+  titulo: string;
+  descricao: string;
+  tipo: string;
+  icone: string;
+}
+
+export async function fetchHistoricoProjeto(projetoId: number): Promise<HistoricoEvento[]> {
+  return fetcher<HistoricoEvento[]>(`/projetos/${projetoId}/historico`);
+}
+
+export interface ObservacaoUsuario {
+  id: number;
+  nome: string;
+}
+
+export interface ObservacaoFaseExterna {
+  id: number;
+  projeto_id: number;
+  texto: string;
+  criado_em: string;
+  usuario?: ObservacaoUsuario;
+}
+
+export async function fetchObservacoesFaseExterna(projetoId: number): Promise<ObservacaoFaseExterna[]> {
+  return fetcher<ObservacaoFaseExterna[]>(`/projetos/${projetoId}/fase-externa/observacoes`);
+}
+
+export async function addObservacaoFaseExterna(projetoId: number, texto: string): Promise<ObservacaoFaseExterna> {
+  return poster<ObservacaoFaseExterna>(`/projetos/${projetoId}/fase-externa/observacoes`, { texto });
+}
+
+/* ── Estrutura Organizacional (Unificada) ────────────────────────────────── */
+
+import type { UnidadeOrg, UnidadeOrgCreatePayload } from "@/types/estrutura_organizacional";
+
+export async function fetchUnidadesOrganizacionais(): Promise<UnidadeOrg[]> {
+  return fetcher<UnidadeOrg[]>("/estrutura-organizacional/unidades");
+}
+export async function criarUnidadeOrganizacional(payload: UnidadeOrgCreatePayload): Promise<UnidadeOrg> {
+  return poster<UnidadeOrg>("/estrutura-organizacional/unidades", payload);
+}
+export async function excluirUnidadeOrganizacional(id: number): Promise<void> {
+  return deleter(`/estrutura-organizacional/unidades/${id}`);
 }
 

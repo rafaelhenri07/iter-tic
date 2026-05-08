@@ -16,6 +16,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import StatusAcaoEnum, TipoNecessidadeEnum
+from app.schemas.estrutura_organizacional import UnidadeOrgResponse
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -105,14 +106,33 @@ class PdticAcaoBase(BaseModel):
     codigo_acao: str = Field(
         ..., min_length=1, max_length=20, examples=["A1"]
     )
-    departamento: str = Field(..., min_length=1, max_length=200)
-    unidade_demandante: str = Field(..., min_length=1, max_length=200)
-    unidade_responsavel: str = Field(..., min_length=1, max_length=200)
+    departamento: Optional[str] = Field(None, max_length=200)
+    unidade_demandante: Optional[str] = Field(None, max_length=200)
+    unidade_responsavel: Optional[str] = Field(None, max_length=200)
+    departamentos_ids: list[int] = Field(..., min_length=1, description="IDs dos departamentos associados.")
+    unidades_demandantes_ids: list[int] = Field(..., min_length=1, description="IDs das unidades demandantes.")
+    unidades_responsaveis_ids: list[int] = Field(..., min_length=1, description="IDs das unidades responsáveis.")
     necessidade: str = Field(..., min_length=1, max_length=20, examples=["N1"])
     descricao: str = Field(..., min_length=1)
 
-    tipo_necessidade: TipoNecessidadeEnum
+    tipo_necessidade: list[str] = Field(
+        ...,
+        min_length=1,
+        description="Lista de tipos: hardware, software, servico, comunicacao, capacitacao, outros.",
+    )
     status: StatusAcaoEnum = StatusAcaoEnum.NAO_INICIADA
+
+    @field_validator("tipo_necessidade", mode="before")
+    @classmethod
+    def validar_tipos_necessidade(cls, v: list[str]) -> list[str]:
+        valores_validos = {e.value for e in TipoNecessidadeEnum}
+        invalidos = [t for t in v if t not in valores_validos]
+        if invalidos:
+            raise ValueError(
+                f"Tipo(s) inválido(s): {invalidos}. "
+                f"Valores permitidos: {sorted(valores_validos)}"
+            )
+        return v
 
     meta: Optional[str] = None
     indicador: Optional[str] = None
@@ -191,14 +211,31 @@ class PdticAcaoUpdate(BaseModel):
     vinculada à anterior via `acao_pai_id` para manter rastreabilidade.
     """
 
-    departamento: Optional[str] = Field(None, min_length=1, max_length=200)
-    unidade_demandante: Optional[str] = Field(None, min_length=1, max_length=200)
-    unidade_responsavel: Optional[str] = Field(None, min_length=1, max_length=200)
+    departamento: Optional[str] = Field(None, max_length=200)
+    unidade_demandante: Optional[str] = Field(None, max_length=200)
+    unidade_responsavel: Optional[str] = Field(None, max_length=200)
+    departamentos_ids: Optional[list[int]] = None
+    unidades_demandantes_ids: Optional[list[int]] = None
+    unidades_responsaveis_ids: Optional[list[int]] = None
     necessidade: Optional[str] = Field(None, min_length=1, max_length=20)
     descricao: Optional[str] = Field(None, min_length=1)
 
-    tipo_necessidade: Optional[TipoNecessidadeEnum] = None
+    tipo_necessidade: Optional[list[str]] = None
     status: Optional[StatusAcaoEnum] = None
+
+    @field_validator("tipo_necessidade", mode="before")
+    @classmethod
+    def validar_tipos_necessidade_update(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is None:
+            return v
+        valores_validos = {e.value for e in TipoNecessidadeEnum}
+        invalidos = [t for t in v if t not in valores_validos]
+        if invalidos:
+            raise ValueError(
+                f"Tipo(s) inválido(s): {invalidos}. "
+                f"Valores permitidos: {sorted(valores_validos)}"
+            )
+        return v
 
     meta: Optional[str] = None
     indicador: Optional[str] = None
@@ -233,6 +270,9 @@ class PdticAcaoResponse(PdticAcaoBase):
     revisao_inclusao_id: int
     revisao_exclusao_id: Optional[int] = None
     acao_pai_id: Optional[int] = None
+    departamentos_rel: list["UnidadeOrgResponse"] = []
+    unidades_demandantes_rel: list["UnidadeOrgResponse"] = []
+    unidades_responsaveis_rel: list["UnidadeOrgResponse"] = []
     criado_em: datetime
     atualizado_em: datetime
 

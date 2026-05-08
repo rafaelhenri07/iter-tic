@@ -15,8 +15,12 @@ from app.api.routers import projetos as projetos_router
 from app.api.routers import dashboard as dashboard_router
 from app.api.routers import contratos as contratos_router
 from app.api.routers import fabricantes as fabricantes_router
+from app.api.routers import empresas as empresas_router
 from app.api.routers import configuracoes as configuracoes_router
 from app.api.routers import auth as auth_router
+from app.api.routers import usuarios as usuarios_router
+from app.api.routers import auditoria as auditoria_router
+from app.api.routers import estrutura_organizacional as estrutura_org_router
 
 app = FastAPI(
     title="ITER TIC — API de Gestão de Licitações de TI",
@@ -31,14 +35,25 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# ── CORS (ajuste as origens conforme o front-end) ──────────────────────────
+from app.core.audit import AuditoriaMiddleware
+
+# ── CORS (origens explícitas para compatibilidade com credenciais JWT) ─────
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://10.93.83.48:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: restringir em produção
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Middleware de Auditoria Silenciosa ──────────────────────────────────────
+app.add_middleware(AuditoriaMiddleware)
 
 
 # ── Routers ────────────────────────────────────────────────────────────────
@@ -49,10 +64,16 @@ app.include_router(projetos_router.router, prefix="/api/v1", dependencies=[Depen
 app.include_router(dashboard_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(contratos_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(fabricantes_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(empresas_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(configuracoes_router.router, prefix="/api/v1")
 
 # Router de autenticação (público)
 app.include_router(auth_router.router, prefix="/api/v1")
+
+# Routers exclusivos de Admin (require_admin aplicado internamente em cada rota)
+app.include_router(usuarios_router.router, prefix="/api/v1")
+app.include_router(auditoria_router.router, prefix="/api/v1")
+app.include_router(estrutura_org_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 
 
 # ── Health check ───────────────────────────────────────────────────────────

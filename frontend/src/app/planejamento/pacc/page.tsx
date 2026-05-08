@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ClipboardList,
   ChevronDown,
@@ -190,6 +191,7 @@ function NovoExercicioModal({
 /* ── Página principal ──────────────────────────────────────────────────── */
 
 export default function PaccPage() {
+  const router = useRouter();
   const [exercicios, setExercicios] = useState<PaccExercicio[]>([]);
   const [selectedExercicioId, setSelectedExercicioId] = useState<number | null>(null);
   const [painel, setPainel] = useState<PaccPainelResponse | null>(null);
@@ -479,9 +481,9 @@ export default function PaccPage() {
             <thead>
               <tr className="border-b border-border bg-slate-50/60 dark:bg-slate-800/40">
                 <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Item</th>
+                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Processo SEI</th>
                 <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Quantidade</th>
                 <th className="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">Valor Estimado</th>
-                <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Processo SEI</th>
                 <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Vínculo PDTIC</th>
                 <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Ações</th>
               </tr>
@@ -493,10 +495,11 @@ export default function PaccPage() {
                 return (
                   <tr
                     key={item.id}
-                    className={`transition-colors ${
+                    onClick={() => router.push(`/planejamento/pacc/${item.id}`)}
+                    className={`cursor-pointer transition-colors duration-150 ${
                       isExcluido
-                        ? "bg-red-50/40 dark:bg-red-950/10"
-                        : "hover:bg-slate-50/60 dark:hover:bg-slate-800/20"
+                        ? "bg-red-50/40 hover:bg-red-50 dark:bg-red-950/10 dark:hover:bg-red-900/20"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800/20"
                     }`}
                   >
                     {/* Item */}
@@ -509,30 +512,16 @@ export default function PaccPage() {
                         }`}>
                           {item.numero_item}
                         </span>
-                        <button
-                          onClick={() => setEditandoItem(item)}
-                          className={`text-left text-sm font-medium transition-colors ${
+                        <span
+                          className={`text-left text-sm font-medium ${
                             isExcluido
-                              ? "text-red-600 line-through cursor-default dark:text-red-400"
-                              : "text-slate-800 hover:text-indigo-600 hover:underline cursor-pointer dark:text-slate-200"
+                              ? "text-red-600 line-through dark:text-red-400"
+                              : "text-slate-800 dark:text-slate-200"
                           }`}
-                          disabled={isExcluido}
                         >
                           {item.descricao_demanda}
-                        </button>
+                        </span>
                       </div>
-                    </td>
-
-                    {/* Quantidade */}
-                    <td className="px-5 py-3.5 text-center">
-                      <span className="text-sm text-slate-700 dark:text-slate-300">{item.quantidade || "—"}</span>
-                    </td>
-
-                    {/* Valor Estimado */}
-                    <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                        {item.valor_estimado > 0 ? formatCurrency(item.valor_estimado) : "—"}
-                      </span>
                     </td>
 
                     {/* Processo SEI */}
@@ -548,6 +537,18 @@ export default function PaccPage() {
                       ) : (
                         <span className="text-xs text-slate-400">—</span>
                       )}
+                    </td>
+
+                    {/* Quantidade */}
+                    <td className="px-5 py-3.5 text-center">
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{item.quantidade || "—"}</span>
+                    </td>
+
+                    {/* Valor Estimado */}
+                    <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                      <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                        {item.valor_estimado > 0 ? formatCurrency(item.valor_estimado) : "—"}
+                      </span>
                     </td>
 
                     {/* Vínculo PDTIC */}
@@ -566,14 +567,14 @@ export default function PaccPage() {
                       {!isExcluido && (
                         <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={() => setEditandoItem(item)}
+                            onClick={(e) => { e.stopPropagation(); setEditandoItem(item); }}
                             className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20"
                             title="Editar item"
                           >
                             <Pencil size={15} />
                           </button>
                           <button
-                            onClick={() => setExcluindoItem(item)}
+                            onClick={(e) => { e.stopPropagation(); setExcluindoItem(item); }}
                             className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
                             title="Desativar item"
                           >

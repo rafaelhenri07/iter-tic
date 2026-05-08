@@ -56,9 +56,7 @@ export function NovoProjetoModal({ onClose, onSuccess }: NovoProjetoModalProps) 
     defaultValues: {
       nome: "",
       processo_sei: "",
-      complexidade: "media",
-      catmat: "",
-      catser: "",
+      complexidade: "Intermediária",
       integrante_requisitante_id: 0,
       integrante_tecnico_id: 0,
       integrante_administrativo_id: 0,
@@ -180,32 +178,23 @@ export function NovoProjetoModal({ onClose, onSuccess }: NovoProjetoModalProps) 
                   />
                 </FormField>
 
-                <FormField label="Complexidade" required error={errors.complexidade?.message}>
-                  <select {...register("complexidade")} className={selectCls}>
+                <FormField label="Prioridade" required error={errors.prioridade?.message}>
+                  <select {...register("prioridade")} className={selectCls}>
                     <option value="baixa">Baixa</option>
                     <option value="media">Média</option>
                     <option value="alta">Alta</option>
                   </select>
                 </FormField>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="CATMAT (Material)" error={errors.catmat?.message}>
-                  <input
-                    {...register("catmat")}
-                    placeholder="Ex: 4501002"
-                    className={inputCls}
-                  />
-                </FormField>
-
-                <FormField label="CATSER (Serviço)" error={errors.catser?.message}>
-                  <input
-                    {...register("catser")}
-                    placeholder="Ex: 27502"
-                    className={inputCls}
-                  />
+                <FormField label="Complexidade" required error={errors.complexidade?.message}>
+                  <select {...register("complexidade")} className={selectCls}>
+                    <option value="Simples">Simples</option>
+                    <option value="Intermediária">Intermediária</option>
+                    <option value="Complexa">Complexa</option>
+                  </select>
                 </FormField>
               </div>
+
             </div>
 
             {/* ═══ 2. EQUIPE ═══ */}

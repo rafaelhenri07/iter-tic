@@ -32,18 +32,6 @@ export const projetoCreateSchema = z.object({
     error: "Selecione a complexidade.",
   }),
 
-  catmat: z
-    .string()
-    .max(50, "CATMAT deve ter no máximo 50 caracteres.")
-    .optional()
-    .or(z.literal("")),
-
-  catser: z
-    .string()
-    .max(50, "CATSER deve ter no máximo 50 caracteres.")
-    .optional()
-    .or(z.literal("")),
-
   /* Equipe */
   integrante_requisitante_id: z
     .number()
@@ -76,10 +64,6 @@ export function cleanProjetoPayload(
   data: ProjetoCreateFormData
 ): Record<string, unknown> {
   const cleaned: Record<string, unknown> = { ...data };
-
-  // Strings vazias → null
-  if (!cleaned.catmat) cleaned.catmat = null;
-  if (!cleaned.catser) cleaned.catser = null;
 
   // Servidor IDs 0 → null (select não selecionado)
   if (!cleaned.integrante_requisitante_id)

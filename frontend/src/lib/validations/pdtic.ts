@@ -22,20 +22,17 @@ export const acaoPdticSchema = z.object({
     .min(1, "Código não pode ser vazio.")
     .max(20, "Código deve ter no máximo 20 caracteres."),
 
-  departamento: z
-    .string({ error: "Departamento é obrigatório." })
-    .min(1, "Departamento não pode ser vazio.")
-    .max(200),
+  departamentos_ids: z
+    .array(z.number().int())
+    .min(1, "Selecione ao menos um departamento."),
 
-  unidade_demandante: z
-    .string({ error: "Unidade demandante é obrigatória." })
-    .min(1, "Unidade demandante não pode ser vazia.")
-    .max(200),
+  unidades_demandantes_ids: z
+    .array(z.number().int())
+    .min(1, "Selecione ao menos uma unidade demandante."),
 
-  unidade_responsavel: z
-    .string({ error: "Unidade responsável é obrigatória." })
-    .min(1, "Unidade responsável não pode ser vazia.")
-    .max(200),
+  unidades_responsaveis_ids: z
+    .array(z.number().int())
+    .min(1, "Selecione ao menos uma unidade responsável."),
 
   necessidade: z
     .string({ error: "Necessidade é obrigatória." })
@@ -47,18 +44,15 @@ export const acaoPdticSchema = z.object({
     .min(1, "Descrição não pode ser vazia."),
 
   /* ── Classificação ──────────────────────────────────────────────────── */
-  tipo_necessidade: z.enum(
-    ["hardware", "software", "servico", "comunicacao", "capacitacao", "outros"],
-    { error: "Tipo de necessidade é obrigatório." }
-  ),
+  tipo_necessidade: z.array(z.enum(
+    ["hardware", "software", "servico", "comunicacao", "capacitacao", "outros"]
+  )).min(1, "Selecione ao menos um tipo de necessidade."),
 
   status: z.enum(
     [
       "Não iniciada",
       "Em andamento",
       "Contratada",
-      "Contrato vigente",
-      "Contrato a ser renovado",
     ],
     { error: "Status é obrigatório." }
   ),
@@ -143,19 +137,18 @@ export const acaoPdticUpdateSchema = z.object({
     .min(1, "Código não pode ser vazio.")
     .max(20, "Código deve ter no máximo 20 caracteres."),
 
-  departamento: z.string().min(1, "Departamento não pode ser vazio.").max(200),
-  unidade_demandante: z.string().min(1, "Unidade demandante não pode ser vazia.").max(200),
-  unidade_responsavel: z.string().min(1, "Unidade responsável não pode ser vazia.").max(200),
+  departamentos_ids: z.array(z.number().int()).min(1, "Selecione ao menos um departamento."),
+  unidades_demandantes_ids: z.array(z.number().int()).min(1, "Selecione ao menos uma unidade demandante."),
+  unidades_responsaveis_ids: z.array(z.number().int()).min(1, "Selecione ao menos uma unidade responsável."),
   necessidade: z.string().min(1, "Necessidade não pode ser vazia.").max(20),
   descricao: z.string().min(1, "Descrição não pode ser vazia."),
 
-  tipo_necessidade: z.enum(
-    ["hardware", "software", "servico", "comunicacao", "capacitacao", "outros"],
-    { error: "Tipo de necessidade é obrigatório." }
-  ),
+  tipo_necessidade: z.array(z.enum(
+    ["hardware", "software", "servico", "comunicacao", "capacitacao", "outros"]
+  )).min(1, "Selecione ao menos um tipo de necessidade."),
 
   status: z.enum(
-    ["Não iniciada", "Em andamento", "Contratada", "Contrato vigente", "Contrato a ser renovado"],
+    ["Não iniciada", "Em andamento", "Contratada"],
     { error: "Status é obrigatório." }
   ),
 

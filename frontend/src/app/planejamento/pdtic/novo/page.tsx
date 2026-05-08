@@ -10,6 +10,7 @@ import {
   Loader2,
   Save,
   AlertCircle,
+  Check,
 } from "lucide-react";
 import type { PdticRevisao, PdticPeriodo } from "@/types/pdtic";
 import { TIPO_NECESSIDADE_LABEL } from "@/types/pdtic";
@@ -18,9 +19,15 @@ import {
   cleanPayload,
   type AcaoPdticFormData,
 } from "@/lib/validations/pdtic";
-import { criarAcaoPdtic, fetchPeriodos, fetchPainelPdtic } from "@/lib/api";
+import { 
+  criarAcaoPdtic, fetchPeriodos, fetchPainelPdtic,
+  fetchUnidadesOrganizacionais
+} from "@/lib/api";
+import type { UnidadeOrg } from "@/types/estrutura_organizacional";
 import { showToast } from "@/components/ui/Toast";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { DatePickerField } from "@/components/ui/DatePickerField";
 
 const TIPOS_NECESSIDADE = Object.entries(TIPO_NECESSIDADE_LABEL) as [
   string,
@@ -31,8 +38,6 @@ const STATUS_OPTIONS = [
   "Não iniciada",
   "Em andamento",
   "Contratada",
-  "Contrato vigente",
-  "Contrato a ser renovado",
 ] as const;
 
 export default function NovaAcaoPdticPage() {
@@ -47,6 +52,9 @@ export default function NovaAcaoPdticPage() {
   const [periodos, setPeriodos] = useState<PdticPeriodo[]>([]);
   const [revisoes, setRevisoes] = useState<PdticRevisao[]>([]);
   const [anosRange, setAnosRange] = useState<number[]>([]);
+  
+  // Dados de estrutura organizacional (tabela unificada)
+  const [unidadesOrg, setUnidadesOrg] = useState<UnidadeOrg[]>([]);
 
   const {
     register,
@@ -60,12 +68,12 @@ export default function NovaAcaoPdticPage() {
       periodo_id: initialPeriodoId ? Number(initialPeriodoId) : 0,
       revisao_inclusao_id: undefined,
       codigo_acao: "",
-      departamento: "",
-      unidade_demandante: "",
-      unidade_responsavel: "",
+      departamentos_ids: [],
+      unidades_demandantes_ids: [],
+      unidades_responsaveis_ids: [],
       necessidade: "",
       descricao: "",
-      tipo_necessidade: undefined,
+      tipo_necessidade: [],
       status: "Não iniciada",
       meta: "",
       indicador: "",
@@ -81,6 +89,38 @@ export default function NovaAcaoPdticPage() {
   const periodoId = watch("periodo_id");
   const investimento = watch("valores_investimento") ?? {};
   const custeio = watch("valores_custeio") ?? {};
+  const previsao_contratacao = watch("previsao_contratacao");
+  const previsao_renovacao = watch("previsao_renovacao");
+  const tipos_selecionados = watch("tipo_necessidade") ?? [];
+  const selectedDeps = watch("departamentos_ids") ?? [];
+  const selectedDems = watch("unidades_demandantes_ids") ?? [];
+  const selectedResps = watch("unidades_responsaveis_ids") ?? [];
+
+  // Handlers para multi-select de unidades
+  const handleAddDep = (val: string) => {
+    const id = Number(val);
+    if (!id || selectedDeps.includes(id)) return;
+    setValue("departamentos_ids", [...selectedDeps, id], { shouldValidate: true });
+  };
+  const handleRemoveDep = (id: number) => {
+    setValue("departamentos_ids", selectedDeps.filter(d => d !== id), { shouldValidate: true });
+  };
+  const handleAddDem = (val: string) => {
+    const id = Number(val);
+    if (!id || selectedDems.includes(id)) return;
+    setValue("unidades_demandantes_ids", [...selectedDems, id], { shouldValidate: true });
+  };
+  const handleRemoveDem = (id: number) => {
+    setValue("unidades_demandantes_ids", selectedDems.filter(d => d !== id), { shouldValidate: true });
+  };
+  const handleAddResp = (val: string) => {
+    const id = Number(val);
+    if (!id || selectedResps.includes(id)) return;
+    setValue("unidades_responsaveis_ids", [...selectedResps, id], { shouldValidate: true });
+  };
+  const handleRemoveResp = (id: number) => {
+    setValue("unidades_responsaveis_ids", selectedResps.filter(d => d !== id), { shouldValidate: true });
+  };
 
   // Carregar períodos na montagem
   useEffect(() => {
@@ -92,8 +132,13 @@ export default function NovaAcaoPdticPage() {
           const ativo = data.find((p) => p.ativo) ?? data[0];
           setValue("periodo_id", ativo.id);
         }
+        
+        // Carregar estrutura organizacional unificada
+        const orgs = await fetchUnidadesOrganizacionais();
+        setUnidadesOrg(orgs);
+
       } catch (err) {
-        showToast("error", "Erro ao carregar períodos.");
+        showToast("error", "Erro ao carregar dados iniciais.");
       }
     }
     loadPeriodos();
@@ -135,18 +180,26 @@ export default function NovaAcaoPdticPage() {
   const handleValorChange = (
     tipo: "valores_investimento" | "valores_custeio",
     ano: string,
-    rawValue: string
+    val: number
   ) => {
     const current = tipo === "valores_investimento" ? { ...investimento } : { ...custeio };
-    if (rawValue === "" || rawValue === undefined) {
+    if (!val) {
       delete current[ano];
     } else {
-      const parsed = parseFloat(rawValue);
-      if (!isNaN(parsed)) {
-        current[ano] = parsed;
-      }
+      current[ano] = val;
     }
     setValue(tipo, current, { shouldValidate: true });
+  };
+
+  const handleAddTipo = (val: string) => {
+    if (!val) return;
+    if (!tipos_selecionados.includes(val as any)) {
+      setValue("tipo_necessidade", [...tipos_selecionados, val as any], { shouldValidate: true });
+    }
+  };
+
+  const handleRemoveTipo = (val: string) => {
+    setValue("tipo_necessidade", tipos_selecionados.filter((t) => t !== val), { shouldValidate: true });
   };
 
   const onSubmit = async (data: AcaoPdticFormData) => {
@@ -167,7 +220,8 @@ export default function NovaAcaoPdticPage() {
   const totalCus = Object.values(custeio).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-6">
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 dark:bg-background">
+      <div className="max-w-4xl mx-auto py-8 px-6 pb-20">
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="mb-8">
         <Link
@@ -238,68 +292,14 @@ export default function NovaAcaoPdticPage() {
               <FormField label="Descrição da Ação" error={errors.descricao?.message} required>
                 <textarea
                   {...register("descricao")}
-                  rows={3}
+                  rows={2}
                   placeholder="Descreva a ação de forma clara e objetiva..."
-                  className={`${inputCls} h-auto py-3 resize-none`}
+                  className={`${inputCls} h-auto py-2 resize-none`}
                   disabled={submitting}
                 />
               </FormField>
             </div>
-          </div>
-
-          {/* ── Seção: Unidades Envolvidas ──────────────────────────────── */}
-          <div>
-            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
-              Unidades Envolvidas
-            </h3>
-            <div className="grid gap-6 sm:grid-cols-3">
-              <FormField label="Departamento" error={errors.departamento?.message} required>
-                <input {...register("departamento")} placeholder="Ex: DTI" className={inputCls} disabled={submitting} />
-              </FormField>
-
-              <FormField label="Unidade Demandante" error={errors.unidade_demandante?.message} required>
-                <input {...register("unidade_demandante")} placeholder="Ex: Divisão de Infra" className={inputCls} disabled={submitting} />
-              </FormField>
-
-              <FormField label="Unidade Responsável" error={errors.unidade_responsavel?.message} required>
-                <input {...register("unidade_responsavel")} placeholder="Ex: Seção de Redes" className={inputCls} disabled={submitting} />
-              </FormField>
-            </div>
-          </div>
-
-          {/* ── Seção: Classificação e Medição ──────────────────────────── */}
-          <div>
-            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
-              Classificação e Medição
-            </h3>
-            <div className="grid gap-6 sm:grid-cols-2">
-              <FormField label="Tipo de Necessidade" error={errors.tipo_necessidade?.message} required>
-                <select {...register("tipo_necessidade")} className={selectCls} disabled={submitting}>
-                  <option value="">Selecione...</option>
-                  {TIPOS_NECESSIDADE.map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-              </FormField>
-
-              <FormField label="Status" error={errors.status?.message} required>
-                <select {...register("status")} className={selectCls} disabled={submitting}>
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              </FormField>
-
-              <FormField label="Quantidade" error={errors.quantidade?.message}>
-                <input {...register("quantidade")} placeholder="Ex: 24 meses" className={inputCls} disabled={submitting} />
-              </FormField>
-
-              <FormField label="Total GUT (0–125)" error={errors.total_gut?.message} required>
-                <input type="number" {...register("total_gut", { valueAsNumber: true })} min={0} max={125} placeholder="0" className={inputCls} disabled={submitting} />
-              </FormField>
-            </div>
-
-            <div className="mt-6 grid gap-6 sm:grid-cols-2">
+            <div className="mt-6">
               <FormField label="Meta" error={errors.meta?.message}>
                 <textarea
                   {...register("meta")}
@@ -309,7 +309,9 @@ export default function NovaAcaoPdticPage() {
                   disabled={submitting}
                 />
               </FormField>
+            </div>
 
+            <div className="mt-6">
               <FormField label="Indicador" error={errors.indicador?.message}>
                 <textarea
                   {...register("indicador")}
@@ -322,6 +324,168 @@ export default function NovaAcaoPdticPage() {
             </div>
           </div>
 
+          {/* ── Seção: Unidades Envolvidas ──────────────────────────────── */}
+          <div>
+            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
+              Unidades Envolvidas
+            </h3>
+            <div className="flex flex-col gap-6">
+              <FormField label="Departamentos" error={errors.departamentos_ids?.message} required>
+                <div className="flex flex-col gap-2">
+                  <select
+                    className={selectCls}
+                    disabled={submitting || loadingContext}
+                    value=""
+                    onChange={(e) => handleAddDep(e.target.value)}
+                  >
+                    <option value="">Adicionar departamento...</option>
+                    {unidadesOrg
+                      .filter(d => !selectedDeps.includes(d.id))
+                      .map(d => (
+                        <option key={d.id} value={d.id}>{d.sigla ? `${d.sigla} - ${d.nome}` : d.nome}</option>
+                      ))}
+                  </select>
+                  {selectedDeps.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedDeps.map(id => {
+                        const dep = unidadesOrg.find(d => d.id === id);
+                        return (
+                          <span key={id} className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full border border-emerald-100 dark:bg-emerald-900/30 dark:border-emerald-500/50 dark:text-emerald-300">
+                            {dep ? (dep.sigla ? `${dep.sigla} - ${dep.nome}` : dep.nome) : `ID ${id}`}
+                            <button type="button" onClick={() => handleRemoveDep(id)} className="hover:text-emerald-900 dark:hover:text-emerald-100 ml-0.5">&times;</button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </FormField>
+
+              <FormField label="Unidades Demandantes" error={errors.unidades_demandantes_ids?.message} required>
+                <div className="flex flex-col gap-2">
+                  <select
+                    className={selectCls}
+                    disabled={submitting || loadingContext}
+                    value=""
+                    onChange={(e) => handleAddDem(e.target.value)}
+                  >
+                    <option value="">Adicionar unidade demandante...</option>
+                    {unidadesOrg
+                      .filter(d => !selectedDems.includes(d.id))
+                      .map(d => (
+                        <option key={d.id} value={d.id}>{d.sigla ? `${d.sigla} - ${d.nome}` : d.nome}</option>
+                      ))}
+                  </select>
+                  {selectedDems.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedDems.map(id => {
+                        const dem = unidadesOrg.find(d => d.id === id);
+                        return (
+                          <span key={id} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full border border-blue-100 dark:bg-blue-900/30 dark:border-blue-500/50 dark:text-blue-300">
+                            {dem ? (dem.sigla ? `${dem.sigla} - ${dem.nome}` : dem.nome) : `ID ${id}`}
+                            <button type="button" onClick={() => handleRemoveDem(id)} className="hover:text-blue-900 dark:hover:text-blue-100 ml-0.5">&times;</button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </FormField>
+
+              <FormField label="Unidades Responsáveis" error={errors.unidades_responsaveis_ids?.message} required>
+                <div className="flex flex-col gap-2">
+                  <select
+                    className={selectCls}
+                    disabled={submitting || loadingContext}
+                    value=""
+                    onChange={(e) => handleAddResp(e.target.value)}
+                  >
+                    <option value="">Adicionar unidade responsável...</option>
+                    {unidadesOrg
+                      .filter(d => !selectedResps.includes(d.id))
+                      .map(d => (
+                        <option key={d.id} value={d.id}>{d.sigla ? `${d.sigla} - ${d.nome}` : d.nome}</option>
+                      ))}
+                  </select>
+                  {selectedResps.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedResps.map(id => {
+                        const resp = unidadesOrg.find(d => d.id === id);
+                        return (
+                          <span key={id} className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 text-xs px-2.5 py-1 rounded-full border border-violet-100 dark:bg-violet-900/30 dark:border-violet-500/50 dark:text-violet-300">
+                            {resp ? (resp.sigla ? `${resp.sigla} - ${resp.nome}` : resp.nome) : `ID ${id}`}
+                            <button type="button" onClick={() => handleRemoveResp(id)} className="hover:text-violet-900 dark:hover:text-violet-100 ml-0.5">&times;</button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </FormField>
+            </div>
+          </div>
+
+          {/* ── Seção: Classificação e Medição ──────────────────────────── */}
+          <div>
+            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
+              Classificação e Medição
+            </h3>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="sm:col-span-1">
+                <FormField label="Tipo de Necessidade" error={errors.tipo_necessidade?.message} required>
+                  <div className="flex flex-col gap-2 mt-2">
+                    <select
+                      className={selectCls}
+                      disabled={submitting}
+                      value=""
+                      onChange={(e) => handleAddTipo(e.target.value)}
+                    >
+                      <option value="">Adicionar item...</option>
+                      {TIPOS_NECESSIDADE
+                        .filter(([value]) => !(tipos_selecionados as string[]).includes(value))
+                        .map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+
+                    {tipos_selecionados.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {tipos_selecionados.map((tipo) => (
+                          <span key={tipo} className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full border border-emerald-100 dark:bg-emerald-900/30 dark:border-emerald-500/50 dark:text-emerald-300">
+                            {TIPO_NECESSIDADE_LABEL[tipo as keyof typeof TIPO_NECESSIDADE_LABEL]}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTipo(tipo)}
+                              className="hover:text-emerald-900 dark:hover:text-emerald-100 ml-0.5"
+                            >
+                              &times;
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </FormField>
+              </div>
+
+              <FormField label="Status" error={errors.status?.message} required>
+                <select {...register("status")} className={selectCls} disabled={submitting}>
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="Quantidade" error={errors.quantidade?.message}>
+                <input {...register("quantidade")} placeholder="Ex: 1, 50, 200" className={inputCls} disabled={submitting} />
+              </FormField>
+
+              <FormField label="Total GUT (0–125)" error={errors.total_gut?.message} required>
+                <input type="number" {...register("total_gut", { valueAsNumber: true })} min={0} max={125} placeholder="0" className={inputCls} disabled={submitting} />
+              </FormField>
+            </div>
+          </div>
+
           {/* ── Seção: Prazos e Previsões ───────────────────────────────── */}
           <div>
             <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
@@ -329,11 +493,21 @@ export default function NovaAcaoPdticPage() {
             </h3>
             <div className="grid gap-6 sm:grid-cols-2">
               <FormField label="Previsão de Contratação" error={errors.previsao_contratacao?.message}>
-                <input {...register("previsao_contratacao")} placeholder="ex: 06/2025" className={inputCls} disabled={submitting} />
+                <DatePickerField
+                  value={previsao_contratacao}
+                  onChange={(val) => setValue("previsao_contratacao", val ?? "", { shouldValidate: true })}
+                  placeholder="Selecione a data..."
+                  disabled={submitting}
+                />
               </FormField>
 
               <FormField label="Previsão de Renovação" error={errors.previsao_renovacao?.message}>
-                <input {...register("previsao_renovacao")} placeholder="ex: 01/2028" className={inputCls} disabled={submitting} />
+                <DatePickerField
+                  value={previsao_renovacao}
+                  onChange={(val) => setValue("previsao_renovacao", val ?? "", { shouldValidate: true })}
+                  placeholder="Selecione a data..."
+                  disabled={submitting}
+                />
               </FormField>
             </div>
           </div>
@@ -349,7 +523,7 @@ export default function NovaAcaoPdticPage() {
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 dark:border-slate-800 dark:bg-slate-900/30">
                 <div className="mb-4 flex items-center justify-between">
                   <span className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Investimento (Capital)
+                    Investimento
                   </span>
                   <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
                     Total:{" "}
@@ -371,14 +545,11 @@ export default function NovaAcaoPdticPage() {
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
                           R$
                         </span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
+                        <CurrencyInput
                           placeholder="0,00"
-                          value={investimento[String(ano)] ?? ""}
-                          onChange={(e) =>
-                            handleValorChange("valores_investimento", String(ano), e.target.value)
+                          value={investimento[String(ano)]}
+                          onChange={(val) =>
+                            handleValorChange("valores_investimento", String(ano), val)
                           }
                           className={`${inputCls} pl-9`}
                           disabled={submitting}
@@ -393,7 +564,7 @@ export default function NovaAcaoPdticPage() {
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5 dark:border-slate-800 dark:bg-slate-900/30">
                 <div className="mb-4 flex items-center justify-between">
                   <span className="text-sm font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                    Custeio (Operacional)
+                    Custeio
                   </span>
                   <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
                     Total:{" "}
@@ -415,14 +586,11 @@ export default function NovaAcaoPdticPage() {
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
                           R$
                         </span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
+                        <CurrencyInput
                           placeholder="0,00"
-                          value={custeio[String(ano)] ?? ""}
-                          onChange={(e) =>
-                            handleValorChange("valores_custeio", String(ano), e.target.value)
+                          value={custeio[String(ano)]}
+                          onChange={(val) =>
+                            handleValorChange("valores_custeio", String(ano), val)
                           }
                           className={`${inputCls} pl-9`}
                           disabled={submitting}
@@ -463,6 +631,7 @@ export default function NovaAcaoPdticPage() {
           </div>
         </form>
       )}
+      </div>
     </div>
   );
 }

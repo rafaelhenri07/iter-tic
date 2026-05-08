@@ -17,8 +17,6 @@ const STATUS_COLORS: Record<string, string> = {
   "Não iniciada": "#94a3b8",     // slate-400
   "Em andamento": "#3b82f6",     // blue-500
   "Contratada": "#10b981",       // emerald-500
-  "Contrato vigente": "#06b6d4", // cyan-500
-  "Contrato a ser renovado": "#f59e0b", // amber-500
 };
 
 interface StatusChartProps {

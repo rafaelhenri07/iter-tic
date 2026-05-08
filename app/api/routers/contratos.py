@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.models.contrato import (
@@ -26,6 +27,7 @@ from app.models.contrato import (
     SituacaoContratoEnum,
     TipoRegistroHistoricoEnum,
 )
+from app.models.aditivo import Aditivo
 from app.models.projeto import Projeto, StatusProjetoEnum
 from app.schemas.contrato import (
     ContratoCreate,
@@ -38,21 +40,27 @@ from app.schemas.contrato import (
     HistoricoContratoResponse,
     ObservacaoContratoCreate,
 )
+from app.schemas.aditivo import AditivoCreate, AditivoResponse
 
 router = APIRouter(prefix="/contratos", tags=["Contratos e Fiscalização"])
 
 
 # ── Labels legíveis para o log de auditoria ────────────────────────────────
 _FIELD_LABELS: dict[str, str] = {
-    "numero_contrato": "Número do Contrato",
-    "empresa_contratada": "Empresa Contratada",
+    "numero": "Número",
+    "ano": "Ano",
+    "modalidade_contrato": "Modalidade",
+    "orgao_gerenciador": "Órgão Gerenciador",
+    "empresa_id": "Empresa Contratada",
     "fabricante_id": "Fabricante",
     "tipo_contrato": "Tipo de Contrato",
     "quantidade": "Quantidade",
     "tecnologia_utilizada": "Tecnologia Utilizada",
     "valor_investimento": "Valor de Investimento",
     "valor_custeio": "Valor de Custeio",
-    "prazo": "Prazo",
+    "vigencia_meses": "Vigência (Meses)",
+    "prorrogacao_meses": "Prorrogação (Meses)",
+    "data_inicio_vigencia": "Data de Início da Vigência",
     "data_assinatura": "Data de Assinatura",
     "data_fim_vigencia": "Data Fim de Vigência",
     "situacao_atual": "Situação",
@@ -194,6 +202,7 @@ async def listar_contratos(
         select(Contrato)
         .options(
             selectinload(Contrato.projeto),
+            selectinload(Contrato.empresa_rel),
             selectinload(Contrato.fabricante_rel),
             selectinload(Contrato.equipe_membros).selectinload(ContratoEquipe.servidor),
         )
@@ -225,16 +234,16 @@ async def listar_contratos(
 
         result.append(ContratoListagemResponse(
             id=c.id,
-            numero_contrato=c.numero_contrato,
-            empresa_contratada=c.empresa_contratada,
+            numero=c.numero,
+            ano=c.ano,
+            modalidade_contrato=c.modalidade_contrato,
+            empresa_id=c.empresa_id,
+            empresa_nome=c.empresa_rel.nome if c.empresa_rel else None,
             tipo_contrato=c.tipo_contrato,
             situacao_atual=c.situacao_atual,
-            valor_investimento=c.valor_investimento,
-            valor_custeio=c.valor_custeio,
             valor_total=c.valor_total,
             data_assinatura=c.data_assinatura,
             data_fim_vigencia=c.data_fim_vigencia,
-            quantidade=c.quantidade,
             projeto_nome=c.projeto.nome if c.projeto else None,
             projeto_processo_sei=c.projeto.processo_sei if c.projeto else None,
             nome_gestor=nome_gestor,
@@ -299,13 +308,32 @@ async def criar_contrato(
             ),
         )
 
-    # ── Separar equipe do payload principal ───────────────────────────────
-    contrato_data = payload.model_dump(exclude={"equipe"})
+    # ── Separar equipe e itens do payload principal ───────────────────────────────
+    contrato_data = payload.model_dump(exclude={"equipe", "itens"})
     equipe_input = payload.equipe
+    itens_data = payload.itens
 
     # ── Criar contrato ───────────────────────────────────────────────────
     contrato = Contrato(**contrato_data)
     db.add(contrato)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Já existe um contrato com o número '{payload.numero}/{payload.ano}'. Use outro número.",
+        )
+
+    # ── Criar itens ──────────────────────────────────────────────────────
+    from app.models.contrato import ItemContrato
+    for item in itens_data:
+        db.add(ItemContrato(
+            contrato_id=contrato.id,
+            objeto_contratado=item.objeto_contratado,
+            quantidade=item.quantidade,
+            valor_unitario=item.valor_unitario
+        ))
     await db.flush()
 
     # ── Criar membros da equipe ──────────────────────────────────────────
@@ -316,7 +344,7 @@ async def criar_contrato(
         contrato_id=contrato.id,
         autor="Usuário do Sistema",
         tipo_registro=TipoRegistroHistoricoEnum.EDICAO_SISTEMA,
-        conteudo=f"Contrato {contrato.numero_contrato} criado no sistema.",
+        conteudo=f"Contrato {contrato.numero}/{contrato.ano} criado no sistema.",
     )
     db.add(historico)
     await db.flush()
@@ -345,8 +373,9 @@ async def atualizar_contrato(
 
     update_data = payload.model_dump(exclude_unset=True)
 
-    # ── Separar equipe dos demais campos ─────────────────────────────────
+    # ── Separar equipe e itens dos demais campos ─────────────────────────────────
     equipe_input = update_data.pop("equipe", None)
+    itens_input = update_data.pop("itens", None)
 
     # ── Detectar mudanças e gerar log ────────────────────────────────────
     mudancas: list[str] = []
@@ -377,6 +406,21 @@ async def atualizar_contrato(
         from app.schemas.contrato import EquipeInput
         equipe_obj = EquipeInput(**equipe_input)
         await _substituir_equipe(db, contrato_id, equipe_obj)
+
+    # ── Atualizar itens (se enviados) ────────────────────────────────────
+    if itens_input is not None:
+        mudancas.append("Itens do contrato atualizados")
+        from app.models.contrato import ItemContrato
+        from sqlalchemy import delete
+        await db.execute(delete(ItemContrato).where(ItemContrato.contrato_id == contrato_id))
+        for item in itens_input:
+            db.add(ItemContrato(
+                contrato_id=contrato_id,
+                objeto_contratado=item["objeto_contratado"],
+                quantidade=item["quantidade"],
+                valor_unitario=item["valor_unitario"]
+            ))
+        await db.flush()
 
     # ── Registrar no histórico (se houve mudança real) ───────────────────
     if mudancas:
@@ -425,6 +469,77 @@ async def adicionar_observacao(
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  ADITIVOS DE PRAZO                                                      ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+@router.get(
+    "/{contrato_id}/aditivos",
+    response_model=list[AditivoResponse],
+    summary="Listar aditivos de prazo de um contrato",
+)
+async def listar_aditivos(
+    contrato_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    await _garantir_contrato_existe(contrato_id, db)
+    stmt = (
+        select(Aditivo)
+        .where(Aditivo.contrato_id == contrato_id)
+        .order_by(Aditivo.data_fim_vigencia.desc())
+    )
+    aditivos = (await db.execute(stmt)).scalars().all()
+    return [AditivoResponse.model_validate(a) for a in aditivos]
+
+
+@router.post(
+    "/{contrato_id}/aditivos",
+    response_model=AditivoResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Criar aditivo de prazo e atualizar vigência do contrato",
+    description=(
+        "Cria um Termo Aditivo de Prazo e atualiza automaticamente "
+        "a data_fim_vigencia do contrato pai para a data_fim_vigencia do aditivo "
+        "(se for posterior à atual)."
+    ),
+)
+async def criar_aditivo(
+    contrato_id: int,
+    payload: AditivoCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    contrato = await _garantir_contrato_existe(contrato_id, db)
+
+    aditivo = Aditivo(
+        contrato_id=contrato_id,
+        numero_aditivo=payload.numero_aditivo,
+        data_inicio_vigencia=payload.data_inicio_vigencia,
+        data_fim_vigencia=payload.data_fim_vigencia,
+    )
+    db.add(aditivo)
+
+    # Atualizar data_fim_vigencia do contrato se o aditivo estender a vigência
+    if payload.data_fim_vigencia > contrato.data_fim_vigencia:
+        contrato.data_fim_vigencia = payload.data_fim_vigencia
+
+    # Registrar no histórico
+    historico = ContratoHistorico(
+        contrato_id=contrato_id,
+        autor="Usuário do Sistema",
+        tipo_registro=TipoRegistroHistoricoEnum.EDICAO_SISTEMA,
+        conteudo=(
+            f"{payload.numero_aditivo} adicionado. "
+            f"Nova data-fim de vigência: {payload.data_fim_vigencia.strftime('%d/%m/%Y')}."
+        ),
+    )
+    db.add(historico)
+    await db.flush()
+    await db.refresh(aditivo)
+
+    return AditivoResponse.model_validate(aditivo)
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  HELPERS INTERNOS                                                       ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
@@ -453,6 +568,9 @@ async def _carregar_contrato_completo(
             selectinload(Contrato.equipe_membros).selectinload(ContratoEquipe.servidor),
             selectinload(Contrato.historico),
             selectinload(Contrato.fabricante_rel),
+            selectinload(Contrato.empresa_rel),
+            selectinload(Contrato.aditivos),
+            selectinload(Contrato.itens),
         )
         .where(Contrato.id == contrato_id)
     )
@@ -494,20 +612,28 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
         for h in (contrato.historico or [])
     ]
 
+    aditivos = [
+        AditivoResponse.model_validate(a)
+        for a in (contrato.aditivos or [])
+    ]
+
     return ContratoResponse(
         id=contrato.id,
-        numero_contrato=contrato.numero_contrato,
+        numero=contrato.numero,
+        ano=contrato.ano,
+        modalidade_contrato=contrato.modalidade_contrato,
+        orgao_gerenciador=contrato.orgao_gerenciador,
         projeto_id=contrato.projeto_id,
-        empresa_contratada=contrato.empresa_contratada,
+        empresa_id=contrato.empresa_id,
+        empresa_nome=contrato.empresa_rel.nome if contrato.empresa_rel else None,
         fabricante_id=contrato.fabricante_id,
         fabricante_nome=contrato.fabricante_rel.nome if contrato.fabricante_rel else None,
         tipo_contrato=contrato.tipo_contrato,
-        quantidade=contrato.quantidade,
-        tecnologia_utilizada=contrato.tecnologia_utilizada,
-        valor_investimento=contrato.valor_investimento,
-        valor_custeio=contrato.valor_custeio,
+        itens=contrato.itens,
         valor_total=contrato.valor_total,
-        prazo=contrato.prazo,
+        data_inicio_vigencia=contrato.data_inicio_vigencia,
+        vigencia_meses=contrato.vigencia_meses,
+        prorrogacao_meses=contrato.prorrogacao_meses,
         data_assinatura=contrato.data_assinatura,
         data_fim_vigencia=contrato.data_fim_vigencia,
         situacao_atual=contrato.situacao_atual,
@@ -518,4 +644,5 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
         acoes_pdtic_vinculadas=acoes_pdtic,
         equipe=equipe,
         historico=historico,
+        aditivos=aditivos,
     )

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, use } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -9,9 +9,7 @@ import {
   Shield,
   Users,
   Layers,
-  ClipboardList,
   Loader2,
-  AlertCircle,
   BarChart3,
   CheckCircle2,
   Clock,
@@ -21,26 +19,43 @@ import {
   Trophy,
   Save,
   CalendarClock,
+  Play,
+  Check,
+  AlertTriangle,
+  Folder,
+  Lock,
 } from "lucide-react";
+import { differenceInDays, parseISO, isValid, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { ArtefatoCard } from "@/components/projetos/ArtefatoCard";
-import { AlterarDataArtefatoModal } from "@/components/projetos/AlterarDataArtefatoModal";
 import { ToastContainer, showToast } from "@/components/ui/Toast";
 import {
   fetchPainelProjeto,
   enviarParaLicitacao,
   atualizarTramiteLicitacao,
   concluirLicitacao,
+  fetchHistoricoProjeto,
+  fetchObservacoesFaseExterna,
+  addObservacaoFaseExterna,
+  type HistoricoEvento,
+  type ObservacaoFaseExterna,
 } from "@/lib/api";
 import type {
   ProjetoPainelResponse,
   ProjetoComDetalhes,
-  Artefato,
 } from "@/types/projeto";
 import {
   COMPLEXIDADE_CONFIG,
   STATUS_PROJETO_CONFIG,
 } from "@/types/projeto";
 
+/* ── Helper de formatação de data ──────────────────────────────────────── */
+
+function fmtDate(d: string | null): string {
+  if (!d) return "—";
+  const parsed = parseISO(d);
+  return isValid(parsed) ? format(parsed, "dd/MM/yyyy", { locale: ptBR }) : "—";
+}
 
 /* ── Página ────────────────────────────────────────────────────────────── */
 
@@ -55,9 +70,10 @@ export default function ProjetoDetalhesPage({
   const [data, setData] = useState<ProjetoPainelResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchKey, setFetchKey] = useState(0);
+  const [activeTab, setActiveTab] = useState<"visao-geral" | "artefatos" | "equipe" | "fase-externa" | "historico">("visao-geral");
+  const [eventos, setEventos] = useState<HistoricoEvento[]>([]);
+  const [loadingEventos, setLoadingEventos] = useState(false);
 
-  // Modal state
-  const [alterarDataArtefato, setAlterarDataArtefato] = useState<Artefato | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -74,6 +90,16 @@ export default function ProjetoDetalhesPage({
     }
     load();
   }, [projetoId, fetchKey]);
+
+  useEffect(() => {
+    if (activeTab === "historico") {
+      setLoadingEventos(true);
+      fetchHistoricoProjeto(projetoId)
+        .then(setEventos)
+        .catch(() => showToast("error", "Erro ao carregar histórico."))
+        .finally(() => setLoadingEventos(false));
+    }
+  }, [activeTab, projetoId, fetchKey]);
 
   const refresh = () => setFetchKey((k) => k + 1);
 
@@ -147,170 +173,276 @@ export default function ProjetoDetalhesPage({
 
 
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-border bg-background-card px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
-            Artefatos
-          </div>
-          <div className="mt-1 text-2xl font-bold text-foreground">
-            {data.total_artefatos}
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-background-card px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
-            Concluídos
-          </div>
-          <div className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-            {data.artefatos_concluidos}
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-background-card px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
-            Pendentes
-          </div>
-          <div className="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400">
-            {data.artefatos_pendentes}
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-background-card px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
-            Progresso
-          </div>
-          <div className="mt-1">
-            <span className="text-2xl font-bold text-foreground">
-              {data.progresso_percentual}%
-            </span>
-            <div className="mt-1.5 h-2 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ${
-                  data.progresso_percentual === 100
-                    ? "bg-emerald-500"
-                    : data.progresso_percentual >= 50
-                      ? "bg-amber-400"
-                      : "bg-blue-400"
-                }`}
-                style={{ width: `${data.progresso_percentual}%` }}
-              />
-            </div>
-          </div>
-        </div>
+      {/* ── Navegação em Abas ── */}
+      <div className="flex overflow-x-auto border-b border-border mb-6 no-scrollbar">
+        {([
+          { key: "visao-geral" as const, label: "Visão Geral" },
+          { key: "artefatos" as const, label: "Artefatos" },
+          { key: "equipe" as const, label: "Equipe" },
+          { key: "fase-externa" as const, label: "Fase Externa" },
+          { key: "historico" as const, label: "Histórico" },
+        ]).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`whitespace-nowrap px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-colors ${
+              activeTab === tab.key
+                ? "border-b-2 border-violet-500 text-violet-600 dark:text-violet-400"
+                : "text-foreground-muted hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Info panel: equipe + vínculos */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Equipe */}
-        <div className="rounded-xl border border-border bg-background-card p-4">
-          <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-foreground-muted mb-3">
-            <Users size={12} />
-            Equipe de Planejamento
-          </h3>
-          <div className="space-y-2">
-            {([
-              { label: "Requisitante", pessoa: projeto.integrante_requisitante },
-              { label: "Técnico", pessoa: projeto.integrante_tecnico },
-              { label: "Administrativo", pessoa: projeto.integrante_administrativo },
-            ] as const).map(({ label, pessoa }) => (
-              <div key={label} className="flex items-center justify-between text-sm">
-                <span className="text-[10px] font-bold uppercase text-foreground-muted">
-                  {label}
-                </span>
-                <span className="font-medium text-foreground">
-                  {pessoa ? `${pessoa.nome} — ${pessoa.cargo}` : (
-                    <span className="text-foreground-muted italic">Não definido</span>
+      {/* ── Conteúdo da Aba ── */}
+      <div className="rounded-2xl border border-border bg-background-card p-6 shadow-sm">
+
+        {/* ═══ ABA: VISÃO GERAL ═══ */}
+        {activeTab === "visao-geral" && (
+          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            
+            {/* Seção 1: DADOS BÁSICOS */}
+            <section>
+              <div className="mb-6 border-b border-border pb-2">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-500">
+                  Dados Básicos
+                </h2>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-6">
+                {/* Linha 1 */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">Nome do Projeto</label>
+                  <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[42px] flex items-center">
+                    {projeto.nome}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">Processo SEI</label>
+                  <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[42px] flex items-center font-mono">
+                    {projeto.processo_sei || "—"}
+                  </div>
+                </div>
+
+                {/* Linha 2 */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">Prioridade</label>
+                  <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[42px] flex items-center capitalize">
+                    {projeto.prioridade || "Média"}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">Complexidade</label>
+                  <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[42px] flex items-center capitalize">
+                    {projeto.complexidade}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Seção 2: PLANEJAMENTO ESTRATÉGICO */}
+            <section className="mt-10">
+              <div className="mb-6 border-b border-border pb-2">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-500">
+                  Planejamento Estratégico
+                </h2>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">Ações PDTIC</label>
+                  <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[100px]">
+                    {projeto.acoes_pdtic.length > 0 ? (
+                      <ul className="space-y-2 list-inside list-disc marker:text-slate-400">
+                        {projeto.acoes_pdtic.map((a) => (
+                          <li key={a.id}>
+                            <span className="font-semibold">{a.codigo_acao}</span> — {a.descricao}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="text-slate-400 italic">Nenhum vínculo selecionado.</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">Itens PACC</label>
+                  <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[100px]">
+                    {projeto.itens_pacc.length > 0 ? (
+                      <ul className="space-y-2 list-inside list-disc marker:text-slate-400">
+                        {projeto.itens_pacc.map((i) => (
+                          <li key={i.id}>
+                            <span className="font-semibold">#{i.numero_item}</span> — {i.descricao_demanda}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="text-slate-400 italic">Nenhum vínculo selecionado.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+          </div>
+        )}
+
+        {/* ═══ ABA: ARTEFATOS (TABELA DE AUDITORIA READ-ONLY) ═══ */}
+        {activeTab === "artefatos" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full border-collapse text-left text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-background-card">
+                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 font-semibold border-b border-slate-200 dark:border-slate-700">
+                  <tr>
+                    <th className="w-[22%] px-4 py-3 whitespace-nowrap">Artefato</th>
+                    <th className="w-[12%] px-4 py-3 whitespace-nowrap">Data Início</th>
+                    <th className="w-[12%] px-4 py-3 whitespace-nowrap">Prazo Limite</th>
+                    <th className="w-[12%] px-4 py-3 whitespace-nowrap">Data Conclusão</th>
+                    <th className="w-[10%] px-4 py-3 whitespace-nowrap">Duração</th>
+                    <th className="w-[32%] px-4 py-3">Justificativa Atraso</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                  {projeto.artefatos.sort((a, b) => a.id - b.id).map((art) => {
+                    let dias = "—";
+                    let isLate = false;
+                    let isDone = art.status === "Concluído";
+                    
+                    if (art.data_inicio && art.data_fim_prevista) {
+                      const dIni = parseISO(art.data_inicio);
+                      const dFim = parseISO(art.data_fim_prevista);
+                      const dConc = art.data_conclusao ? parseISO(art.data_conclusao) : new Date();
+                      
+                      if (isValid(dIni) && isValid(dFim) && isValid(dConc)) {
+                        const diff = differenceInDays(dConc, dIni);
+                        dias = diff >= 0 ? `${diff} dias` : "—";
+                        if (isDone && dConc > dFim) isLate = true;
+                        if (!isDone && dConc > dFim) isLate = true;
+                      }
+                    }
+
+                    return (
+                      <tr key={art.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                        <td className="px-4 py-3 font-bold text-blue-900 dark:text-blue-400 whitespace-nowrap">{art.tipo}</td>
+                        <td className="px-4 py-3">{fmtDate(art.data_inicio)}</td>
+                        <td className="px-4 py-3">
+                          {art.data_fim_prevista ? (
+                            <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold w-fit ${isLate ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>
+                              {fmtDate(art.data_fim_prevista)}
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td className="px-4 py-3">{fmtDate(art.data_conclusao)}</td>
+                        <td className="px-4 py-3">
+                          {dias !== "—" ? (
+                            <span className={`font-semibold ${isLate ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                              {dias}
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 max-w-xs break-words">
+                          {art.justificativa_atraso || "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ ABA: EQUIPE ═══ */}
+        {activeTab === "equipe" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground-muted">
+              <Users size={16} className="text-violet-500" /> Equipe de Planejamento
+            </div>
+            <div className="grid grid-cols-1 gap-5">
+              {([
+                { label: "Integrante Requisitante", pessoa: projeto.integrante_requisitante },
+                { label: "Integrante Técnico", pessoa: projeto.integrante_tecnico },
+                { label: "Integrante Administrativo", pessoa: projeto.integrante_administrativo },
+              ] as const).map(({ label, pessoa }) => (
+                <div key={label} className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-4 bg-slate-50/30 dark:bg-slate-900/20">
+                  <div className="mb-2 text-xs font-bold uppercase tracking-wider text-foreground-muted">{label}</div>
+                  {pessoa ? (
+                    <div className="rounded-lg border border-border bg-background-secondary px-3 py-2 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-foreground">{pessoa.nome}</div>
+                        <div className="mt-0.5 flex items-center gap-3 text-xs text-foreground-muted">
+                          <span>{pessoa.cargo}</span>
+                          <span className="font-mono text-[11px]">Mat. {pessoa.matricula}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border px-3 py-3 text-xs text-foreground-muted italic">Não designado</div>
                   )}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Vínculos */}
-        <div className="rounded-xl border border-border bg-background-card p-4">
-          <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-foreground-muted mb-3">
-            <Layers size={12} />
-            Planejamento Estratégico
-          </h3>
-
-          {/* PDTIC */}
-          <div className="mb-3">
-            <div className="text-[10px] font-bold uppercase text-indigo-500 mb-1">
-              Ações PDTIC ({projeto.acoes_pdtic.length})
+                </div>
+              ))}
             </div>
-            {projeto.acoes_pdtic.length > 0 ? (
-              <div className="space-y-1">
-                {projeto.acoes_pdtic.map((a) => (
-                  <div key={a.id} className="rounded-md bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300">
-                    <strong>{a.codigo_acao}</strong> — {a.descricao.substring(0, 60)}
-                  </div>
-                ))}
+          </div>
+        )}
+
+        {/* ═══ ABA: FASE EXTERNA ═══ */}
+        {activeTab === "fase-externa" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <FaseExternaSection projeto={projeto} onRefresh={refresh} />
+          </div>
+        )}
+
+        {/* ═══ ABA: HISTÓRICO ═══ */}
+        {activeTab === "historico" && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-500">
+              <Clock size={16} className="text-violet-500" /> Linha do Tempo
+            </div>
+            {loadingEventos ? (
+              <div className="flex h-32 items-center justify-center">
+                <Loader2 size={24} className="animate-spin text-violet-500" />
+              </div>
+            ) : eventos.length > 0 ? (
+              <div className="relative space-y-0 pl-7 before:absolute before:left-[11px] before:top-2 before:h-[calc(100%-16px)] before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
+                {eventos.map((evt) => {
+                  let Icon = Clock;
+                  let colorClass = "text-violet-500";
+                  let bgClass = "bg-violet-50 dark:bg-violet-900/20";
+                  let borderClass = "border-violet-200 dark:border-violet-800";
+                  
+                  if (evt.icone === "folder") { Icon = Folder; }
+                  else if (evt.icone === "play") { Icon = Play; colorClass = "text-blue-500"; bgClass = "bg-blue-50 dark:bg-blue-900/20"; borderClass = "border-blue-200 dark:border-blue-800"; }
+                  else if (evt.icone === "check") { Icon = Check; colorClass = "text-emerald-500"; bgClass = "bg-emerald-50 dark:bg-emerald-900/20"; borderClass = "border-emerald-200 dark:border-emerald-800"; }
+                  else if (evt.icone === "alert") { Icon = AlertTriangle; colorClass = "text-amber-500"; bgClass = "bg-amber-50 dark:bg-amber-900/20"; borderClass = "border-amber-300 dark:border-amber-700"; }
+
+                  return (
+                    <div key={evt.id} className="relative pb-6 last:pb-0">
+                      <div className={`absolute -left-[27px] top-1 flex h-5 w-5 items-center justify-center rounded-full border-[3px] border-white dark:border-slate-900 ${colorClass.replace("text-", "bg-")} shadow-sm`} />
+                      <div className={`rounded-xl border ${borderClass} ${bgClass} p-4 shadow-sm`}>
+                        <div className="flex items-center gap-2 mb-2 text-xs font-medium text-slate-500">
+                          <Icon size={14} className={colorClass} />
+                          {new Date(evt.data_evento).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">{evt.titulo}</h4>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{evt.descricao}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <p className="text-[11px] text-foreground-muted italic">Sem vínculos PDTIC</p>
-            )}
-          </div>
-
-          {/* PACC */}
-          <div>
-            <div className="text-[10px] font-bold uppercase text-teal-500 mb-1">
-              Itens PACC ({projeto.itens_pacc.length})
-            </div>
-            {projeto.itens_pacc.length > 0 ? (
-              <div className="space-y-1">
-                {projeto.itens_pacc.map((i) => (
-                  <div key={i.id} className="rounded-md bg-teal-50 px-2 py-1 text-[11px] text-teal-700 dark:bg-teal-900/20 dark:text-teal-300">
-                    <strong>#{i.numero_item}</strong> — {i.descricao_demanda.substring(0, 50)}
-                    <span className="ml-1 font-mono">
-                      R$ {i.valor_estimado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                ))}
+              <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 px-6 py-10 flex flex-col items-center gap-3 text-center">
+                <Clock size={32} className="text-slate-400/50" />
+                <p className="text-sm font-medium text-slate-500">Nenhum evento registrado no histórico.</p>
               </div>
-            ) : (
-              <p className="text-[11px] text-foreground-muted italic">Sem vínculos PACC</p>
             )}
           </div>
-        </div>
+        )}
+
       </div>
-
-      {/* Artefatos title */}
-      <div className="flex items-center gap-2">
-        <BarChart3 size={16} className="text-violet-500" />
-        <h2 className="text-lg font-bold text-foreground">
-          Artefatos da Fase Interna
-        </h2>
-      </div>
-
-      {/* Artefatos grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {projeto.artefatos
-          .sort((a, b) => a.id - b.id)
-          .map((art) => (
-            <ArtefatoCard
-              key={art.id}
-              artefato={art}
-              onRefresh={refresh}
-              onAlterarData={(a) => setAlterarDataArtefato(a)}
-            />
-          ))}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-       * FASE EXTERNA (LICITAÇÃO)
-       * ═══════════════════════════════════════════════════════════════════ */}
-      <FaseExternaSection
-        projeto={projeto}
-        onRefresh={refresh}
-      />
-
-      {/* Modal de compliance */}
-      {alterarDataArtefato && (
-        <AlterarDataArtefatoModal
-          artefato={alterarDataArtefato}
-          onClose={() => setAlterarDataArtefato(null)}
-          onSuccess={refresh}
-        />
-      )}
 
       <ToastContainer />
     </div>
@@ -319,8 +451,7 @@ export default function ProjetoDetalhesPage({
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Componente: Fase Externa (Licitação)
- * Renderização condicional baseada no status do projeto
+ * Componente: Fase Externa (Diário de Bordo)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 function FaseExternaSection({
@@ -331,15 +462,21 @@ function FaseExternaSection({
   onRefresh: () => void;
 }) {
   const [actionLoading, setActionLoading] = useState(false);
-  const [tramiteTexto, setTramiteTexto] = useState(
-    projeto.situacao_licitacao_texto ?? ""
-  );
-  const [savingTramite, setSavingTramite] = useState(false);
+  const [observacoes, setObservacoes] = useState<ObservacaoFaseExterna[]>([]);
+  const [loadingObs, setLoadingObs] = useState(true);
+  const [novaObs, setNovaObs] = useState("");
+  const [savingObs, setSavingObs] = useState(false);
+  const [showConcluirModal, setShowConcluirModal] = useState(false);
 
-  // Sync tramiteTexto when project data changes
   useEffect(() => {
-    setTramiteTexto(projeto.situacao_licitacao_texto ?? "");
-  }, [projeto.situacao_licitacao_texto]);
+    if (projeto.status === "Fase externa" || projeto.status === "Contratado") {
+      fetchObservacoesFaseExterna(projeto.id)
+        .then(setObservacoes)
+        .finally(() => setLoadingObs(false));
+    } else {
+      setLoadingObs(false);
+    }
+  }, [projeto.id, projeto.status]);
 
   /* ── Handlers ────────────────────────────────────────────────────────── */
 
@@ -347,29 +484,30 @@ function FaseExternaSection({
     setActionLoading(true);
     try {
       await enviarParaLicitacao(projeto.id);
-      showToast("success", "Projeto enviado para licitação com sucesso!");
+      showToast("success", "Projeto enviado para fase externa com sucesso!");
       onRefresh();
     } catch (err: any) {
-      showToast("error", err.message ?? "Erro ao enviar para licitação.");
+      showToast("error", err.message ?? "Erro ao enviar para fase externa.");
     } finally {
       setActionLoading(false);
     }
   }
 
-  async function handleSalvarTramite() {
-    if (!tramiteTexto.trim()) {
-      showToast("error", "Preencha a situação da licitação.");
+  async function handleAddObservacao() {
+    if (!novaObs.trim()) {
+      showToast("error", "Preencha a observação.");
       return;
     }
-    setSavingTramite(true);
+    setSavingObs(true);
     try {
-      await atualizarTramiteLicitacao(projeto.id, tramiteTexto.trim());
-      showToast("success", "Tramitação atualizada com sucesso!");
-      onRefresh();
+      const added = await addObservacaoFaseExterna(projeto.id, novaObs.trim());
+      setObservacoes([added, ...observacoes]);
+      setNovaObs("");
+      showToast("success", "Movimentação adicionada com sucesso!");
     } catch (err: any) {
-      showToast("error", err.message ?? "Erro ao salvar tramitação.");
+      showToast("error", err.message ?? "Erro ao salvar movimentação.");
     } finally {
-      setSavingTramite(false);
+      setSavingObs(false);
     }
   }
 
@@ -377,10 +515,10 @@ function FaseExternaSection({
     setActionLoading(true);
     try {
       await concluirLicitacao(projeto.id);
-      showToast("success", "Licitação concluída com sucesso!");
+      showToast("success", "Fase Externa concluída com sucesso!");
       onRefresh();
     } catch (err: any) {
-      showToast("error", err.message ?? "Erro ao concluir licitação.");
+      showToast("error", err.message ?? "Erro ao concluir fase externa.");
     } finally {
       setActionLoading(false);
     }
@@ -396,15 +534,19 @@ function FaseExternaSection({
   /* ── Não exibir a seção se não estiver em um dos 3 estados ──────────── */
 
   const showSection =
-    projeto.status === "Pronto para contratação" ||
-    projeto.status === "Em licitação" ||
-    projeto.status === "Licitação concluída";
+    projeto.status === "Fase interna" ||
+    projeto.status === "Fase externa" ||
+    projeto.status === "Contratado";
+
+  const todosArtefatosConcluidos =
+    projeto.artefatos.length > 0 &&
+    projeto.artefatos.every((a) => a.status === "Concluído");
 
   if (!showSection) return null;
 
-  /* ── ESTADO 1: Pronto para contratação ──────────────────────────────── */
+  /* ── ESTADO 1: Fase Interna com artefatos concluídos ────────────────── */
 
-  if (projeto.status === "Pronto para contratação") {
+  if (projeto.status === "Fase interna" && todosArtefatosConcluidos) {
     return (
       <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-violet-300 bg-gradient-to-br from-violet-50 to-purple-50 p-6 dark:border-violet-700 dark:from-violet-950/30 dark:to-purple-950/20">
         <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-200/30 dark:bg-violet-700/10" />
@@ -415,13 +557,13 @@ function FaseExternaSection({
               <Send size={16} />
             </div>
             <h3 className="text-sm font-bold text-violet-800 dark:text-violet-300">
-              Fase Externa — Licitação
+              Fase Externa
             </h3>
           </div>
 
           <p className="text-sm text-violet-700/80 dark:text-violet-400/80 mb-4 max-w-xl">
             Todos os artefatos da fase interna foram concluídos. O projeto está
-            pronto para ser enviado à área de compras/licitação.
+            pronto para iniciar a fase externa.
           </p>
 
           <button
@@ -434,73 +576,118 @@ function FaseExternaSection({
             ) : (
               <Send size={16} />
             )}
-            Enviar Projeto para Licitação
+            Iniciar Fase Externa
           </button>
         </div>
       </div>
     );
   }
 
-  /* ── ESTADO 2: Em licitação ─────────────────────────────────────────── */
+  if (projeto.status === "Fase interna" && !todosArtefatosConcluidos) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border px-6 py-10 flex flex-col items-center gap-3 text-center">
+        <Lock size={32} className="text-foreground-muted/30" />
+        <p className="text-sm font-medium text-foreground-muted max-w-md">
+          A Fase Externa está bloqueada. Para habilitá-la, conclua primeiro todos os artefatos obrigatórios da Fase Interna.
+        </p>
+      </div>
+    );
+  }
 
-  if (projeto.status === "Em licitação") {
+  /* ── ESTADO 2: Fase Externa ─────────────────────────────────────────── */
+
+  if (projeto.status === "Fase externa") {
     return (
       <div className="relative overflow-hidden rounded-xl border border-violet-200 bg-background-card p-6 shadow-sm dark:border-violet-800">
         {/* Header */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400">
-            <PackageCheck size={16} />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-foreground">
-              Fase Externa — Em Licitação
-            </h3>
-            <div className="flex items-center gap-1.5 text-[11px] text-foreground-muted mt-0.5">
-              <CalendarClock size={11} />
-              Enviado em{" "}
-              <strong>{formatDate(projeto.data_envio_licitacao)}</strong>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400">
+              <PackageCheck size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-foreground">
+                Fase Externa
+              </h3>
+              <div className="flex items-center gap-1.5 text-[11px] text-foreground-muted mt-0.5">
+                <CalendarClock size={11} />
+                Iniciada em{" "}
+                <strong>{formatDate(projeto.data_envio_licitacao)}</strong>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Tramitação textarea */}
-        <div className="mb-4">
+        {/* Adicionar Movimentação */}
+        <div className="mb-6 border-b border-border pb-6">
           <label
-            htmlFor="tramite-licitacao"
+            htmlFor="diario-bordo"
             className="block text-xs font-bold uppercase tracking-wider text-foreground-muted mb-1.5"
           >
-            Situação Atual da Licitação
+            Situação Atual - Adicionar Detalhes
           </label>
           <textarea
-            id="tramite-licitacao"
-            value={tramiteTexto}
-            onChange={(e) => setTramiteTexto(e.target.value)}
+            id="diario-bordo"
+            value={novaObs}
+            onChange={(e) => setNovaObs(e.target.value)}
             rows={3}
-            placeholder="Ex: Processo encaminhado à Procuradoria Jurídica para análise..."
+            placeholder="Descreva o andamento atual, pendências ou movimentações..."
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-400/20 transition-colors resize-none"
           />
           <button
-            onClick={handleSalvarTramite}
-            disabled={savingTramite || !tramiteTexto.trim()}
+            onClick={handleAddObservacao}
+            disabled={savingObs || !novaObs.trim()}
             className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-700 transition-all hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-violet-700 dark:bg-violet-900/20 dark:text-violet-400 dark:hover:bg-violet-900/40"
           >
-            {savingTramite ? (
+            {savingObs ? (
               <Loader2 size={13} className="animate-spin" />
             ) : (
-              <Save size={13} />
+              <span className="text-sm leading-none">+</span>
             )}
-            Salvar Tramitação
+            Adicionar Movimentação
           </button>
+        </div>
+
+        {/* Lista de Movimentações */}
+        <div className="mb-6">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-foreground-muted mb-4">
+            Histórico de Movimentações
+          </h4>
+          {loadingObs ? (
+            <div className="flex justify-center py-4">
+              <Loader2 size={24} className="animate-spin text-violet-500" />
+            </div>
+          ) : observacoes.length > 0 ? (
+            <div className="space-y-3">
+              {observacoes.map((obs) => (
+                <div key={obs.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {obs.usuario?.nome || "Usuário do Sistema"}
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      {new Date(obs.criado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{obs.texto}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border py-8 text-center text-sm text-foreground-muted italic">
+              Nenhuma movimentação registrada.
+            </div>
+          )}
         </div>
 
         {/* Divider */}
         <div className="border-t border-border pt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-xs text-foreground-muted">
-            Quando o processo licitatório for finalizado, conclua a licitação
+            Quando o processo for finalizado, conclua a fase externa
             para avançar o projeto.
           </p>
           <button
-            onClick={handleConcluir}
+            onClick={() => setShowConcluirModal(true)}
             disabled={actionLoading}
             className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition-all hover:shadow-xl hover:shadow-emerald-500/30 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
@@ -509,16 +696,48 @@ function FaseExternaSection({
             ) : (
               <Trophy size={16} />
             )}
-            Concluir Licitação
+            Concluir Fase Externa
           </button>
         </div>
+
+        {/* Modal Confirmação Conclusão */}
+        {showConcluirModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-md rounded-xl bg-background p-6 shadow-xl border border-border">
+              <h3 className="mb-2 text-lg font-bold text-foreground">Concluir Fase Externa?</h3>
+              <p className="mb-6 text-sm text-foreground-muted">
+                Tem certeza que deseja finalizar a fase externa deste projeto? Certifique-se de que todas as movimentações foram registradas.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowConcluirModal(false)}
+                  disabled={actionLoading}
+                  className="rounded-lg px-4 py-2 text-sm font-bold text-foreground-muted hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    await handleConcluir();
+                    setShowConcluirModal(false);
+                  }}
+                  disabled={actionLoading}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading ? <Loader2 size={16} className="animate-spin" /> : null}
+                  Sim, Concluir
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  /* ── ESTADO 3: Licitação concluída ──────────────────────────────────── */
+  /* ── ESTADO 3: Contratado ───────────────────────────────────────────── */
 
-  if (projeto.status === "Licitação concluída") {
+  if (projeto.status === "Contratado") {
     return (
       <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-6 dark:border-emerald-800 dark:from-emerald-950/20 dark:to-teal-950/15">
         <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-emerald-200/30 dark:bg-emerald-700/10" />
@@ -529,30 +748,51 @@ function FaseExternaSection({
               <Trophy size={16} />
             </div>
             <h3 className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
-              Licitação Concluída com Sucesso
+              Fase Externa Concluída com Sucesso
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div className="flex flex-wrap gap-8 mb-6">
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-500/70 mb-1">
-                Data de Envio
+              <div className="text-xs uppercase text-emerald-700 dark:text-emerald-500 mb-1">
+                Data de Início
               </div>
-              <div className="flex items-center gap-1.5 text-sm font-medium text-emerald-800 dark:text-emerald-300">
-                <CalendarClock size={13} />
+              <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-300">
                 {formatDate(projeto.data_envio_licitacao)}
               </div>
             </div>
-
-            {projeto.situacao_licitacao_texto && (
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-500/70 mb-1">
-                  Último Registro de Tramitação
-                </div>
-                <p className="text-sm text-emerald-700 dark:text-emerald-400">
-                  {projeto.situacao_licitacao_texto}
-                </p>
+            <div>
+              <div className="text-xs uppercase text-emerald-700 dark:text-emerald-500 mb-1">
+                Data de Conclusão
               </div>
+              <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-300">
+                {projeto.tramitacoes && projeto.tramitacoes.length > 0 
+                  ? formatDate(projeto.tramitacoes[0].data_hora) 
+                  : observacoes.length > 0 
+                    ? formatDate(observacoes[0].criado_em) 
+                    : "—"}
+              </div>
+            </div>
+          </div>
+
+          {/* Diário de Bordo Readonly */}
+          <div className="mb-4 mt-2">
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-500/70 mb-2">
+              Histórico de Movimentações
+            </h4>
+            {loadingObs ? (
+              <div className="text-xs text-emerald-600">Carregando...</div>
+            ) : observacoes.length > 0 ? (
+              <div className="space-y-2">
+                {observacoes.map((obs) => (
+                  <div key={obs.id} className="rounded border border-emerald-200/50 bg-emerald-100/30 p-2 text-xs text-emerald-800 dark:border-emerald-800/50 dark:text-emerald-300">
+                    <span className="font-bold mr-2">{new Date(obs.criado_em).toLocaleDateString("pt-BR")}:</span>
+                    {obs.texto}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-emerald-600 italic">Sem registros.</div>
             )}
           </div>
 

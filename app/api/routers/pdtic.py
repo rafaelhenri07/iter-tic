@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.pdtic import AcaoPdtic, PeriodoPdtic, RevisaoPdtic
+from app.models.estrutura_organizacional import UnidadeOrganizacional
 from app.schemas.pdtic import (
     PdticAcaoCreate,
     PdticAcaoExcluir,
@@ -292,6 +293,11 @@ async def listar_acoes_do_periodo(
 
     stmt = (
         select(AcaoPdtic)
+        .options(
+            selectinload(AcaoPdtic.departamento_rel),
+            selectinload(AcaoPdtic.unidade_demandante_rel),
+            selectinload(AcaoPdtic.unidade_responsavel_rel),
+        )
         .where(AcaoPdtic.periodo_id == periodo_id)
         .order_by(AcaoPdtic.codigo_acao, AcaoPdtic.id)
     )
@@ -316,6 +322,9 @@ async def obter_acao(
         .options(
             selectinload(AcaoPdtic.revisao_inclusao),
             selectinload(AcaoPdtic.revisao_exclusao),
+            selectinload(AcaoPdtic.departamentos_rel),
+            selectinload(AcaoPdtic.unidades_demandantes_rel),
+            selectinload(AcaoPdtic.unidades_responsaveis_rel),
         )
         .where(AcaoPdtic.id == acao_id)
     )
@@ -368,6 +377,11 @@ async def obter_painel_periodo(
     # Ações — todas do período
     stmt_acoes = (
         select(AcaoPdtic)
+        .options(
+            selectinload(AcaoPdtic.departamentos_rel),
+            selectinload(AcaoPdtic.unidades_demandantes_rel),
+            selectinload(AcaoPdtic.unidades_responsaveis_rel),
+        )
         .where(AcaoPdtic.periodo_id == periodo_id)
         .order_by(AcaoPdtic.codigo_acao, AcaoPdtic.id)
     )
@@ -436,10 +450,22 @@ async def criar_acao(
                 detail="acao_pai_id deve pertencer ao mesmo período.",
             )
 
-    nova_acao = AcaoPdtic(**payload.model_dump())
+    nova_acao = AcaoPdtic(
+        **payload.model_dump(exclude={"departamentos_ids", "unidades_demandantes_ids", "unidades_responsaveis_ids"})
+    )
+
+    # Resolver relacionamentos N:N (todos usam a tabela unificada)
+    deps = (await db.execute(select(UnidadeOrganizacional).where(UnidadeOrganizacional.id.in_(payload.departamentos_ids)))).scalars().all()
+    dems = (await db.execute(select(UnidadeOrganizacional).where(UnidadeOrganizacional.id.in_(payload.unidades_demandantes_ids)))).scalars().all()
+    resps = (await db.execute(select(UnidadeOrganizacional).where(UnidadeOrganizacional.id.in_(payload.unidades_responsaveis_ids)))).scalars().all()
+
+    nova_acao.departamentos_rel = list(deps)
+    nova_acao.unidades_demandantes_rel = list(dems)
+    nova_acao.unidades_responsaveis_rel = list(resps)
+
     db.add(nova_acao)
     await db.flush()
-    await db.refresh(nova_acao)
+    await db.refresh(nova_acao, attribute_names=['departamentos_rel', 'unidades_demandantes_rel', 'unidades_responsaveis_rel'])
     return nova_acao
 
 
@@ -533,6 +559,10 @@ async def atualizar_acao_scd(
 
     # Sobrescrever com os campos enviados no payload (partial update)
     dados_atualizados = payload.model_dump(exclude_unset=True)
+    # Extrair IDs de org N:N do payload para tratamento especial
+    dep_ids = dados_atualizados.pop("departamentos_ids", None)
+    dem_ids = dados_atualizados.pop("unidades_demandantes_ids", None)
+    resp_ids = dados_atualizados.pop("unidades_responsaveis_ids", None)
     dados_nova_versao.update(dados_atualizados)
 
     # Campos de ciclo de vida
@@ -542,10 +572,30 @@ async def atualizar_acao_scd(
     dados_nova_versao["acao_pai_id"] = acao_atual.id
 
     nova_acao = AcaoPdtic(**dados_nova_versao)
+
+    # Resolver N:N — se o payload trouxe listas novas, usar; senão copiar da versão anterior
+    if dep_ids is not None:
+        deps = (await db.execute(select(UnidadeOrganizacional).where(UnidadeOrganizacional.id.in_(dep_ids)))).scalars().all()
+        nova_acao.departamentos_rel = list(deps)
+    else:
+        nova_acao.departamentos_rel = list(acao_atual.departamentos_rel)
+
+    if dem_ids is not None:
+        dems = (await db.execute(select(UnidadeOrganizacional).where(UnidadeOrganizacional.id.in_(dem_ids)))).scalars().all()
+        nova_acao.unidades_demandantes_rel = list(dems)
+    else:
+        nova_acao.unidades_demandantes_rel = list(acao_atual.unidades_demandantes_rel)
+
+    if resp_ids is not None:
+        resps = (await db.execute(select(UnidadeOrganizacional).where(UnidadeOrganizacional.id.in_(resp_ids)))).scalars().all()
+        nova_acao.unidades_responsaveis_rel = list(resps)
+    else:
+        nova_acao.unidades_responsaveis_rel = list(acao_atual.unidades_responsaveis_rel)
+
     db.add(nova_acao)
 
     await db.flush()
-    await db.refresh(nova_acao)
+    await db.refresh(nova_acao, attribute_names=['departamentos_rel', 'unidades_demandantes_rel', 'unidades_responsaveis_rel'])
     return nova_acao
 
 
@@ -596,7 +646,7 @@ async def excluir_acao_logicamente(
     acao.revisao_exclusao_id = payload.revisao_exclusao_id
 
     await db.flush()
-    await db.refresh(acao)
+    await db.refresh(acao, attribute_names=['departamento_rel', 'unidade_demandante_rel', 'unidade_responsavel_rel'])
     return acao
 
 

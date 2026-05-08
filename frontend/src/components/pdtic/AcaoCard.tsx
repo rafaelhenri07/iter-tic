@@ -254,9 +254,11 @@ export function AcaoCard({ acao, revisoes, revisaoAtualId, onEditar, onExcluir }
             >
               {acao.status}
             </span>
-            <span className="rounded-full bg-background-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground-muted">
-              {TIPO_NECESSIDADE_LABEL[acao.tipo_necessidade]}
-            </span>
+            {acao.tipo_necessidade?.map((tipo) => (
+              <span key={tipo} className="rounded-full bg-background-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground-muted">
+                {TIPO_NECESSIDADE_LABEL[tipo]}
+              </span>
+            ))}
             <span className="text-[11px] text-foreground-muted">
               <Building2 size={11} className="mr-0.5 inline" />
               {acao.unidade_demandante}
@@ -409,7 +411,7 @@ export function AcaoCard({ acao, revisoes, revisaoAtualId, onEditar, onExcluir }
           {/* Valores financeiros */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ValoresGrid
-              label="Investimento (Capital)"
+              label="Investimento"
               valores={acao.valores_investimento}
               icon={<DollarSign size={10} />}
             />

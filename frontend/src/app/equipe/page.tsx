@@ -14,29 +14,13 @@ import {
   Building,
   Briefcase,
   Shield,
+  Mail,
 } from "lucide-react";
 import Link from "next/link";
 import { ToastContainer, showToast } from "@/components/ui/Toast";
 import { fetchServidores, excluirServidor } from "@/lib/api";
 import type { Servidor } from "@/types/projeto";
 import { CardListSkeleton } from "@/components/ui/Skeleton";
-
-/* ── Badge de perfil ──────────────────────────────────────────────────── */
-
-const PERFIL_CONFIG: Record<string, { icon: string; cls: string }> = {
-  Administrador: {
-    icon: "🔴",
-    cls: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400",
-  },
-  Gestor: {
-    icon: "🔵",
-    cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
-  },
-  Visualizador: {
-    icon: "🟢",
-    cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
-  },
-};
 
 /* ── Página ────────────────────────────────────────────────────────────── */
 
@@ -79,7 +63,9 @@ export default function EquipePage() {
         s.nome.toLowerCase().includes(q) ||
         s.matricula.toLowerCase().includes(q) ||
         s.cargo.toLowerCase().includes(q) ||
-        s.lotacao.toLowerCase().includes(q)
+        (s.departamento?.sigla || "").toLowerCase().includes(q) ||
+        (s.departamento?.nome || "").toLowerCase().includes(q) ||
+        (s.email_funcional || "").toLowerCase().includes(q)
     );
   }, [servidores, search]);
 
@@ -131,7 +117,7 @@ export default function EquipePage() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-border bg-background-card px-4 py-3">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
             Total de Servidores
@@ -140,22 +126,7 @@ export default function EquipePage() {
             {servidores.length}
           </div>
         </div>
-        <div className="rounded-xl border border-border bg-background-card px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
-            Administradores
-          </div>
-          <div className="mt-1 text-2xl font-bold text-rose-600 dark:text-rose-400">
-            {servidores.filter((s) => s.perfil_acesso === "Administrador").length}
-          </div>
-        </div>
-        <div className="rounded-xl border border-border bg-background-card px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
-            Gestores
-          </div>
-          <div className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {servidores.filter((s) => s.perfil_acesso === "Gestor").length}
-          </div>
-        </div>
+
         <div className="rounded-xl border border-border bg-background-card px-4 py-3">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
             Exibindo
@@ -231,10 +202,11 @@ export default function EquipePage() {
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-foreground-muted">
                     <div className="flex items-center gap-1">
-                      <Shield size={10} />
-                      Perfil
+                      <Mail size={10} />
+                      E-mail
                     </div>
                   </th>
+
                   <th className="px-4 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-foreground-muted">
                     Ações
                   </th>
@@ -242,10 +214,6 @@ export default function EquipePage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {filtered.map((s) => {
-                  const perfilCfg = s.perfil_acesso
-                    ? PERFIL_CONFIG[s.perfil_acesso]
-                    : null;
-
                   return (
                     <tr
                       key={s.id}
@@ -277,24 +245,33 @@ export default function EquipePage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                          <Building size={10} />
-                          {s.lotacao}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className="inline-flex w-fit items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                            <Building size={10} />
+                            {s.departamento?.sigla || s.departamento?.nome || "N/I"}
+                          </span>
+                          {(s.unidade_lotacao || s.secao) && (
+                            <span className="text-[10px] text-foreground-muted">
+                              {[
+                                s.unidade_lotacao?.sigla || s.unidade_lotacao?.nome,
+                                s.secao?.sigla || s.secao?.nome,
+                              ]
+                                .filter(Boolean)
+                                .join(" / ")}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
-                        {perfilCfg ? (
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${perfilCfg.cls}`}
-                          >
-                            {perfilCfg.icon} {s.perfil_acesso}
+                        {s.email_funcional ? (
+                          <span className="text-xs text-foreground-muted">
+                            {s.email_funcional}
                           </span>
                         ) : (
-                          <span className="text-[11px] text-foreground-muted italic">
-                            Não definido
-                          </span>
+                          <span className="text-xs text-foreground-muted/50">—</span>
                         )}
                       </td>
+
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
                           <button

@@ -56,6 +56,11 @@ export interface PaccItemComAcao extends PaccItem {
   acao_pdtic: PdticAcao | null;
 }
 
+export interface PaccItemComHistoricoResponse extends PaccItemComAcao {
+  revisao_inclusao: PaccRevisao | null;
+  revisao_exclusao: PaccRevisao | null;
+}
+
 /* ── Resposta do painel ────────────────────────────────────────────────── */
 
 /** Resposta da rota GET /pacc/{exercicio_id}/painel */

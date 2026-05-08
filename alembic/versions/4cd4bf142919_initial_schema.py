@@ -126,7 +126,7 @@ def upgrade() -> None:
     sa.Column('necessidade', sa.String(length=20), nullable=False),
     sa.Column('descricao', sa.Text(), nullable=False),
     sa.Column('tipo_necessidade', sa.Enum('hardware', 'software', 'servico', 'comunicacao', 'capacitacao', 'outros', name='tipo_necessidade_enum'), nullable=False),
-    sa.Column('status', sa.Enum('Não iniciada', 'Em andamento', 'Contratada', 'Contrato vigente', 'Contrato a ser renovado', name='status_acao_enum'), nullable=False),
+    sa.Column('status', sa.Enum('Não iniciada', 'Em andamento', 'Contratada', name='status_acao_enum'), nullable=False),
     sa.Column('meta', sa.Text(), nullable=True),
     sa.Column('indicador', sa.Text(), nullable=True),
     sa.Column('quantidade', sa.String(length=100), nullable=True),

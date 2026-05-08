@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -14,6 +14,7 @@ import {
   Briefcase,
   Building,
   Shield,
+  Mail,
   X,
 } from "lucide-react";
 
@@ -23,7 +24,8 @@ import {
   type ServidorFormData,
   cleanServidorPayload,
 } from "@/lib/validations/servidor";
-import { criarServidor } from "@/lib/api";
+import { criarServidor, fetchUnidadesOrganizacionais } from "@/lib/api";
+import type { UnidadeOrg } from "@/types/estrutura_organizacional";
 import { showToast, ToastContainer } from "@/components/ui/Toast";
 
 export default function NovoServidorPage() {
@@ -41,10 +43,26 @@ export default function NovoServidorPage() {
       nome: "",
       cargo: "",
       funcao: "",
-      lotacao: "",
-      perfil_acesso: "",
+      departamento_id: 0,
+      unidade_lotacao_id: 0,
+      secao_id: 0,
+      email_funcional: "",
     },
   });
+
+  const [unidades, setUnidades] = useState<UnidadeOrg[]>([]);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await fetchUnidadesOrganizacionais();
+        setUnidades(data);
+      } catch (err) {
+        showToast("error", "Erro ao carregar unidades organizacionais.");
+      }
+    }
+    load();
+  }, []);
 
   const onSubmit = async (data: ServidorFormData) => {
     setSubmitting(true);
@@ -122,29 +140,51 @@ export default function NovoServidorPage() {
         </h3>
 
         <div className="grid gap-6 sm:grid-cols-2">
+          {/* Linha 1 */}
           <FormField
-            label="Lotação"
+            label="Departamento"
             required
             icon={<Building size={14} />}
-            error={errors.lotacao?.message}
+            error={errors.departamento_id?.message}
           >
-            <input
-              {...register("lotacao")}
-              placeholder="Ex: DTI, Gabinete"
-              className={inputCls}
-            />
+            <select {...register("departamento_id", { valueAsNumber: true })} className={selectCls}>
+              <option value="">Selecione o Departamento</option>
+              {unidades.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.sigla ? `${u.sigla} - ${u.nome}` : u.nome}
+                </option>
+              ))}
+            </select>
           </FormField>
 
           <FormField
-            label="Perfil de Acesso"
-            icon={<Shield size={14} />}
-            error={errors.perfil_acesso?.message}
+            label="Unidade de Lotação"
+            icon={<Building size={14} />}
+            error={errors.unidade_lotacao_id?.message}
           >
-            <select {...register("perfil_acesso")} className={selectCls}>
-              <option value="">Selecione...</option>
-              <option value="Administrador">🔴 Administrador</option>
-              <option value="Gestor">🔵 Gestor</option>
-              <option value="Visualizador">🟢 Visualizador</option>
+            <select {...register("unidade_lotacao_id", { valueAsNumber: true })} className={selectCls}>
+              <option value="">Selecione a Unidade (opcional)</option>
+              {unidades.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.sigla ? `${u.sigla} - ${u.nome}` : u.nome}
+                </option>
+              ))}
+            </select>
+          </FormField>
+
+          {/* Linha 2 */}
+          <FormField
+            label="Seção"
+            icon={<Building size={14} />}
+            error={errors.secao_id?.message}
+          >
+            <select {...register("secao_id", { valueAsNumber: true })} className={selectCls}>
+              <option value="">Selecione a Seção (opcional)</option>
+              {unidades.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.sigla ? `${u.sigla} - ${u.nome}` : u.nome}
+                </option>
+              ))}
             </select>
           </FormField>
 
@@ -161,6 +201,7 @@ export default function NovoServidorPage() {
             />
           </FormField>
 
+          {/* Linha 3 */}
           <FormField
             label="Função (opcional)"
             icon={<Briefcase size={14} />}
@@ -169,6 +210,20 @@ export default function NovoServidorPage() {
             <input
               {...register("funcao")}
               placeholder="Ex: Chefe de Seção"
+              className={inputCls}
+            />
+          </FormField>
+
+          <FormField
+            label="E-mail Funcional"
+            required
+            icon={<Mail size={14} />}
+            error={errors.email_funcional?.message}
+          >
+            <input
+              {...register("email_funcional")}
+              type="email"
+              placeholder="Ex: servidor@orgao.gov.br"
               className={inputCls}
             />
           </FormField>

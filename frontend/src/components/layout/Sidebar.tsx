@@ -9,11 +9,13 @@ import {
   FolderKanban,
   ClipboardCheck,
   Building2,
+  Briefcase,
   Users,
   Settings,
   X,
   Menu,
   Search,
+  ShieldCheck,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -26,18 +28,10 @@ interface NavItem {
   icon: ReactNode;
 }
 
-/* ── Estrutura de navegação (Flat) ─────────────────────────────────────── */
-
-const navigation: NavItem[] = [
-  { label: "Painel de Indicadores", href: "/dashboard", icon: <LayoutDashboard size={20} /> },
-  { label: "PDTIC", href: "/planejamento/pdtic", icon: <BookOpen size={20} /> },
-  { label: "PACC", href: "/planejamento/pacc", icon: <ClipboardList size={20} /> },
-  { label: "Meus Projetos", href: "/projetos", icon: <FolderKanban size={20} /> },
-  { label: "Gestão de Contratos", href: "/contratos", icon: <ClipboardCheck size={20} /> },
-  { label: "Fabricantes", href: "/execucao/fabricantes", icon: <Building2 size={20} /> },
-  { label: "Servidores", href: "/equipe", icon: <Users size={20} /> },
-  { label: "Configurações", href: "/configuracoes", icon: <Settings size={20} /> },
-];
+interface NavGroup {
+  title?: string;
+  items: NavItem[];
+}
 
 /* ── Sidebar principal ─────────────────────────────────────────────────── */
 
@@ -49,7 +43,55 @@ interface SidebarProps {
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+
+  // Monta a lista de nav agrupada dinamicamente
+  const navGroups: NavGroup[] = [
+    {
+      items: [
+        { label: "Painel de Indicadores", href: "/dashboard", icon: <LayoutDashboard size={20} /> },
+      ],
+    },
+    {
+      title: "Planejamento Estratégico",
+      items: [
+        { label: "PDTIC", href: "/planejamento/pdtic", icon: <BookOpen size={20} /> },
+        { label: "PACC", href: "/planejamento/pacc", icon: <ClipboardList size={20} /> },
+      ],
+    },
+    {
+      title: "Gestão e Execução",
+      items: [
+        { label: "Projetos", href: "/projetos", icon: <FolderKanban size={20} /> },
+        { label: "Contratos", href: "/contratos", icon: <ClipboardCheck size={20} /> },
+      ],
+    },
+    {
+      title: "Fornecedores",
+      items: [
+        { label: "Empresas", href: "/empresas", icon: <Briefcase size={20} /> },
+        { label: "Fabricantes", href: "/execucao/fabricantes", icon: <Building2 size={20} /> },
+      ],
+    },
+    {
+      title: "Estrutura Interna",
+      items: [
+        { label: "Servidores", href: "/equipe", icon: <Users size={20} /> },
+        ...(isAdmin
+          ? [{ label: "Estrutura Org.", href: "/admin/estrutura-organizacional", icon: <Building2 size={20} /> }]
+          : []),
+      ],
+    },
+    {
+      title: "Sistema",
+      items: [
+        { label: "Configurações", href: "/configuracoes", icon: <Settings size={20} /> },
+        ...(isAdmin
+          ? [{ label: "Administração", href: "/admin", icon: <ShieldCheck size={20} /> }]
+          : []),
+      ],
+    },
+  ];
 
   return (
     <>
@@ -91,51 +133,46 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Busca Integrada */}
-        <div className="px-4 py-4">
-          {isCollapsed ? (
-            <button
-              onClick={() => setIsCollapsed(false)}
-              className="flex w-full justify-center rounded-lg p-2 text-sidebar-fg transition-colors hover:bg-white/5 hover:text-white"
-              title="Buscar"
-            >
-              <Search size={20} />
-            </button>
-          ) : (
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-sidebar-section" />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                className="w-full rounded-lg border border-white/10 bg-black/20 py-2 pl-9 pr-4 text-sm text-white placeholder-sidebar-section transition-colors focus:border-brand-primary focus:outline-none"
-              />
-            </div>
-          )}
-        </div>
+
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 space-y-1 pb-4">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`sidebar-link flex items-center rounded-lg px-3 py-2.5 transition-all duration-200
-                  ${isActive ? "active bg-sidebar-hover font-medium text-sidebar-fg-active" : "text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-fg-active"}
-                  ${isCollapsed ? "justify-center" : "justify-start"}
-                `}
-                title={isCollapsed ? item.label : undefined}
-              >
-                <span className={`shrink-0 ${isActive ? "text-sidebar-accent" : "opacity-80"}`}>
-                  {item.icon}
-                </span>
-                {!isCollapsed && (
-                  <span className="ml-3 truncate text-sm">{item.label}</span>
-                )}
-              </Link>
-            );
-          })}
+          {navGroups.map((group, groupIdx) => (
+            <div key={groupIdx}>
+              {group.title && !isCollapsed && (
+                <div className="mt-6 mb-2 mx-3 border-b border-slate-700/60 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {group.title}
+                </div>
+              )}
+              {group.title && isCollapsed && (
+                <div className="mt-6 mb-2 border-t border-white/10" />
+              )}
+              
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`sidebar-link flex items-center rounded-lg px-3 py-2.5 transition-all duration-200
+                        ${isActive ? "active bg-sidebar-hover font-medium text-sidebar-fg-active" : "text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-fg-active"}
+                        ${isCollapsed ? "justify-center" : "justify-start"}
+                      `}
+                      title={isCollapsed ? item.label : undefined}
+                    >
+                      <span className={`shrink-0 ${isActive ? "text-sidebar-accent" : "opacity-80"}`}>
+                        {item.icon}
+                      </span>
+                      {!isCollapsed && (
+                        <span className="ml-3 truncate text-sm">{item.label}</span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
       </aside>

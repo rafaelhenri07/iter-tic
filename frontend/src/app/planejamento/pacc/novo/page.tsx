@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -28,6 +28,7 @@ import {
 } from "@/lib/api";
 import { showToast } from "@/components/ui/Toast";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 
 export default function NovoItemPaccPage() {
   const router = useRouter();
@@ -49,6 +50,7 @@ export default function NovoItemPaccPage() {
     handleSubmit,
     setValue,
     watch,
+    control,
     formState: { errors },
   } = useForm<ItemPaccCreateFormData>({
     resolver: zodResolver(itemPaccCreateSchema),
@@ -246,14 +248,18 @@ export default function NovoItemPaccPage() {
               </FormField>
 
               <FormField label="Valor Estimado (R$)" required error={errors.valor_estimado?.message}>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  {...register("valor_estimado", { valueAsNumber: true })}
-                  placeholder="0,00"
-                  className={inputCls}
-                  disabled={submitting}
+                <Controller
+                  control={control}
+                  name="valor_estimado"
+                  render={({ field }) => (
+                    <CurrencyInput
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="0,00"
+                      className={inputCls}
+                      disabled={submitting}
+                    />
+                  )}
                 />
               </FormField>
 

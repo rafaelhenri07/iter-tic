@@ -11,6 +11,8 @@ export type SituacaoContrato =
   | "Extinto"
   | "Extinto, mas suporte vigente";
 
+export type ModalidadeContrato = "CONTRATO" | "ARP";
+
 /* ── Configuração visual (badges) ──────────────────────────────────────── */
 
 export const TIPO_CONTRATO_CONFIG: Record<
@@ -46,6 +48,22 @@ export const SITUACAO_CONTRATO_CONFIG: Record<
   "Extinto, mas suporte vigente": {
     icon: "⚠️",
     cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+  },
+};
+
+export const MODALIDADE_CONTRATO_CONFIG: Record<
+  ModalidadeContrato,
+  { icon: string; label: string; cls: string }
+> = {
+  CONTRATO: {
+    icon: "📄",
+    label: "Contrato",
+    cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-400",
+  },
+  ARP: {
+    icon: "📑",
+    label: "ARP",
+    cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400",
   },
 };
 
@@ -111,24 +129,47 @@ export interface HistoricoContrato {
   conteudo: string;
 }
 
+/* ── Itens do Contrato ─────────────────────────────────────────────────── */
+
+export interface ItemContrato {
+  id: number;
+  contrato_id: number;
+  objeto_contratado: string;
+  quantidade: number;
+  valor_unitario: number;
+  valor_total: number;
+  tipo_catalogo: string | null;
+  codigo_catalogo: string | null;
+}
+
+export interface ItemContratoPayload {
+  objeto_contratado: string;
+  quantidade: number;
+  valor_unitario: number;
+  tipo_catalogo?: string | null;
+  codigo_catalogo?: string | null;
+}
+
 /* ── Contrato (resposta completa) ──────────────────────────────────────── */
 
 export interface ContratoResponse {
   id: number;
-  numero_contrato: string;
+  numero: number;
+  ano: number;
+  modalidade_contrato: ModalidadeContrato;
+  orgao_gerenciador: string | null;
   projeto_id: number;
-  empresa_contratada: string;
+  empresa_id: number | null;
+  empresa_nome: string | null;
   fabricante_id: number | null;
   fabricante_nome: string | null;
   tipo_contrato: TipoContrato;
-  quantidade: number;
-  tecnologia_utilizada: string | null;
-
-  valor_investimento: number;
-  valor_custeio: number;
+  itens: ItemContrato[];
   valor_total: number;
 
-  prazo: string | null;
+  data_inicio_vigencia: string | null;
+  vigencia_meses: number | null;
+  prorrogacao_meses: number;
   data_assinatura: string;
   data_fim_vigencia: string;
 
@@ -142,43 +183,66 @@ export interface ContratoResponse {
   acoes_pdtic_vinculadas: AcaoPdticResumo[];
   equipe: EquipeFiscalizacao | null;
   historico: HistoricoContrato[];
+  aditivos: Aditivo[];
 }
 
 /* ── Contrato (listagem otimizada) ─────────────────────────────────────── */
 
 export interface ContratoListagem {
   id: number;
-  numero_contrato: string;
-  empresa_contratada: string;
+  numero: number;
+  ano: number;
+  modalidade_contrato: ModalidadeContrato;
+  empresa_id: number | null;
+  empresa_nome: string | null;
   tipo_contrato: TipoContrato;
   situacao_atual: SituacaoContrato;
-  valor_investimento: number;
-  valor_custeio: number;
   valor_total: number;
   data_assinatura: string;
   data_fim_vigencia: string;
-  quantidade: number;
   projeto_nome: string | null;
   projeto_processo_sei: string | null;
   nome_gestor: string | null;
 }
 
-/* ── Payload de criação ────────────────────────────────────────────────── */
+/* ── Aditivo de Prazo ───────────────────────────────────────────────────────── */
+
+export interface Aditivo {
+  id: number;
+  contrato_id: number;
+  numero_aditivo: string;
+  data_inicio_vigencia: string;
+  data_fim_vigencia: string;
+  criado_em: string;
+}
+
+export interface AditivoCreatePayload {
+  numero_aditivo: string;
+  data_inicio_vigencia: string;
+  data_fim_vigencia: string;
+}
+
+/* ── Payload de criação ───────────────────────────────────────────────────────── */
 
 export interface ContratoCreatePayload {
   projeto_id: number;
-  numero_contrato: string;
-  empresa_contratada: string;
+  numero: number;
+  ano: number;
+  modalidade_contrato: ModalidadeContrato;
+  orgao_gerenciador?: string | null;
+  empresa_id: number;
   fabricante_id?: number | null;
   tipo_contrato: TipoContrato;
-  quantidade: number;
-  tecnologia_utilizada?: string | null;
-  valor_investimento: number;
-  valor_custeio: number;
-  prazo?: string | null;
+  itens: ItemContratoPayload[];
+  data_inicio_vigencia?: string | null;
+  vigencia_meses?: number | null;
+  prorrogacao_meses?: number;
   data_assinatura: string;
   data_fim_vigencia: string;
   situacao_atual: SituacaoContrato;
   observacoes?: string | null;
   equipe?: EquipeInput | null;
 }
+
+
+

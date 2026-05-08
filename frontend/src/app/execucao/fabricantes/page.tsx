@@ -10,14 +10,14 @@ import {
   ExternalLink,
   CalendarPlus,
 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   fetchFabricantes,
-  criarFabricante,
-  atualizarFabricante,
   excluirFabricante,
 } from "@/lib/api";
-import type { Fabricante, FabricantePayload } from "@/lib/api";
-import FabricanteModal from "@/components/fabricantes/FabricanteModal";
+import type { Fabricante } from "@/lib/api";
+
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
@@ -34,14 +34,13 @@ function daysAgo(d: string) {
 /* ── Página ────────────────────────────────────────────────────────────── */
 
 export default function FabricantesPage() {
+  const router = useRouter();
   const [fabricantes, setFabricantes] = useState<Fabricante[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [fetchKey, setFetchKey] = useState(0);
 
-  // Modal
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<Fabricante | null>(null);
+
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<Fabricante | null>(null);
@@ -71,24 +70,7 @@ export default function FabricantesPage() {
   const totalFabricantes = fabricantes.length;
   const recentes = fabricantes.filter((f) => daysAgo(f.create_time) <= 30).length;
 
-  /* Handlers */
-  function openNew() {
-    setEditTarget(null);
-    setModalOpen(true);
-  }
-  function openEdit(fab: Fabricante) {
-    setEditTarget(fab);
-    setModalOpen(true);
-  }
 
-  async function handleSave(data: FabricantePayload) {
-    if (editTarget) {
-      await atualizarFabricante(editTarget.id, data);
-    } else {
-      await criarFabricante(data);
-    }
-    refresh();
-  }
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -113,13 +95,13 @@ export default function FabricantesPage() {
           </div>
         </div>
 
-        <button
-          onClick={openNew}
+        <Link
+          href="/execucao/fabricantes/novo"
           className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 hover:shadow-md"
         >
           <Plus size={16} />
           Novo Fabricante
-        </button>
+        </Link>
       </div>
 
       {/* ── KPI cards ─────────────────────────────────────────────── */}
@@ -199,16 +181,14 @@ export default function FabricantesPage() {
                 filtered.map((fab) => (
                   <tr
                     key={fab.id}
-                    className="group border-b border-slate-100 transition-colors hover:bg-slate-50/60 dark:border-slate-800 dark:hover:bg-slate-800/30"
+                    onClick={() => router.push(`/execucao/fabricantes/${fab.id}/editar`)}
+                    className="group cursor-pointer border-b border-slate-100 transition-colors duration-150 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/30"
                   >
                     {/* Fabricante */}
                     <td className="px-4 py-3.5">
-                      <button
-                        onClick={() => openEdit(fab)}
-                        className="text-[13px] font-semibold text-indigo-600 transition-colors hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
-                      >
+                      <span className="text-[13px] font-semibold text-indigo-600 dark:text-indigo-400">
                         {fab.nome}
-                      </button>
+                      </span>
                       <p className="mt-0.5 text-[11px] text-slate-400">
                         Cadastrado em {formatDate(fab.create_time)}
                       </p>
@@ -236,6 +216,7 @@ export default function FabricantesPage() {
                     <td className="px-4 py-3.5">
                       <a
                         href={`mailto:${fab.contato_email}`}
+                        onClick={(ev) => ev.stopPropagation()}
                         className="text-[13px] text-indigo-600 transition-colors hover:underline dark:text-indigo-400"
                       >
                         {fab.contato_email}
@@ -249,6 +230,7 @@ export default function FabricantesPage() {
                           href={fab.site}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(ev) => ev.stopPropagation()}
                           className="inline-flex items-center gap-1 text-[13px] text-cyan-600 transition-colors hover:underline dark:text-cyan-400"
                         >
                           Acessar
@@ -262,15 +244,16 @@ export default function FabricantesPage() {
                     {/* Ações */}
                     <td className="px-4 py-3.5 text-center">
                       <div className="inline-flex items-center gap-1">
-                        <button
-                          onClick={() => openEdit(fab)}
+                        <Link
+                          href={`/execucao/fabricantes/${fab.id}/editar`}
+                          onClick={(ev) => ev.stopPropagation()}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400"
                           title="Editar"
                         >
                           <Pencil size={14} />
-                        </button>
+                        </Link>
                         <button
-                          onClick={() => setDeleteTarget(fab)}
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(fab); }}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/30 dark:hover:text-rose-400"
                           title="Excluir"
                         >
@@ -286,13 +269,7 @@ export default function FabricantesPage() {
         </div>
       </div>
 
-      {/* ── Modal Criar / Editar ──────────────────────────────────── */}
-      <FabricanteModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={handleSave}
-        fabricante={editTarget}
-      />
+
 
       {/* ── Delete Confirmation ───────────────────────────────────── */}
       {deleteTarget && (

@@ -15,9 +15,7 @@ export type TipoNecessidade =
 export type StatusAcao =
   | "Não iniciada"
   | "Em andamento"
-  | "Contratada"
-  | "Contrato vigente"
-  | "Contrato a ser renovado";
+  | "Contratada";
 
 /* ── Labels de exibição ─────────────────────────────────────────────────── */
 
@@ -37,10 +35,6 @@ export const STATUS_ACAO_COLOR: Record<StatusAcao, string> = {
     "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
   Contratada:
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
-  "Contrato vigente":
-    "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
-  "Contrato a ser renovado":
-    "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
 };
 
 /* ── DTOs de resposta ───────────────────────────────────────────────────── */
@@ -71,13 +65,18 @@ export interface PdticAcao {
   revisao_exclusao_id: number | null;
   acao_pai_id: number | null;
 
-  departamento: string;
-  unidade_demandante: string;
-  unidade_responsavel: string;
+  // N:N — listas de objetos de estrutura organizacional
+  departamentos_rel: { id: number; nome: string; sigla: string | null; criado_em: string }[];
+  unidades_demandantes_rel: { id: number; nome: string; sigla: string | null; criado_em: string }[];
+  unidades_responsaveis_rel: { id: number; nome: string; sigla: string | null; criado_em: string }[];
+
+  departamento: string | null;
+  unidade_demandante: string | null;
+  unidade_responsavel: string | null;
   necessidade: string;
   descricao: string;
 
-  tipo_necessidade: TipoNecessidade;
+  tipo_necessidade: TipoNecessidade[];
   status: StatusAcao;
 
   meta: string | null;
@@ -94,6 +93,11 @@ export interface PdticAcao {
 
   criado_em: string;
   atualizado_em: string;
+}
+
+export interface PdticAcaoComHistoricoResponse extends PdticAcao {
+  revisao_inclusao: PdticRevisao | null;
+  revisao_exclusao: PdticRevisao | null;
 }
 
 /** Resposta da rota GET /pdtic/{periodo_id}/painel */

@@ -32,15 +32,15 @@ export const PRIORIDADE_CONFIG: Record<
 > = {
   baixa: {
     label: "Baixa",
-    cls: "bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-900/40 dark:text-slate-400 dark:border-slate-800",
+    cls: "text-emerald-600 dark:text-emerald-400 font-bold",
   },
   media: {
     label: "Média",
-    cls: "bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800/50",
+    cls: "text-amber-600 dark:text-amber-500 font-bold",
   },
   alta: {
     label: "Alta",
-    cls: "bg-rose-100 text-rose-700 border border-rose-300 dark:bg-rose-900/40 dark:text-rose-400 dark:border-rose-800/50",
+    cls: "text-rose-600 dark:text-rose-500 font-bold",
   },
 };
 
@@ -72,7 +72,7 @@ export const STATUS_PROJETO_CONFIG: Record<
   },
   "Fase externa": {
     icon: "📤",
-    cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-400",
+    cls: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400",
   },
   "Contratado": {
     icon: "✅",
@@ -98,6 +98,14 @@ export const STATUS_ARTEFATO_CONFIG: Record<
   },
 };
 
+/* ── Unidade Organizacional (Resumo) ─────────────────────────────────────── */
+
+export interface UnidadeOrgResumo {
+  id: number;
+  nome: string;
+  sigla: string | null;
+}
+
 /* ── Servidor ──────────────────────────────────────────────────────────── */
 
 export interface Servidor {
@@ -106,8 +114,13 @@ export interface Servidor {
   nome: string;
   cargo: string;
   funcao: string | null;
-  lotacao: string;
-  perfil_acesso: string | null;
+  departamento_id: number;
+  unidade_lotacao_id: number | null;
+  secao_id: number | null;
+  departamento?: UnidadeOrgResumo | null;
+  unidade_lotacao?: UnidadeOrgResumo | null;
+  secao?: UnidadeOrgResumo | null;
+  email_funcional: string | null;
   criado_em: string;
   atualizado_em: string;
 }
@@ -120,7 +133,9 @@ export interface Artefato {
   tipo: TipoArtefato;
   status: StatusArtefato;
   data_inicio: string | null;
+  data_fim_prevista: string | null;
   data_conclusao: string | null;
+  justificativa_atraso: string | null;
   observacoes: string | null;
   criado_em: string;
   atualizado_em: string;
@@ -177,8 +192,6 @@ export interface ProjetoBase {
   prioridade: PrioridadeProjeto;
   complexidade: ComplexidadeProjeto;
   status: StatusProjeto;
-  catmat: string | null;
-  catser: string | null;
   criado_em: string;
   atualizado_em: string;
   integrante_requisitante_id: number | null;
@@ -223,7 +236,9 @@ export interface ArtefatoResumo {
   ultimo_comentario: string | null;
   total_comentarios: number;
   data_inicio: string | null;
+  data_fim_prevista: string | null;
   data_conclusao: string | null;
+  justificativa_atraso: string | null;
   comentarios?: ComentarioResumo[];
 }
 

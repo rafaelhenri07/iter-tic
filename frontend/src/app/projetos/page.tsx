@@ -9,14 +9,15 @@ import {
   Loader2,
   AlertCircle,
   Inbox,
+  Filter,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ProjetoRow } from "@/components/projetos/ProjetoRow";
-import { DetalhesProjetoModal } from "@/components/projetos/DetalhesProjetoModal";
+
 import { GerenciarArtefatoModal } from "@/components/projetos/GerenciarArtefatoModal";
 import { ToastContainer } from "@/components/ui/Toast";
 import { fetchProjetos } from "@/lib/api";
-import type { ProjetoListagem, StatusProjeto, ArtefatoResumo } from "@/types/projeto";
+import type { ProjetoListagem, StatusProjeto, ArtefatoResumo, PrioridadeProjeto } from "@/types/projeto";
 import { ProjetosSkeleton } from "@/components/ui/Skeleton";
 
 /* ── Filtros de status ─────────────────────────────────────────────────── */
@@ -26,6 +27,13 @@ const STATUS_OPTIONS: { label: string; value: StatusProjeto | "todos" }[] = [
   { label: "Fase interna", value: "Fase interna" },
   { label: "Fase externa", value: "Fase externa" },
   { label: "Contratado", value: "Contratado" },
+];
+
+const PRIORIDADE_OPTIONS: { label: string; value: PrioridadeProjeto | "todas" }[] = [
+  { label: "Todas as prioridades", value: "todas" },
+  { label: "Baixa", value: "baixa" },
+  { label: "Média", value: "media" },
+  { label: "Alta", value: "alta" },
 ];
 
 /* ── Página principal ──────────────────────────────────────────────────── */
@@ -38,13 +46,16 @@ export default function ProjetosPage() {
   const [fetchKey, setFetchKey] = useState(0);
 
   // Modais
-  const [selectedProjetoId, setSelectedProjetoId] = useState<number | null>(null);
+
   const [artefatoModal, setArtefatoModal] = useState<{ projetoId: number; artefato: ArtefatoResumo } | null>(null);
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusProjeto | "todos">(
     "todos"
+  );
+  const [prioridadeFilter, setPrioridadeFilter] = useState<PrioridadeProjeto | "todas">(
+    "todas"
   );
 
   // Fetch
@@ -73,6 +84,10 @@ export default function ProjetosPage() {
       resultado = resultado.filter((p) => p.status === statusFilter);
     }
 
+    if (prioridadeFilter !== "todas") {
+      resultado = resultado.filter((p) => p.prioridade === prioridadeFilter);
+    }
+
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       resultado = resultado.filter(
@@ -85,7 +100,7 @@ export default function ProjetosPage() {
     }
 
     return resultado;
-  }, [projetos, statusFilter, searchTerm]);
+  }, [projetos, statusFilter, prioridadeFilter, searchTerm]);
 
   // Stats
   const stats = useMemo(() => {
@@ -112,7 +127,7 @@ export default function ProjetosPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">
-              Meus Projetos
+              Projetos
             </h1>
             <p className="text-sm text-foreground-muted">
               Projetos de contratação e artefatos da fase interna
@@ -205,6 +220,19 @@ export default function ProjetosPage() {
               </option>
             ))}
           </select>
+
+          {/* Prioridade dropdown */}
+          <select
+            value={prioridadeFilter}
+            onChange={(e) => setPrioridadeFilter(e.target.value as PrioridadeProjeto | "todas")}
+            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+          >
+            {PRIORIDADE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
@@ -255,9 +283,7 @@ export default function ProjetosPage() {
                   <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Prioridade
                   </th>
-                  <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Complexidade
-                  </th>
+
                   <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Ações
                   </th>
@@ -268,7 +294,6 @@ export default function ProjetosPage() {
                   <ProjetoRow
                     key={p.id}
                     projeto={p}
-                    onVerDetalhes={(id) => setSelectedProjetoId(id)}
                     onEditProjeto={(proj) => router.push(`/projetos/${proj.id}/editar`)}
                     onArtefatoClick={(pid, a) => setArtefatoModal({ projetoId: pid, artefato: a })}
                   />
@@ -279,14 +304,7 @@ export default function ProjetosPage() {
         </div>
       )}
 
-      {/* Modais */}
-      {selectedProjetoId !== null && (
-        <DetalhesProjetoModal
-          projetoId={selectedProjetoId}
-          onClose={() => setSelectedProjetoId(null)}
-          onRefresh={() => setFetchKey((k) => k + 1)}
-        />
-      )}
+
 
       {artefatoModal && (
         <GerenciarArtefatoModal

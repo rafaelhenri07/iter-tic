@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, literal_column, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -20,10 +20,12 @@ from app.models.pacc import ExercicioPacc, ItemPacc
 from app.models.projeto import (
     Artefato,
     Projeto,
+    Servidor,
     StatusArtefatoEnum,
     StatusProjetoEnum,
+    projeto_item_pacc,
 )
-from app.models.contrato import Contrato, SituacaoContratoEnum
+from app.models.contrato import Contrato, ContratoEquipe, ItemContrato, SituacaoContratoEnum, TipoContratoEnum
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -91,6 +93,47 @@ class KpisDashboard(BaseModel):
     contratos_ativos: int
 
 
+# ── Schemas para Gráficos ────────────────────────────────────────────────
+
+class DistribuicaoTipoItem(BaseModel):
+    name: str
+    value: int
+
+class DistribuicaoSituacaoItem(BaseModel):
+    label: str
+    qtd: int
+
+class DistribuicaoContratosData(BaseModel):
+    por_tipo: list[DistribuicaoTipoItem]
+    por_situacao: list[DistribuicaoSituacaoItem]
+
+class EfetividadeFinanceiraItem(BaseModel):
+    acao: str
+    estimativa: float
+    efetivo: float
+
+
+class TempoArtefatoItem(BaseModel):
+    """Tempo médio (em dias) de conclusão de um tipo de artefato."""
+    artefato: str
+    dias: float
+
+
+class CargaEquipeItem(BaseModel):
+    """Carga de trabalho de um servidor por área de atuação."""
+    nome: str
+    planejamento: int   # participações em equipes de Fase Interna
+    fiscalizacao: int   # participações em equipes de Contratos
+
+
+class GraficosDashboard(BaseModel):
+    """Payload para os gráficos do Painel de Indicadores."""
+    distribuicao_contratos: DistribuicaoContratosData
+    efetividade_financeira: list[EfetividadeFinanceiraItem]
+    tempo_artefatos: list[TempoArtefatoItem]
+    carga_equipe: list[CargaEquipeItem]
+
+
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  ROTA PRINCIPAL                                                         ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -146,6 +189,200 @@ async def kpis_dashboard(db: AsyncSession = Depends(get_db)):
         projetos_fase_interna=proj_row.interna,
         projetos_fase_externa=proj_row.externa,
         contratos_ativos=contratos_ativos,
+    )
+
+
+@router.get(
+    "/graficos",
+    response_model=GraficosDashboard,
+    summary="Dados para os gráficos do Painel de Indicadores",
+    description="Retorna distribuição de contratos (por tipo e situação) e efetividade financeira.",
+)
+async def graficos_dashboard(db: AsyncSession = Depends(get_db)):
+    """
+    Executa queries agregadas para alimentar os gráficos Recharts
+    de Distribuição de Contratos e Efetividade Financeira.
+    """
+
+    # ── 1. Distribuição de Contratos por Tipo (GROUP BY) ──────────────────
+    stmt_tipo = (
+        select(
+            Contrato.tipo_contrato,
+            func.count(Contrato.id).label("qtd"),
+        )
+        .group_by(Contrato.tipo_contrato)
+        .order_by(func.count(Contrato.id).desc())
+    )
+    tipo_rows = (await db.execute(stmt_tipo)).all()
+    por_tipo = [
+        DistribuicaoTipoItem(name=tipo_enum.value, value=qtd)
+        for tipo_enum, qtd in tipo_rows
+    ]
+
+    # ── 2. Distribuição de Contratos por Situação (GROUP BY) ─────────────
+    stmt_situacao = (
+        select(
+            Contrato.situacao_atual,
+            func.count(Contrato.id).label("qtd"),
+        )
+        .group_by(Contrato.situacao_atual)
+        .order_by(func.count(Contrato.id).desc())
+    )
+    situacao_rows = (await db.execute(stmt_situacao)).all()
+    por_situacao = [
+        DistribuicaoSituacaoItem(label=sit_enum.value, qtd=qtd)
+        for sit_enum, qtd in situacao_rows
+    ]
+
+    # ── 3. Efetividade Financeira (Projeto → Contrato) ──────────────────
+    # Para cada projeto que possui contrato, compara ItemPacc.valor_estimado
+    # com o custo efetivo do contrato (ItemContrato.quantidade * valor_unitario).
+    subq_pacc = (
+        select(
+            projeto_item_pacc.c.projeto_id,
+            func.sum(ItemPacc.valor_estimado).label("total_estimativa")
+        )
+        .join(ItemPacc, ItemPacc.id == projeto_item_pacc.c.item_pacc_id)
+        .group_by(projeto_item_pacc.c.projeto_id)
+        .subquery()
+    )
+
+    subq_contrato = (
+        select(
+            Contrato.projeto_id,
+            func.sum(ItemContrato.quantidade * ItemContrato.valor_unitario).label("total_efetivo")
+        )
+        .join(ItemContrato, ItemContrato.contrato_id == Contrato.id)
+        .group_by(Contrato.projeto_id)
+        .subquery()
+    )
+
+    stmt_efetividade = (
+        select(
+            Projeto.nome,
+            func.coalesce(subq_pacc.c.total_estimativa, 0).label("estimativa"),
+            func.coalesce(subq_contrato.c.total_efetivo, 0).label("efetivo"),
+        )
+        .join(subq_contrato, subq_contrato.c.projeto_id == Projeto.id)
+        .outerjoin(subq_pacc, subq_pacc.c.projeto_id == Projeto.id)
+        .order_by(Projeto.nome)
+        .limit(10)
+    )
+    efet_rows = (await db.execute(stmt_efetividade)).all()
+
+    efetividade = []
+    for nome, est, efe in efet_rows:
+        # Trunca o nome para caber no eixo X do gráfico
+        sigla = nome[:20] + ("…" if len(nome) > 20 else "")
+        efetividade.append(
+            EfetividadeFinanceiraItem(
+                acao=sigla,
+                estimativa=float(est),
+                efetivo=float(efe),
+            )
+        )
+
+    # ── 4. Tempo Médio de Artefatos (CONCLUÍDO, com data_inicio e data_conclusao) ──
+    # Calcula AVG(data_conclusao - data_inicio) por tipo de artefato.
+    # Artefatos sem ambas as datas são ignorados (COALESCE seguro).
+    stmt_tempo = (
+        select(
+            Artefato.tipo,
+            func.avg(
+                func.julianday(Artefato.data_conclusao)
+                - func.julianday(Artefato.data_inicio)
+            ).label("media_dias"),
+        )
+        .where(
+            Artefato.status == StatusArtefatoEnum.CONCLUIDO,
+            Artefato.data_inicio.is_not(None),
+            Artefato.data_conclusao.is_not(None),
+        )
+        .group_by(Artefato.tipo)
+        .order_by(Artefato.tipo)
+    )
+    tempo_rows = (await db.execute(stmt_tempo)).all()
+
+    # Fallback: se não houver artefatos concluídos com datas, retorna zeros
+    # para que o front-end não quebre.
+    ARTEFATO_LABELS = ["DFD", "ETP", "Mapa de Riscos", "Estimativa de Custos e Orçamento", "TR"]
+    tempo_map: dict[str, float] = {}
+    for tipo_enum, media in tempo_rows:
+        if media is not None:
+            tempo_map[tipo_enum.value] = round(float(media), 1)
+
+    tempo_artefatos = [
+        TempoArtefatoItem(artefato=label, dias=tempo_map.get(label, 0.0))
+        for label in ARTEFATO_LABELS
+    ]
+
+    # ── 5. Carga de Trabalho da Equipe ────────────────────────────────────
+    # Parte A: contagem de participações em equipes de Fase Interna (Projeto)
+    # Um servidor pode aparecer em até 3 papéis por projeto (req, tec, adm),
+    # mas contamos uma participação por projeto (DISTINCT projeto_id).
+    stmt_fase_interna = (
+        select(
+            Servidor.id.label("servidor_id"),
+            Servidor.nome.label("nome"),
+            func.count(Projeto.id).label("planejamento"),
+        )
+        .select_from(Servidor)
+        .outerjoin(
+            Projeto,
+            (
+                (Projeto.integrante_requisitante_id == Servidor.id)
+                | (Projeto.integrante_tecnico_id == Servidor.id)
+                | (Projeto.integrante_administrativo_id == Servidor.id)
+            ),
+        )
+        .group_by(Servidor.id, Servidor.nome)
+    )
+    fi_rows = (await db.execute(stmt_fase_interna)).all()
+    fi_map: dict[int, tuple[str, int]] = {
+        row.servidor_id: (row.nome, row.planejamento) for row in fi_rows
+    }
+
+    # Parte B: contagem de participações em equipes de Contratos
+    stmt_contratos_equipe = (
+        select(
+            Servidor.id.label("servidor_id"),
+            func.count(ContratoEquipe.id).label("fiscalizacao"),
+        )
+        .select_from(Servidor)
+        .outerjoin(ContratoEquipe, ContratoEquipe.servidor_id == Servidor.id)
+        .group_by(Servidor.id)
+    )
+    ce_rows = (await db.execute(stmt_contratos_equipe)).all()
+    ce_map: dict[int, int] = {
+        row.servidor_id: row.fiscalizacao for row in ce_rows
+    }
+
+    # Mescla e filtra somente quem tem pelo menos 1 participação
+    carga_equipe_lista: list[CargaEquipeItem] = []
+    for srv_id, (nome, planejamento) in fi_map.items():
+        fiscalizacao = ce_map.get(srv_id, 0)
+        if planejamento > 0 or fiscalizacao > 0:
+            carga_equipe_lista.append(
+                CargaEquipeItem(
+                    nome=nome,
+                    planejamento=planejamento,
+                    fiscalizacao=fiscalizacao,
+                )
+            )
+
+    # Ordena por carga total decrescente
+    carga_equipe_lista.sort(
+        key=lambda x: x.planejamento + x.fiscalizacao, reverse=True
+    )
+
+    return GraficosDashboard(
+        distribuicao_contratos=DistribuicaoContratosData(
+            por_tipo=por_tipo,
+            por_situacao=por_situacao,
+        ),
+        efetividade_financeira=efetividade,
+        tempo_artefatos=tempo_artefatos,
+        carga_equipe=carga_equipe_lista,
     )
 
 

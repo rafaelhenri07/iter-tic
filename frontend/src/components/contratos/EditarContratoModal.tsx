@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useEffect, useState, useCallback } from "react";
+import { useForm, Controller, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, Loader2, UserCheck, Users } from "lucide-react";
+import { X, Loader2, UserCheck, Users, Plus, Trash2 } from "lucide-react";
+import { DatePickerField } from "@/components/ui/DatePickerField";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
 import {
   contratoCreateSchema,
@@ -16,8 +18,9 @@ import {
   fetchServidores,
   fetchProjetosLicitados,
   fetchFabricantes,
+  fetchEmpresas,
 } from "@/lib/api";
-import type { Fabricante } from "@/lib/api";
+import type { Fabricante, Empresa } from "@/lib/api";
 import { showToast } from "@/components/ui/Toast";
 import type { Servidor, ProjetoListagem } from "@/types/projeto";
 import type { ContratoResponse } from "@/types/contrato";
@@ -239,14 +242,14 @@ function EquipePapelBlock({
 
 /* ── Componente Principal ──────────────────────────────────────────────── */
 
-interface NovoContratoModalProps {
+interface EditarContratoModalProps {
   onClose: () => void;
   onSuccess: () => void;
   /** Se fornecido, entra em modo edição */
   initialData?: ContratoResponse;
 }
 
-export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContratoModalProps) {
+export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarContratoModalProps) {
   const isEditMode = !!initialData;
   const [submitting, setSubmitting] = useState(false);
 
@@ -254,6 +257,7 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
   const [servidores, setServidores] = useState<Servidor[]>([]);
   const [projetosLicitados, setProjetosLicitados] = useState<ProjetoListagem[]>([]);
   const [fabricantes, setFabricantes] = useState<Fabricante[]>([]);
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   // Helper: extrair equipe do initialData
@@ -295,36 +299,44 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
     defaultValues: initialData
       ? {
           projeto_id: initialData.projeto_id,
-          numero_contrato: initialData.numero_contrato,
-          empresa_contratada: initialData.empresa_contratada,
+          numero: initialData.numero,
+          ano: initialData.ano,
+          modalidade_contrato: initialData.modalidade_contrato ?? "CONTRATO",
+          empresa_id: initialData.empresa_id ?? 0,
           fabricante_id: initialData.fabricante_id ?? 0,
           tipo_contrato: initialData.tipo_contrato as "Aquisição" | "Serviço continuado" | "Subscrição",
-          quantidade: Number(initialData.quantidade),
-          tecnologia_utilizada: initialData.tecnologia_utilizada ?? "",
-          valor_investimento: Number(initialData.valor_investimento),
-          valor_custeio: Number(initialData.valor_custeio),
-          prazo: initialData.prazo ?? "",
+          itens: initialData.itens?.map(i => ({
+            objeto_contratado: i.objeto_contratado,
+            quantidade: i.quantidade,
+            valor_unitario: i.valor_unitario
+          })) ?? [{ objeto_contratado: "", quantidade: 1, valor_unitario: 0 }],
+          data_inicio_vigencia: initialData.data_inicio_vigencia ?? "",
+          vigencia_meses: initialData.vigencia_meses ?? null,
+          prorrogacao_meses: initialData.prorrogacao_meses ?? 0,
           data_assinatura: initialData.data_assinatura,
           data_fim_vigencia: initialData.data_fim_vigencia,
           situacao_atual: initialData.situacao_atual as "Vigente" | "Extinto" | "Extinto, mas suporte vigente",
           observacoes: initialData.observacoes ?? "",
+          orgao_gerenciador: initialData.orgao_gerenciador ?? "",
           equipe: buildInitialEquipe(),
         }
       : {
           projeto_id: 0,
-          numero_contrato: "",
-          empresa_contratada: "",
+          numero: "" as unknown as number,
+          ano: new Date().getFullYear(),
+          modalidade_contrato: "CONTRATO" as const,
+          empresa_id: 0,
           fabricante_id: 0,
           tipo_contrato: "Aquisição",
-          quantidade: 1,
-          tecnologia_utilizada: "",
-          valor_investimento: 0,
-          valor_custeio: 0,
-          prazo: "",
+          itens: [{ objeto_contratado: "", quantidade: 1, valor_unitario: 0 }],
+          data_inicio_vigencia: "",
+          vigencia_meses: null,
+          prorrogacao_meses: 0,
           data_assinatura: "",
           data_fim_vigencia: "",
           situacao_atual: "Vigente",
           observacoes: "",
+          orgao_gerenciador: "",
           equipe: {
             gestor: { titular_id: 0, substitutos_ids: [] },
             fiscal_requisitante: { titular_id: 0, substitutos_ids: [] },
@@ -337,18 +349,50 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
   // Watch equipe for controlled components
   const equipeValues = watch("equipe");
 
+  // ── Itens Dinâmicos ──────────────────────────────────────────────────────
+  const { fields: itensFields, append: appendItem, remove: removeItem } = useFieldArray({
+    control,
+    name: "itens",
+  });
+  const watchedItens = useWatch({ control, name: "itens" }) || [];
+  const totalItens = watchedItens.reduce((acc, curr) => acc + (Number(curr?.quantidade) || 0) * (Number(curr?.valor_unitario) || 0), 0);
+
+  // ── Cálculo automático de vigência (meses) ─────────────────────────────
+  const watchedAssinatura = useWatch({ control, name: "data_assinatura" });
+  const watchedInicioVigencia = useWatch({ control, name: "data_inicio_vigencia" });
+  const watchedFimVigencia = useWatch({ control, name: "data_fim_vigencia" });
+
+  const calcVigenciaMeses = useCallback(() => {
+    const fimStr = watchedFimVigencia;
+    const inicioStr = watchedInicioVigencia || watchedAssinatura;
+    if (!fimStr || !inicioStr) return;
+    const inicio = new Date(inicioStr);
+    const fim = new Date(fimStr);
+    if (isNaN(inicio.getTime()) || isNaN(fim.getTime())) return;
+    const meses =
+      (fim.getFullYear() - inicio.getFullYear()) * 12 +
+      (fim.getMonth() - inicio.getMonth());
+    setValue("vigencia_meses", Math.max(0, meses));
+  }, [watchedFimVigencia, watchedInicioVigencia, watchedAssinatura, setValue]);
+
+  useEffect(() => {
+    calcVigenciaMeses();
+  }, [calcVigenciaMeses]);
+
   // ── Load dados dinâmicos ──────────────────────────────────────────────
   useEffect(() => {
     async function load() {
       try {
-        const [srvs, projs, fabs] = await Promise.all([
+        const [srvs, projs, fabs, emps] = await Promise.all([
           fetchServidores(),
           fetchProjetosLicitados(),
           fetchFabricantes(),
+          fetchEmpresas(),
         ]);
         setServidores(srvs);
         setProjetosLicitados(projs);
         setFabricantes(fabs);
+        setEmpresas(emps);
       } catch {
         setServidores([]);
         setProjetosLicitados([]);
@@ -365,10 +409,10 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
       const payload = cleanContratoPayload(data);
       if (isEditMode && initialData) {
         await atualizarContrato(initialData.id, payload);
-        showToast("success", `Contrato "${data.numero_contrato}" atualizado com sucesso!`);
+        showToast("success", `${isARP ? 'ARP' : 'Contrato'} "${data.numero}/${data.ano}" atualizado com sucesso!`);
       } else {
         await criarContrato(payload);
-        showToast("success", `Contrato "${data.numero_contrato}" criado com sucesso!`);
+        showToast("success", `${isARP ? 'ARP' : 'Contrato'} "${data.numero}/${data.ano}" criado com sucesso!`);
       }
       onSuccess();
       onClose();
@@ -390,6 +434,9 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
     { key: "fiscal_administrativo" as const, label: "Fiscal Administrativo" },
   ];
 
+  const watchedModalidade = watch("modalidade_contrato");
+  const isARP = watchedModalidade === "ARP";
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 backdrop-blur-sm p-4 pt-6"
@@ -403,7 +450,9 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4 shrink-0">
           <h2 className="text-base font-bold text-foreground">
-            {isEditMode ? `Editar Contrato ${initialData?.numero_contrato}` : "Novo Contrato"}
+            {isEditMode
+              ? `Editar ${initialData?.modalidade_contrato === 'ARP' ? 'ARP' : 'Contrato'} ${initialData?.numero}/${initialData?.ano}`
+              : isARP ? "Nova ARP" : "Novo Contrato"}
           </h2>
           <button
             onClick={onClose}
@@ -416,6 +465,40 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
           <div className="overflow-y-auto flex-1 px-6 py-5 space-y-0 scrollbar-thin">
+
+            {/* ═══ 0. MODALIDADE ═══ */}
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-teal-600 uppercase tracking-wide mb-3">Modalidade</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setValue("modalidade_contrato", "CONTRATO")}
+                  className={`relative flex flex-col items-center gap-1.5 rounded-xl border-2 px-4 py-3 text-center transition-all ${
+                    !isARP
+                      ? "border-teal-500 bg-teal-50/60 shadow-sm ring-2 ring-teal-500/20 dark:bg-teal-950/30 dark:border-teal-400"
+                      : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800"
+                  }`}
+                >
+                  <span className="text-lg">📄</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Contrato</span>
+                  {!isARP && <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-white text-[9px]">✓</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setValue("modalidade_contrato", "ARP")}
+                  className={`relative flex flex-col items-center gap-1.5 rounded-xl border-2 px-4 py-3 text-center transition-all ${
+                    isARP
+                      ? "border-amber-500 bg-amber-50/60 shadow-sm ring-2 ring-amber-500/20 dark:bg-amber-950/30 dark:border-amber-400"
+                      : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800"
+                  }`}
+                >
+                  <span className="text-lg">📑</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">ARP</span>
+                  {isARP && <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white text-[9px]">✓</span>}
+                </button>
+              </div>
+              <input type="hidden" {...register("modalidade_contrato")} />
+            </div>
 
             {/* ═══ 1. PROJETO DE ORIGEM ═══ */}
             <h3 className="text-sm font-semibold text-teal-600 uppercase tracking-wide mb-4">
@@ -435,8 +518,8 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
                   {loadingData
                     ? "Carregando projetos..."
                     : projetosLicitados.length === 0
-                      ? "Nenhum projeto com licitação concluída"
-                      : "Selecione o projeto..."}
+                      ? "Nenhum projeto apto para contratação"
+                      : "Selecione o projeto correspondente..."}
                 </option>
                 {projetosLicitados.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -454,17 +537,18 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                label="Número do Contrato"
-                required
-                error={errors.numero_contrato?.message}
-              >
-                <input
-                  {...register("numero_contrato")}
-                  placeholder="Ex: 42/2025"
-                  className={inputCls}
-                />
+            <div className="flex gap-4">
+              <FormField label={isARP ? "Número da Ata" : "Número do Contrato"} required error={errors.numero?.message} className="flex-1">
+                <input {...register("numero")} type="number" placeholder="Ex: 42" className={inputCls} />
               </FormField>
+              <FormField label="Ano" required error={errors.ano?.message} className="w-32">
+                <select {...register("ano", { valueAsNumber: true })} className={selectCls}>
+                  {Array.from({ length: 21 }, (_, i) => 2015 + i).map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </FormField>
+            </div>
 
               <FormField
                 label="Tipo de Contrato"
@@ -483,15 +567,35 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
               <FormField
                 label="Empresa Contratada"
                 required
-                error={errors.empresa_contratada?.message}
+                error={errors.empresa_id?.message}
               >
-                <input
-                  {...register("empresa_contratada")}
-                  placeholder="Razão social completa"
-                  className={inputCls}
-                />
+                <select
+                  {...register("empresa_id", { valueAsNumber: true })}
+                  className={selectCls}
+                >
+                  <option value={0}>
+                    {loadingData
+                      ? "Carregando empresas..."
+                      : empresas.length === 0
+                        ? "Nenhuma empresa cadastrada"
+                        : "Selecione a empresa contratada..."}
+                  </option>
+                  {empresas.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.nome} — CNPJ: {e.cnpj}
+                    </option>
+                  ))}
+                </select>
               </FormField>
             </div>
+
+            {isARP && (
+              <div className="mt-4">
+                <FormField label="Órgão Gerenciador" error={errors.orgao_gerenciador?.message}>
+                  <input {...register("orgao_gerenciador")} placeholder="Ex: Ministério da Economia" className={inputCls} />
+                </FormField>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-4 mt-4">
               <FormField
@@ -513,104 +617,185 @@ export function NovoContratoModal({ onClose, onSuccess, initialData }: NovoContr
                 </select>
               </FormField>
 
-              <FormField
-                label="Quantidade"
-                required
-                error={errors.quantidade?.message}
-              >
-                <input
-                  type="number"
-                  {...register("quantidade", { valueAsNumber: true })}
-                  min={1}
-                  className={inputCls}
-                />
-              </FormField>
-
-              <FormField
-                label="Tecnologia"
-                error={errors.tecnologia_utilizada?.message}
-              >
-                <input
-                  {...register("tecnologia_utilizada")}
-                  placeholder="Ex: Catalyst 9300"
-                  className={inputCls}
-                />
-              </FormField>
             </div>
 
-            {/* ═══ 3. VALORES E VIGÊNCIA ═══ */}
+            {/* ═══ 2.5. ITENS DA CONTRATAÇÃO ═══ */}
+            <div className="border-t border-slate-200 dark:border-slate-700 mt-6 pt-4 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-teal-600 uppercase tracking-wide mb-4">
+                2.5. Itens da Contratação
+              </h3>
+              <button
+                type="button"
+                onClick={() => appendItem({ objeto_contratado: "", quantidade: 1, valor_unitario: 0 })}
+                className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+              >
+                <Plus size={14} /> Adicionar Item
+              </button>
+            </div>
+
+            <div className="space-y-4 mb-4">
+              {itensFields.map((field, index) => {
+                const itemError = errors.itens?.[index];
+                const qtd = watchedItens[index]?.quantidade || 0;
+                const val = watchedItens[index]?.valor_unitario || 0;
+                const subtotal = qtd * val;
+
+                return (
+                  <div key={field.id} className="relative rounded-xl border border-slate-200 bg-slate-50/50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/20">
+                    {itensFields.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeItem(index)}
+                        className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-red-600 shadow-sm hover:bg-red-200 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-900"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                    <div className="grid gap-4 sm:grid-cols-12 items-start">
+                      <div className="sm:col-span-6">
+                        <FormField label="Objeto Contratado" required error={itemError?.objeto_contratado?.message}>
+                          <input {...register(`itens.${index}.objeto_contratado` as const)} placeholder="Ex: Licença Microsoft 365" className={inputCls} />
+                        </FormField>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <FormField label="Qtd" required error={itemError?.quantidade?.message}>
+                          <input type="number" min={1} {...register(`itens.${index}.quantidade` as const, { valueAsNumber: true })} className={inputCls} />
+                        </FormField>
+                      </div>
+                      <div className="sm:col-span-4">
+                        <FormField label="Valor Unitário" required error={itemError?.valor_unitario?.message}>
+                          <Controller
+                            control={control}
+                            name={`itens.${index}.valor_unitario` as const}
+                            render={({ field }) => (
+                              <CurrencyInput
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder="0,00"
+                                className={inputCls}
+                              />
+                            )}
+                          />
+                        </FormField>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-end border-t border-slate-200 pt-2 text-xs font-medium text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                      Subtotal deste item: <span className="ml-1 font-mono text-sm font-bold text-teal-600 dark:text-teal-400">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {errors.itens?.root && (
+                <p className="text-sm text-red-500 font-medium">{errors.itens.root.message}</p>
+              )}
+
+              <div className="flex justify-end rounded-xl bg-teal-50 px-5 py-4 dark:bg-teal-900/20 mt-2 border border-teal-100 dark:border-teal-900">
+                <div className="text-right">
+                  <div className="text-xs font-bold uppercase tracking-wider text-teal-600/70 dark:text-teal-400/70">Valor Total</div>
+                  <div className="mt-1 font-mono text-xl font-extrabold text-teal-700 dark:text-teal-300">
+                    R$ {totalItens.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ═══ 3. VIGÊNCIA E SITUAÇÃO ═══ */}
             <div className="border-t border-slate-200 dark:border-slate-700 mt-6 pt-4">
               <h3 className="text-sm font-semibold text-teal-600 uppercase tracking-wide mb-4">
-                3. Valores e Vigência
+                3. Vigência e Situação
               </h3>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                label="Investimento (R$)"
-                required
-                error={errors.valor_investimento?.message}
-              >
-                <input
-                  type="number"
-                  step="0.01"
-                  {...register("valor_investimento", { valueAsNumber: true })}
-                  placeholder="0.00"
-                  className={inputCls}
-                />
-              </FormField>
+              <Controller
+                name="data_assinatura"
+                control={control}
+                render={({ field }) => (
+                  <FormField
+                    label="Data de Assinatura"
+                    required
+                    error={errors.data_assinatura?.message}
+                  >
+                    <DatePickerField
+                      value={field.value || null}
+                      onChange={(d) => field.onChange(d ?? "")}
+                      placeholder="Selecione a data de assinatura"
+                      id="data_assinatura_modal"
+                    />
+                  </FormField>
+                )}
+              />
+
+              <Controller
+                name="data_fim_vigencia"
+                control={control}
+                render={({ field }) => (
+                  <FormField
+                    label={isARP ? "Validade da Ata" : "Data Fim de Vigência"}
+                    required
+                    error={errors.data_fim_vigencia?.message}
+                  >
+                    <DatePickerField
+                      value={field.value || null}
+                      onChange={(d) => field.onChange(d ?? "")}
+                      placeholder="Selecione a data fim"
+                      id="data_fim_vigencia_modal"
+                    />
+                  </FormField>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <Controller
+                name="data_inicio_vigencia"
+                control={control}
+                render={({ field }) => (
+                  <FormField
+                    label="Data de Início da Vigência"
+                    error={errors.data_inicio_vigencia?.message}
+                  >
+                    <DatePickerField
+                      value={field.value || null}
+                      onChange={(d) => field.onChange(d ?? "")}
+                      placeholder="Se diferente da assinatura"
+                      id="data_inicio_vigencia_modal"
+                    />
+                  </FormField>
+                )}
+              />
 
               <FormField
-                label="Custeio (R$)"
-                required
-                error={errors.valor_custeio?.message}
+                label="Vigência"
+                error={errors.vigencia_meses?.message}
               >
+                {/* Campo hidden mantém o número para a API */}
+                <input type="hidden" {...register("vigencia_meses", { valueAsNumber: true })} />
                 <input
-                  type="number"
-                  step="0.01"
-                  {...register("valor_custeio", { valueAsNumber: true })}
-                  placeholder="0.00"
-                  className={inputCls}
+                  type="text"
+                  readOnly
+                  tabIndex={-1}
+                  value={watchedFimVigencia ? `${watch("vigencia_meses") ?? 0} meses` : ""}
+                  className={inputCls + " cursor-not-allowed opacity-70"}
+                  placeholder="Calculado automaticamente"
                 />
               </FormField>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mt-4">
               <FormField
-                label="Data de Assinatura"
-                required
-                error={errors.data_assinatura?.message}
+                label="Prorrogação"
+                error={errors.prorrogacao_meses?.message}
               >
-                <input
-                  type="date"
-                  {...register("data_assinatura")}
-                  className={inputCls}
-                />
-              </FormField>
-
-              <FormField
-                label="Data Fim de Vigência"
-                required
-                error={errors.data_fim_vigencia?.message}
-              >
-                <input
-                  type="date"
-                  {...register("data_fim_vigencia")}
-                  className={inputCls}
-                />
-              </FormField>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <FormField
-                label="Prazo"
-                error={errors.prazo?.message}
-              >
-                <input
-                  {...register("prazo")}
-                  placeholder="Ex: 12 meses"
-                  className={inputCls}
-                />
+                <select {...register("prorrogacao_meses", { valueAsNumber: true })} className={selectCls}>
+                  <option value={0}>Não há prorrogação</option>
+                  {Array.from({ length: 120 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>
+                      {m} {m === 1 ? "mês" : "meses"}
+                    </option>
+                  ))}
+                </select>
               </FormField>
 
               <FormField

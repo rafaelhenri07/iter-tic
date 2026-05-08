@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   X,
@@ -11,6 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import {
   itemPaccUpdateSchema,
   type ItemPaccUpdateFormData,
@@ -58,6 +59,7 @@ export function EditarItemPaccModal({
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors },
   } = useForm<ItemPaccUpdateFormData>({
     resolver: zodResolver(itemPaccUpdateSchema),
@@ -234,12 +236,17 @@ export function EditarItemPaccModal({
               required
               error={errors.valor_estimado?.message}
             >
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                {...register("valor_estimado", { valueAsNumber: true })}
-                className={inputCls}
+              <Controller
+                control={control}
+                name="valor_estimado"
+                render={({ field }) => (
+                  <CurrencyInput
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="0,00"
+                    className={inputCls}
+                  />
+                )}
               />
             </FormField>
 

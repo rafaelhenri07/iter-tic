@@ -53,6 +53,12 @@ class SituacaoContratoEnum(str, enum.Enum):
     EXTINTO_SUPORTE_VIGENTE = "Extinto, mas suporte vigente"
 
 
+class ModalidadeContratoEnum(str, enum.Enum):
+    """Modalidade da contratação."""
+    CONTRATO = "CONTRATO"
+    ARP = "ARP"
+
+
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  CONTRATO (entidade central do Módulo 3)                               ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -76,9 +82,25 @@ class Contrato(Base):
 
     # ── Identificação ───────────────────────────────────────────────────────
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    numero_contrato: Mapped[str] = mapped_column(
-        String(20), nullable=False, unique=True, index=True,
-        comment="Número do contrato no formato NN/YYYY.",
+    numero: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    ano: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    # ── Modalidade ───────────────────────────────────────────────────────────
+    modalidade_contrato: Mapped[ModalidadeContratoEnum] = mapped_column(
+        Enum(
+            ModalidadeContratoEnum,
+            name="modalidade_contrato_enum",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+        default=ModalidadeContratoEnum.CONTRATO,
+        server_default="CONTRATO",
+        index=True,
+        comment="Modalidade: CONTRATO ou ARP.",
+    )
+    orgao_gerenciador: Mapped[Optional[str]] = mapped_column(
+        String(300), nullable=True,
+        comment="Órgão gerenciador da ARP (somente para modalidade ARP).",
     )
 
     # ── Vínculo com Projeto ─────────────────────────────────────────────────
@@ -90,9 +112,11 @@ class Contrato(Base):
     )
 
     # ── Dados da Contratação ────────────────────────────────────────────────
-    empresa_contratada: Mapped[str] = mapped_column(
-        String(500), nullable=False,
-        comment="Razão social da empresa contratada.",
+    empresa_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("empresas.id", ondelete="RESTRICT"),
+        nullable=True,
+        comment="Empresa contratada (FK para empresas).",
     )
     fabricante_id: Mapped[Optional[int]] = mapped_column(
         Integer,
@@ -108,29 +132,26 @@ class Contrato(Base):
         ),
         nullable=False,
     )
-    quantidade: Mapped[int] = mapped_column(
-        Integer, nullable=False,
-        comment="Quantidade de itens/licenças/unidades contratadas.",
-    )
-    tecnologia_utilizada: Mapped[Optional[str]] = mapped_column(
-        String(500), nullable=True,
-        comment="Descrição livre da tecnologia contratada.",
-    )
-
-    # ── Valores Financeiros ─────────────────────────────────────────────────
-    valor_investimento: Mapped[Decimal] = mapped_column(
-        Numeric(15, 2), nullable=False, default=0,
-        comment="Valor de investimento (CAPEX).",
-    )
-    valor_custeio: Mapped[Decimal] = mapped_column(
-        Numeric(15, 2), nullable=False, default=0,
-        comment="Valor de custeio (OPEX).",
+    # ── Itens da Contratação ────────────────────────────────────────────────
+    itens: Mapped[list["ItemContrato"]] = relationship(
+        "ItemContrato",
+        back_populates="contrato",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     # ── Vigência ────────────────────────────────────────────────────────────
-    prazo: Mapped[Optional[str]] = mapped_column(
-        String(300), nullable=True,
-        comment="Descrição do prazo (ex: '12 meses; 24 meses com suporte').",
+    data_inicio_vigencia: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True,
+        comment="Data de início da vigência (pode diferir da assinatura).",
+    )
+    vigencia_meses: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True,
+        comment="Quantidade de meses de vigência original (calculado automaticamente).",
+    )
+    prorrogacao_meses: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0",
+        comment="Prorrogação total em meses acumulada via aditivos.",
     )
     data_assinatura: Mapped[date] = mapped_column(
         Date, nullable=False,
@@ -167,6 +188,10 @@ class Contrato(Base):
     # ── Relationships ───────────────────────────────────────────────────────
     projeto: Mapped["Projeto"] = relationship("Projeto", lazy="selectin")
 
+    empresa_rel: Mapped[Optional["Empresa"]] = relationship(
+        "Empresa", foreign_keys=[empresa_id], lazy="selectin",
+    )
+
     fabricante_rel: Mapped[Optional["Fabricante"]] = relationship(
         "Fabricante", foreign_keys=[fabricante_id], lazy="selectin",
     )
@@ -187,18 +212,27 @@ class Contrato(Base):
         lazy="selectin",
     )
 
+    # Aditivos de Prazo (1:N)
+    aditivos: Mapped[list["Aditivo"]] = relationship(
+        "Aditivo",
+        back_populates="contrato",
+        cascade="all, delete-orphan",
+        order_by="Aditivo.data_fim_vigencia.desc()",
+        lazy="selectin",
+    )
+
     # ── Constraints ─────────────────────────────────────────────────────────
     __table_args__ = (
-        UniqueConstraint("numero_contrato", name="uq_contrato_numero"),
+        UniqueConstraint("numero", "ano", name="uq_contrato_numero_ano"),
     )
 
     @property
     def valor_total(self) -> Decimal:
-        """Soma de investimento + custeio."""
-        return (self.valor_investimento or Decimal(0)) + (self.valor_custeio or Decimal(0))
+        """Soma do valor total de todos os itens do contrato."""
+        return sum((item.valor_total for item in self.itens), Decimal(0))
 
     def __repr__(self) -> str:
-        return f"<Contrato #{self.id} {self.numero_contrato} situacao={self.situacao_atual.value}>"
+        return f"<Contrato #{self.id} {self.numero}/{self.ano} situacao={self.situacao_atual.value}>"
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -245,6 +279,55 @@ class ContratoEquipe(Base):
     def __repr__(self) -> str:
         tipo = "Titular" if self.is_titular else "Substituto"
         return f"<ContratoEquipe #{self.id} papel={self.papel.value} {tipo}>"
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  ITEM DE CONTRATO (Múltiplos produtos/serviços)                        ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+class ItemContrato(Base):
+    __tablename__ = "item_contrato"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    contrato_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("contratos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    objeto_contratado: Mapped[str] = mapped_column(
+        String(500), nullable=False,
+        comment="Descrição detalhada do item/produto/serviço contratado.",
+    )
+    quantidade: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1,
+        comment="Quantidade de itens.",
+    )
+    valor_unitario: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2), nullable=False, default=0,
+        comment="Valor unitário do item.",
+    )
+
+    # ── Catálogo Governamental (CATMAT ou CATSER) ──────────────────────────
+    tipo_catalogo: Mapped[Optional[str]] = mapped_column(
+        String(10), nullable=True,
+        comment="Tipo de catálogo: 'CATMAT' (material) ou 'CATSER' (serviço).",
+    )
+    codigo_catalogo: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True,
+        comment="Código numérico do catálogo (ComprasNet).",
+    )
+
+    # ── Relationships ──────────────────────────────────────────────────────
+    contrato: Mapped["Contrato"] = relationship("Contrato", back_populates="itens")
+
+    @property
+    def valor_total(self) -> Decimal:
+        return Decimal(self.quantidade) * self.valor_unitario
+
+    def __repr__(self) -> str:
+        return f"<ItemContrato #{self.id} qtd={self.quantidade} valor_unitario={self.valor_unitario}>"
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -300,3 +383,5 @@ class ContratoHistorico(Base):
 # ── Forward reference imports ──────────────────────────────────────────────
 from app.models.projeto import Projeto, Servidor  # noqa: E402, F401
 from app.models.fabricante import Fabricante  # noqa: E402, F401
+from app.models.empresa import Empresa  # noqa: E402, F401
+from app.models.aditivo import Aditivo  # noqa: E402, F401

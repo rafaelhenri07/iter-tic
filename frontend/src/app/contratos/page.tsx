@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   FileSignature,
   Search,
@@ -11,12 +12,13 @@ import {
   Filter,
   Pencil,
 } from "lucide-react";
-import { NovoContratoModal } from "@/components/contratos/NovoContratoModal";
-import { DetalheContratoModal } from "@/components/contratos/DetalheContratoModal";
+import { EditarContratoModal } from "@/components/contratos/EditarContratoModal";
+
 import { ToastContainer } from "@/components/ui/Toast";
 import { fetchContratos, fetchContrato } from "@/lib/api";
 import { formatarMoedaBRL } from "@/lib/formatters";
 import type { ContratoListagem, ContratoResponse } from "@/types/contrato";
+import { MODALIDADE_CONTRATO_CONFIG } from "@/types/contrato";
 import { CardListSkeleton } from "@/components/ui/Skeleton";
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
@@ -55,6 +57,7 @@ const TIPO_PILL: Record<string, string> = {
 /* ── Página ────────────────────────────────────────────────────────────── */
 
 export default function ContratosPage() {
+  const router = useRouter();
   const [contratos, setContratos] = useState<ContratoListagem[]>([]);
   const [loading, setLoading] = useState(true);
   const [usingMock, setUsingMock] = useState(false);
@@ -65,7 +68,7 @@ export default function ContratosPage() {
   const [filterSituacao, setFilterSituacao] = useState<string>("todos");
 
   // Modals
-  const [selectedContratoId, setSelectedContratoId] = useState<number | null>(null);
+
   const [editContratoData, setEditContratoData] = useState<ContratoResponse | null>(null);
 
   const handleEditar = async (id: number) => {
@@ -106,8 +109,8 @@ export default function ContratosPage() {
       const q = search.toLowerCase();
       result = result.filter(
         (c) =>
-          c.numero_contrato.toLowerCase().includes(q) ||
-          c.empresa_contratada.toLowerCase().includes(q) ||
+          `${c.numero}/${c.ano}`.includes(q) ||
+          (c.empresa_nome ?? "").toLowerCase().includes(q) ||
           (c.projeto_nome ?? "").toLowerCase().includes(q) ||
           (c.nome_gestor ?? "").toLowerCase().includes(q)
       );
@@ -138,7 +141,7 @@ export default function ContratosPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">
-              Gestão de Contratos
+              Contratos
             </h1>
             <p className="text-xs text-foreground-muted">
               Execução e fiscalização de contratos de TI
@@ -289,21 +292,27 @@ export default function ContratosPage() {
               {filtered.map((c) => (
                 <tr
                   key={c.id}
-                  className="transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-800/20"
+                  onClick={() => router.push(`/execucao/contratos/${c.id}`)}
+                  className="cursor-pointer transition-colors duration-150 hover:bg-slate-50 dark:hover:bg-slate-800/20"
                 >
                   {/* Contrato e Fornecedor */}
                   <td className="px-5 py-3.5">
-                    <button
-                      onClick={() => setSelectedContratoId(c.id)}
-                      className="text-left"
-                    >
-                      <div className="text-sm font-semibold text-slate-800 hover:text-teal-600 hover:underline cursor-pointer transition-colors dark:text-slate-200">
-                        {c.numero_contrato}
-                      </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {c.empresa_contratada}
-                      </div>
-                    </button>
+                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                      {String(c.numero).padStart(3, '0')}/{c.ano}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {(() => {
+                        const modCfg = MODALIDADE_CONTRATO_CONFIG[c.modalidade_contrato] ?? MODALIDADE_CONTRATO_CONFIG.CONTRATO;
+                        return (
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${modCfg.cls}`}>
+                            {modCfg.icon} {modCfg.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      {c.empresa_nome ?? "—"}
+                    </div>
                   </td>
 
                   {/* Projeto de Origem */}
@@ -351,7 +360,7 @@ export default function ContratosPage() {
                   {/* Ações */}
                   <td className="px-5 py-3.5 text-center">
                     <button
-                      onClick={() => handleEditar(c.id)}
+                      onClick={(e) => { e.stopPropagation(); handleEditar(c.id); }}
                       className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-600 dark:hover:bg-teal-900/20"
                       title="Editar contrato"
                     >
@@ -367,17 +376,11 @@ export default function ContratosPage() {
 
       {/* Criação via página dedicada: /execucao/contratos/novo */}
 
-      {/* Modal Detalhe do Contrato */}
-      {selectedContratoId !== null && (
-        <DetalheContratoModal
-          contratoId={selectedContratoId}
-          onClose={() => setSelectedContratoId(null)}
-        />
-      )}
+
 
       {/* Modal Editar Contrato */}
       {editContratoData && (
-        <NovoContratoModal
+      <EditarContratoModal
           onClose={() => setEditContratoData(null)}
           onSuccess={refresh}
           initialData={editContratoData}

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { useConfig } from "@/components/providers/ConfigProvider";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { Loader2, Bell, Sun, Moon, Monitor, Menu as MenuIcon, LogOut } from "lucide-react";
+import { Loader2, Bell, Sun, Moon, Monitor, Menu as MenuIcon, LogOut, Shield, Search } from "lucide-react";
 import { useTheme } from "next-themes";
 
 /**
@@ -90,6 +90,26 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         {/* Spacer */}
         <div className="flex-1" />
 
+        {/* Global Search */}
+        <div className="hidden sm:flex items-center justify-end mr-4">
+          <div className="relative w-64 lg:w-80">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar em todo o sistema..."
+              className="w-full rounded-full border border-slate-700 bg-slate-800/50 py-1.5 pl-9 pr-4 text-sm text-slate-200 placeholder-slate-400 transition-all focus:border-brand-primary focus:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-primary"
+            />
+          </div>
+        </div>
+        
+        {/* Mobile Search Icon */}
+        <button
+          className="sm:hidden mr-2 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+          aria-label="Buscar"
+        >
+          <Search size={18} />
+        </button>
+
         {/* Right Section: Actions */}
         <div className="flex items-center gap-1 sm:gap-2">
           {/* Notifications */}
@@ -129,7 +149,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 />
                 <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-white/10 bg-slate-900 p-1 shadow-xl z-50 animate-in slide-in-from-top-2">
                   <div className="px-2 py-2 border-b border-white/10 mb-1">
-                    <p className="text-sm font-medium text-white truncate">{user?.nome || "Usuário"}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-white truncate">{user?.nome || "Usuário"}</p>
+                      {user?.role === "ADMIN" && (
+                        <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-400 ring-1 ring-amber-500/20">
+                          <Shield size={8} />
+                          Admin
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-400 truncate">{user?.email || "email@orgao.gov.br"}</p>
                   </div>
                   <button

@@ -63,7 +63,15 @@ const CargaEquipeChart = dynamic(
   }
 );
 
-import { fetchKpis, type KpisDashboard } from "@/lib/api";
+import { fetchKpis, fetchGraficos, type KpisDashboard, type GraficosDashboard, type TempoArtefatoItem, type CargaEquipeItem } from "@/lib/api";
+
+/* ── Paleta de cores para os donuts do Recharts ───────────────────────── */
+const TIPO_COLORS = ["#6366f1", "#06b6d4", "#f59e0b", "#ef4444", "#8b5cf6"];
+const SITUACAO_COLORS: Record<string, string> = {
+  "Vigente": "#10b981",
+  "Extinto": "#ef4444",
+  "Extinto, mas suporte vigente": "#f59e0b",
+};
 
 /* ═══════════════════════════════════════════════════════════════════════════
    COMPONENTE — PÁGINA
@@ -73,9 +81,12 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
   const [kpis, setKpis] = useState<KpisDashboard | null>(null);
   const [loadingKpis, setLoadingKpis] = useState(true);
+  const [graficos, setGraficos] = useState<GraficosDashboard | null>(null);
+  const [loadingGraficos, setLoadingGraficos] = useState(true);
 
   useEffect(() => {
     setMounted(true);
+
     async function loadKpis() {
       try {
         const data = await fetchKpis();
@@ -86,8 +97,53 @@ export default function DashboardPage() {
         setLoadingKpis(false);
       }
     }
+
+    async function loadGraficos() {
+      try {
+        const data = await fetchGraficos();
+        setGraficos(data);
+      } catch (err) {
+        console.error("Erro ao carregar gráficos:", err);
+      } finally {
+        setLoadingGraficos(false);
+      }
+    }
+
     loadKpis();
+    loadGraficos();
   }, []);
+
+  /* Prepara dados formatados para os gráficos Recharts */
+  const porTipoFormatted = (graficos?.distribuicao_contratos.por_tipo ?? []).map((t, i) => ({
+    ...t,
+    color: TIPO_COLORS[i % TIPO_COLORS.length],
+  }));
+
+  const porSituacaoFormatted = (graficos?.distribuicao_contratos.por_situacao ?? []).map((s) => ({
+    ...s,
+    color: SITUACAO_COLORS[s.label] ?? "#94a3b8",
+  }));
+
+  const efetividadeData = graficos?.efetividade_financeira ?? [];
+
+  // Tempo médio de artefatos — vem direto da API
+  const tempoArtefatosData: TempoArtefatoItem[] = graficos?.tempo_artefatos ?? [];
+
+  // Carga da equipe — vem direto da API
+  const cargaEquipeData: CargaEquipeItem[] = graficos?.carga_equipe ?? [];
+
+  // Médias derivadas para os MiniStats
+  const mediaFaseInterna =
+    tempoArtefatosData.length > 0
+      ? Math.round(
+          tempoArtefatosData.reduce((sum, d) => sum + d.dias, 0) / tempoArtefatosData.length
+        )
+      : null;
+
+  const maxArtefato =
+    tempoArtefatosData.length > 0
+      ? tempoArtefatosData.reduce((prev, cur) => (cur.dias > prev.dias ? cur : prev))
+      : null;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -165,8 +221,12 @@ export default function DashboardPage() {
             subtitle="Comparação entre estimativa inicial e custo efetivo por ação"
             icon={<TrendingUp size={14} className="text-emerald-500" />}
           >
-            {mounted && (
-              <EfetividadeFinanceiraChart data={[]} />
+            {loadingGraficos ? (
+              <div className="flex h-[310px] items-center justify-center">
+                <div className="h-full w-full rounded-lg bg-slate-100 animate-pulse dark:bg-slate-800" />
+              </div>
+            ) : mounted && (
+              <EfetividadeFinanceiraChart data={efetividadeData} />
             )}
           </ChartCard>
 
@@ -176,8 +236,24 @@ export default function DashboardPage() {
             subtitle="Por tipo de contratação e situação atual"
             icon={<BarChart3 size={14} className="text-indigo-500" />}
           >
-            {mounted && (
-              <DistribuicaoContratosChart data={{ porTipo: [], porSituacao: [] }} />
+            {loadingGraficos ? (
+              <div className="grid grid-cols-2 gap-6">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-[180px] w-[180px] rounded-full bg-slate-100 animate-pulse dark:bg-slate-800" />
+                  <div className="h-12 w-32 rounded-lg bg-slate-100 animate-pulse dark:bg-slate-800" />
+                </div>
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-[180px] w-[180px] rounded-full bg-slate-100 animate-pulse dark:bg-slate-800" />
+                  <div className="h-12 w-32 rounded-lg bg-slate-100 animate-pulse dark:bg-slate-800" />
+                </div>
+              </div>
+            ) : mounted && (
+              <DistribuicaoContratosChart
+                data={{
+                  porTipo: porTipoFormatted,
+                  porSituacao: porSituacaoFormatted,
+                }}
+              />
             )}
           </ChartCard>
         </div>
@@ -188,13 +264,33 @@ export default function DashboardPage() {
           subtitle="Identifica as etapas mais demoradas na fase interna dos projetos"
           icon={<Clock size={14} className="text-amber-500" />}
         >
-          {mounted && (
-            <TempoArtefatosChart data={[]} />
+          {loadingGraficos ? (
+            <div className="flex h-[300px] items-center justify-center">
+              <div className="h-full w-full rounded-lg bg-slate-100 animate-pulse dark:bg-slate-800" />
+            </div>
+          ) : mounted && (
+            <TempoArtefatosChart data={tempoArtefatosData} />
           )}
           {/* Mini-cards com médias */}
           <div className="mt-4 flex flex-wrap gap-3">
-            <MiniStat label="Média Fase Interna" value="45 dias" color="indigo" />
-            <MiniStat label="Média Fase Externa" value="90 dias" color="violet" />
+            <MiniStat
+              label="Média Geral"
+              value={
+                loadingGraficos
+                  ? "—"
+                  : mediaFaseInterna !== null
+                  ? `${mediaFaseInterna} dias`
+                  : "Sem dados"
+              }
+              color="indigo"
+            />
+            {maxArtefato && maxArtefato.dias > 0 && (
+              <MiniStat
+                label={`Gargalo: ${maxArtefato.artefato}`}
+                value={`${maxArtefato.dias} dias`}
+                color="amber"
+              />
+            )}
           </div>
         </ChartCard>
 
@@ -204,8 +300,12 @@ export default function DashboardPage() {
           subtitle="Carga de trabalho distribuída entre fase interna e gestão de contratos"
           icon={<Users size={14} className="text-blue-500" />}
         >
-          {mounted && (
-            <CargaEquipeChart data={[]} />
+          {loadingGraficos ? (
+            <div className="flex h-[340px] items-center justify-center">
+              <div className="h-full w-full rounded-lg bg-slate-100 animate-pulse dark:bg-slate-800" />
+            </div>
+          ) : mounted && (
+            <CargaEquipeChart data={cargaEquipeData} />
           )}
         </ChartCard>
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   ChevronDown,
@@ -16,7 +17,6 @@ import {
   Settings,
 } from "lucide-react";
 import { EditarAcaoModal } from "@/components/pdtic/EditarAcaoModal";
-import { VisualizarAcaoModal } from "@/components/pdtic/VisualizarAcaoModal";
 import { ExcluirAcaoDialog } from "@/components/pdtic/ExcluirAcaoDialog";
 import { ToastContainer, showToast } from "@/components/ui/Toast";
 import {
@@ -64,8 +64,6 @@ const STATUS_PILL: Record<string, string> = {
   "Não iniciada": "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
   "Em andamento": "bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
   "Contratada": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
-  "Contrato vigente": "bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
-  "Contrato a ser renovado": "bg-orange-50 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
 };
 
 /* ── Dropdown de ações administrativas ────────────────────────────────── */
@@ -238,6 +236,7 @@ function NovoPeriodoModal({
 /* ── Página principal ──────────────────────────────────────────────────── */
 
 export default function PdticPage() {
+  const router = useRouter();
   const [periodos, setPeriodos] = useState<PdticPeriodo[]>([]);
   const [selectedPeriodoId, setSelectedPeriodoId] = useState<number | null>(null);
   const [painel, setPainel] = useState<PdticPainelResponse | null>(null);
@@ -245,7 +244,6 @@ export default function PdticPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Modais
-  const [viewModalAcao, setViewModalAcao] = useState<PdticAcao | null>(null);
   const [editModalAcao, setEditModalAcao] = useState<PdticAcao | null>(null);
   const [deleteDialogAcao, setDeleteDialogAcao] = useState<PdticAcao | null>(null);
   const [showNovoPeriodoModal, setShowNovoPeriodoModal] = useState(false);
@@ -314,7 +312,8 @@ export default function PdticPage() {
           searchTerm === "" ||
           acao.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
           acao.codigo_acao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          acao.unidade_demandante.toLowerCase().includes(searchTerm.toLowerCase());
+          (acao.departamentos_rel?.map(d => d.nome).join(" ") || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (acao.unidades_demandantes_rel?.map(d => d.nome).join(" ") || "").toLowerCase().includes(searchTerm.toLowerCase());
         const matchStatus = statusFilter === "todas" || acao.status === statusFilter;
         return matchSearch && matchStatus;
       })
@@ -569,10 +568,11 @@ export default function PdticPage() {
                 return (
                   <tr
                     key={acao.id}
-                    className={`transition-colors ${
+                    onClick={() => router.push(`/planejamento/pdtic/${acao.id}`)}
+                    className={`cursor-pointer transition-colors duration-150 ${
                       isExcluida
-                        ? "bg-red-50/40 dark:bg-red-950/10"
-                        : "hover:bg-slate-50/60 dark:hover:bg-slate-800/20"
+                        ? "bg-red-50/40 hover:bg-red-50 dark:bg-red-950/10 dark:hover:bg-red-900/20"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800/20"
                     }`}
                   >
                     {/* Ação */}
@@ -585,22 +585,25 @@ export default function PdticPage() {
                         }`}>
                           {acao.codigo_acao}
                         </span>
-                        <button
-                          onClick={() => setViewModalAcao(acao)}
-                          className={`text-left text-sm font-medium transition-colors cursor-pointer ${
+                        <span
+                          className={`text-sm font-medium ${
                             isExcluida
-                              ? "text-red-600 line-through hover:text-red-700 hover:underline dark:text-red-400 dark:hover:text-red-300"
-                              : "text-slate-800 hover:text-indigo-600 hover:underline dark:text-slate-200"
+                              ? "text-red-600 line-through dark:text-red-400"
+                              : "text-slate-800 dark:text-slate-200"
                           }`}
                         >
                           {acao.descricao}
-                        </button>
+                        </span>
                       </div>
                     </td>
 
                     {/* Departamento */}
                     <td className="px-5 py-3.5">
-                      <span className="text-sm text-slate-700 dark:text-slate-300">{acao.departamento || acao.unidade_demandante}</span>
+                      <span className="text-sm text-slate-700 dark:text-slate-300">
+                        {acao.departamentos_rel && acao.departamentos_rel.length > 0
+                          ? acao.departamentos_rel.map(d => d.sigla || d.nome).join(", ")
+                          : "—"}
+                      </span>
                     </td>
 
                     {/* Previsão */}
@@ -627,14 +630,14 @@ export default function PdticPage() {
                       {!isExcluida && (
                         <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={() => setEditModalAcao(acao)}
+                            onClick={(e) => { e.stopPropagation(); setEditModalAcao(acao); }}
                             className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20"
                             title="Editar ação"
                           >
                             <Pencil size={15} />
                           </button>
                           <button
-                            onClick={() => setDeleteDialogAcao(acao)}
+                            onClick={(e) => { e.stopPropagation(); setDeleteDialogAcao(acao); }}
                             className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
                             title="Desativar ação"
                           >
@@ -662,20 +665,7 @@ export default function PdticPage() {
 
 
 
-      {viewModalAcao && painel && (
-        <VisualizarAcaoModal
-          open={!!viewModalAcao}
-          onClose={() => setViewModalAcao(null)}
-          acao={viewModalAcao}
-          revisoes={painel.revisoes}
-          anosRange={anosRange}
-          onEdit={() => {
-            const a = viewModalAcao;
-            setViewModalAcao(null);
-            setEditModalAcao(a);
-          }}
-        />
-      )}
+
 
       {editModalAcao && painel && (
         <EditarAcaoModal

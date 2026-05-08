@@ -9,7 +9,7 @@ Cobre:
   - Rota /painel consolidada para o front-end
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -17,12 +17,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.core.security import get_current_user
+from app.models.usuario import Usuario
 from app.models.pdtic import AcaoPdtic
 from app.models.pacc import ItemPacc
 from app.models.projeto import (
     Artefato,
     ComentarioArtefato,
     HistoricoDataArtefato,
+    ObservacaoFaseExterna,
     Projeto,
     ProjetoTramitacao,
     Servidor,
@@ -42,6 +45,9 @@ from app.schemas.projeto import (
     ComentarioArtefatoResponse,
     HistoricoDataArtefatoCreate,
     HistoricoDataArtefatoResponse,
+    HistoricoEventoResponse,
+    ObservacaoFaseExternaCreate,
+    ObservacaoFaseExternaResponse,
     ProjetoComDetalhesResponse,
     ProjetoCreate,
     ProjetoListagemResponse,
@@ -62,6 +68,45 @@ from app.schemas.projeto import (
 router = APIRouter(prefix="/projetos", tags=["Projetos e Licitações"])
 
 
+# ── Matriz de SLA por Complexidade (dias corridos) ────────────────────────────
+SLA_MATRIX: dict[str, dict[TipoArtefatoEnum, int]] = {
+    "Simples": {
+        TipoArtefatoEnum.DFD: 15,
+        TipoArtefatoEnum.ETP: 90,
+        TipoArtefatoEnum.MAPA_RISCOS: 15,
+        TipoArtefatoEnum.ESTIMATIVA_CUSTOS: 30,
+        TipoArtefatoEnum.TR: 60,
+    },
+    "Intermediária": {
+        TipoArtefatoEnum.DFD: 15,
+        TipoArtefatoEnum.ETP: 120,
+        TipoArtefatoEnum.MAPA_RISCOS: 15,
+        TipoArtefatoEnum.ESTIMATIVA_CUSTOS: 30,
+        TipoArtefatoEnum.TR: 60,
+    },
+    "Complexa": {
+        TipoArtefatoEnum.DFD: 15,
+        TipoArtefatoEnum.ETP: 180,
+        TipoArtefatoEnum.MAPA_RISCOS: 20,
+        TipoArtefatoEnum.ESTIMATIVA_CUSTOS: 60,
+        TipoArtefatoEnum.TR: 90,
+    },
+}
+
+
+def _calcular_data_fim_prevista(
+    complexidade: str, tipo: TipoArtefatoEnum, data_inicio: date
+) -> date | None:
+    """Calcula a data fim prevista baseando-se na matriz de SLA."""
+    prazos = SLA_MATRIX.get(complexidade)
+    if not prazos:
+        return None
+    dias = prazos.get(tipo)
+    if dias is None:
+        return None
+    return data_inicio + timedelta(days=dias)
+
+
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  SERVIDORES                                                             ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -76,7 +121,15 @@ async def listar_servidores(
     q: str | None = Query(None, description="Busca por nome ou matrícula"),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Servidor).order_by(Servidor.nome)
+    stmt = (
+        select(Servidor)
+        .options(
+            selectinload(Servidor.departamento),
+            selectinload(Servidor.unidade_lotacao),
+            selectinload(Servidor.secao),
+        )
+        .order_by(Servidor.nome)
+    )
     if q:
         like = f"%{q}%"
         stmt = stmt.where(
@@ -108,7 +161,18 @@ async def criar_servidor(
     servidor = Servidor(**payload.model_dump())
     db.add(servidor)
     await db.flush()
-    await db.refresh(servidor)
+    
+    # Re-consultar para eager loading
+    stmt = (
+        select(Servidor)
+        .options(
+            selectinload(Servidor.departamento),
+            selectinload(Servidor.unidade_lotacao),
+            selectinload(Servidor.secao),
+        )
+        .where(Servidor.id == servidor.id)
+    )
+    servidor = (await db.execute(stmt)).scalar_one()
     return servidor
 
 
@@ -121,7 +185,16 @@ async def obter_servidor(
     servidor_id: int,
     db: AsyncSession = Depends(get_db),
 ):
-    servidor = await db.get(Servidor, servidor_id)
+    stmt = (
+        select(Servidor)
+        .options(
+            selectinload(Servidor.departamento),
+            selectinload(Servidor.unidade_lotacao),
+            selectinload(Servidor.secao),
+        )
+        .where(Servidor.id == servidor_id)
+    )
+    servidor = (await db.execute(stmt)).scalar_one_or_none()
     if not servidor:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -163,7 +236,17 @@ async def atualizar_servidor(
         setattr(servidor, campo, valor)
 
     await db.flush()
-    await db.refresh(servidor)
+    # Para garantir o carregamento das FKs no retorno, re-consultamos
+    stmt = (
+        select(Servidor)
+        .options(
+            selectinload(Servidor.departamento),
+            selectinload(Servidor.unidade_lotacao),
+            selectinload(Servidor.secao),
+        )
+        .where(Servidor.id == servidor.id)
+    )
+    servidor = (await db.execute(stmt)).scalar_one()
     return servidor
 
 
@@ -272,7 +355,9 @@ async def listar_projetos(
                     ultimo_comentario=_ultimo,
                     total_comentarios=_total,
                     data_inicio=art.data_inicio if art else None,
+                    data_fim_prevista=art.data_fim_prevista if art else None,
                     data_conclusao=art.data_conclusao if art else None,
+                    justificativa_atraso=art.justificativa_atraso if art else None,
                     comentarios=[
                         ComentarioResumoListagem(
                             id=c.id,
@@ -677,8 +762,8 @@ async def obter_artefato(
     response_model=ArtefatoResponse,
     summary="Atualizar artefato",
     description=(
-        "Atualização parcial. Para alterar `data_inicio` ou `data_conclusao`, "
-        "use a rota dedicada de auditoria para registrar justificativa."
+        "Atualização parcial. Ao iniciar, envie `data_inicio`. "
+        "Para alterar `data_inicio` de um artefato já iniciado, envie `justificativa_alteracao`."
     ),
 )
 async def atualizar_artefato(
@@ -694,19 +779,90 @@ async def atualizar_artefato(
         )
 
     dados = payload.model_dump(exclude_unset=True)
+    justificativa = dados.pop("justificativa_alteracao", None)
+    justificativa_atraso = dados.pop("justificativa_atraso", None)
+
+    # Carregar projeto pai para consultar complexidade (SLA)
+    projeto = await db.get(Projeto, artefato.projeto_id)
+
+    # ── Calcular SLA ao definir data_inicio pela primeira vez ─────────────────
+    is_primeiro_inicio = artefato.data_inicio is None and "data_inicio" in dados and dados["data_inicio"] is not None
+    if is_primeiro_inicio and projeto:
+        data_fim = _calcular_data_fim_prevista(
+            projeto.complexidade, artefato.tipo, dados["data_inicio"]
+        )
+        if data_fim:
+            artefato.data_fim_prevista = data_fim
+
+    # ── Detectar alteração de data_inicio em artefato já iniciado ─────────────
+    if (
+        artefato.data_inicio is not None
+        and "data_inicio" in dados
+        and dados["data_inicio"] != artefato.data_inicio
+    ):
+        # Exigir justificativa
+        if not justificativa or len(justificativa.strip()) < 10:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Justificativa obrigatória (mín. 10 caracteres) ao "
+                    "alterar a Data de Início de um artefato já iniciado."
+                ),
+            )
+
+        # Registrar no histórico de auditoria
+        historico = HistoricoDataArtefato(
+            artefato_id=artefato_id,
+            tipo_data_alterada=TipoDataAlteradaEnum.DATA_INICIO,
+            data_antiga=artefato.data_inicio,
+            data_nova=dados["data_inicio"],
+            justificativa=justificativa.strip(),
+        )
+        db.add(historico)
+
+        # Criar comentário automático
+        data_ant = artefato.data_inicio.strftime("%d/%m/%Y")
+        data_nov = dados["data_inicio"].strftime("%d/%m/%Y")
+        comentario = ComentarioArtefato(
+            artefato_id=artefato_id,
+            conteudo=(
+                f"⏰ Data de Início alterada: {data_ant} → {data_nov}. "
+                f"Justificativa: {justificativa.strip()}"
+            ),
+            autor="Sistema (Edição de Data)",
+        )
+        db.add(comentario)
+
+        # Recalcular SLA com a nova data de início
+        if projeto:
+            data_fim = _calcular_data_fim_prevista(
+                projeto.complexidade, artefato.tipo, dados["data_inicio"]
+            )
+            if data_fim:
+                artefato.data_fim_prevista = data_fim
 
     # ── Regras de transição de status ────────────────────────────────────────
-
     if "status" in dados:
         novo_status = dados["status"]
 
-        # Ao iniciar → preencher data_inicio se não existir
-        if novo_status == StatusArtefatoEnum.INICIADO and not artefato.data_inicio:
-            artefato.data_inicio = date.today()
-
         # Ao concluir → preencher data_conclusão se não existir
-        if novo_status == StatusArtefatoEnum.CONCLUIDO and not artefato.data_conclusao:
-            artefato.data_conclusao = date.today()
+        if novo_status == StatusArtefatoEnum.CONCLUIDO:
+            data_conclusao_efetiva = dados.get("data_conclusao") or artefato.data_conclusao or date.today()
+            if "data_conclusao" not in dados:
+                artefato.data_conclusao = data_conclusao_efetiva
+
+            # ── Validar justificativa de atraso se ultrapassou o prazo ────────
+            if artefato.data_fim_prevista and data_conclusao_efetiva > artefato.data_fim_prevista:
+                if not justificativa_atraso or len(justificativa_atraso.strip()) < 10:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"O artefato ultrapassou o prazo previsto "
+                            f"({artefato.data_fim_prevista.strftime('%d/%m/%Y')}). "
+                            f"A justificativa de atraso é obrigatória (mín. 10 caracteres)."
+                        ),
+                    )
+                artefato.justificativa_atraso = justificativa_atraso.strip()
 
     for campo, valor in dados.items():
         setattr(artefato, campo, valor)
@@ -714,7 +870,7 @@ async def atualizar_artefato(
     await db.flush()
     await db.refresh(artefato)
 
-    # ── Auto-promoção do projeto para "Pronto para contratação" ──────────────
+    # ── Auto-promoção do projeto ───────────────────────────────────────────
     await _verificar_promocao_projeto(artefato.projeto_id, db)
 
     return artefato
@@ -1077,6 +1233,129 @@ async def adicionar_tramitacao_projeto(
     await db.flush()
     await db.refresh(tramitacao)
     return tramitacao
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  HISTÓRICO E FASE EXTERNA (DIÁRIO DE BORDO)                            ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+@router.get(
+    "/{projeto_id}/historico",
+    response_model=list[HistoricoEventoResponse],
+    summary="Obter histórico do projeto em formato de timeline",
+)
+async def obter_historico_projeto(
+    projeto_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    projeto = await _garantir_projeto_existe(projeto_id, db)
+    # Eager load artefatos
+    stmt = select(Projeto).options(selectinload(Projeto.artefatos)).where(Projeto.id == projeto_id)
+    projeto = (await db.execute(stmt)).scalar_one()
+
+    eventos = []
+
+    # Evento de Criação
+    eventos.append({
+        "id": f"criacao-{projeto.id}",
+        "data_evento": projeto.criado_em,
+        "titulo": "Projeto Registrado",
+        "descricao": "O projeto foi criado no sistema.",
+        "tipo": "criacao",
+        "icone": "folder"
+    })
+
+    for art in projeto.artefatos:
+        if art.data_inicio:
+            eventos.append({
+                "id": f"inicio-{art.id}",
+                "data_evento": func.now() if not hasattr(art, 'criado_em') else art.criado_em, # Usamos datetime para timeline
+                "titulo": f"Artefato {art.tipo.value} Iniciado",
+                "descricao": f"A elaboração do artefato foi iniciada com data de início em {art.data_inicio.strftime('%d/%m/%Y')}.",
+                "tipo": "inicio",
+                "icone": "play"
+            })
+            # Corrige a data_evento para ser datetime na view, usando a meia-noite da data de inicio
+            from datetime import datetime
+            eventos[-1]["data_evento"] = datetime.combine(art.data_inicio, datetime.min.time()).astimezone()
+
+        if art.data_conclusao:
+            descricao = f"Artefato concluído em {art.data_conclusao.strftime('%d/%m/%Y')}."
+            tipo = "conclusao"
+            icone = "check"
+
+            # Check atraso
+            if art.data_fim_prevista and art.data_conclusao > art.data_fim_prevista:
+                descricao += f" Houve atraso na conclusão (Prazo Limite era {art.data_fim_prevista.strftime('%d/%m/%Y')})."
+                if art.justificativa_atraso:
+                    descricao += f"\nJustificativa: {art.justificativa_atraso}"
+                tipo = "atraso"
+                icone = "alert"
+
+            from datetime import datetime
+            eventos.append({
+                "id": f"conclusao-{art.id}",
+                "data_evento": datetime.combine(art.data_conclusao, datetime.min.time()).astimezone(),
+                "titulo": f"Artefato {art.tipo.value} Concluído",
+                "descricao": descricao,
+                "tipo": tipo,
+                "icone": icone
+            })
+
+    # Ordenar por data
+    eventos.sort(key=lambda x: x["data_evento"])
+
+    return eventos
+
+
+@router.get(
+    "/{projeto_id}/fase-externa/observacoes",
+    response_model=list[ObservacaoFaseExternaResponse],
+    summary="Listar diário de bordo (observações) da Fase Externa",
+)
+async def listar_observacoes_fase_externa(
+    projeto_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    await _garantir_projeto_existe(projeto_id, db)
+    stmt = (
+        select(ObservacaoFaseExterna)
+        .options(selectinload(ObservacaoFaseExterna.usuario))
+        .where(ObservacaoFaseExterna.projeto_id == projeto_id)
+        .order_by(ObservacaoFaseExterna.criado_em.desc())
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+@router.post(
+    "/{projeto_id}/fase-externa/observacoes",
+    response_model=ObservacaoFaseExternaResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Adicionar anotação no diário de bordo da Fase Externa",
+)
+async def adicionar_observacao_fase_externa(
+    projeto_id: int,
+    payload: ObservacaoFaseExternaCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    await _garantir_projeto_existe(projeto_id, db)
+    
+    nova_obs = ObservacaoFaseExterna(
+        projeto_id=projeto_id,
+        texto=payload.texto,
+        usuario_id=current_user.id
+    )
+    db.add(nova_obs)
+    await db.flush()
+    await db.refresh(nova_obs)
+
+    # Carregar o usuário para o response
+    stmt = select(ObservacaoFaseExterna).options(selectinload(ObservacaoFaseExterna.usuario)).where(ObservacaoFaseExterna.id == nova_obs.id)
+    nova_obs = (await db.execute(stmt)).scalar_one()
+
+    return nova_obs
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗

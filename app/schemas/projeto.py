@@ -14,7 +14,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.projeto import (
     StatusProjetoEnum,
@@ -24,6 +24,18 @@ from app.models.projeto import (
 )
 
 _RE_PROCESSO_SEI = re.compile(r"^\d{5}-\d{8}/\d{4}-\d{2}$")
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  UNIDADE ORGANIZACIONAL (Resumo)                                         ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+class _UnidadeOrgResumo(BaseModel):
+    """Resumo de uma Unidade Organizacional para aninhamento no Servidor."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nome: str
+    sigla: Optional[str] = None
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -44,12 +56,13 @@ class ServidorBase(BaseModel):
     funcao: Optional[str] = Field(
         None, max_length=200, examples=["Chefe de Seção"]
     )
-    lotacao: str = Field(
-        ..., min_length=1, max_length=200, examples=["DTI"]
+    departamento_id: int = Field(..., description="ID do Departamento.")
+    unidade_lotacao_id: Optional[int] = Field(None, description="ID da Unidade de Lotação.")
+    secao_id: Optional[int] = Field(None, description="ID da Seção.")
+    email_funcional: Optional[EmailStr] = Field(
+        None, max_length=200, examples=["servidor@orgao.gov.br"]
     )
-    perfil_acesso: Optional[str] = Field(
-        None, max_length=100, examples=["admin"]
-    )
+
 
 
 class ServidorCreate(ServidorBase):
@@ -63,8 +76,10 @@ class ServidorUpdate(BaseModel):
     nome: Optional[str] = Field(None, min_length=1, max_length=200)
     cargo: Optional[str] = Field(None, min_length=1, max_length=200)
     funcao: Optional[str] = Field(None, max_length=200)
-    lotacao: Optional[str] = Field(None, min_length=1, max_length=200)
-    perfil_acesso: Optional[str] = Field(None, max_length=100)
+    departamento_id: Optional[int] = None
+    unidade_lotacao_id: Optional[int] = None
+    secao_id: Optional[int] = None
+    email_funcional: Optional[EmailStr] = Field(None, max_length=200)
 
 
 class ServidorResponse(ServidorBase):
@@ -74,6 +89,11 @@ class ServidorResponse(ServidorBase):
     id: int
     criado_em: datetime
     atualizado_em: datetime
+
+    # Relacionamentos aninhados
+    departamento: Optional[_UnidadeOrgResumo] = None
+    unidade_lotacao: Optional[_UnidadeOrgResumo] = None
+    secao: Optional[_UnidadeOrgResumo] = None
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -85,7 +105,9 @@ class ArtefatoBase(BaseModel):
     tipo: TipoArtefatoEnum
     status: StatusArtefatoEnum = StatusArtefatoEnum.NAO_INICIADO
     data_inicio: Optional[date] = None
+    data_fim_prevista: Optional[date] = None
     data_conclusao: Optional[date] = None
+    justificativa_atraso: Optional[str] = None
     observacoes: Optional[str] = None
 
 
@@ -99,14 +121,16 @@ class ArtefatoCreate(BaseModel):
 class ArtefatoUpdate(BaseModel):
     """Atualização parcial de artefato.
 
-    ATENÇÃO: alterações em `data_inicio` e `data_conclusao` devem
-    ser acompanhadas de justificativa via payload separado
-    (HistoricoDataArtefatoCreate) processado na rota.
+    ATENÇÃO: alterar `data_inicio` de um artefato já iniciado
+    exige `justificativa_alteracao` no payload.
+    Se `data_conclusao` > `data_fim_prevista`, `justificativa_atraso` é obrigatória.
     """
     status: Optional[StatusArtefatoEnum] = None
     data_inicio: Optional[date] = None
     data_conclusao: Optional[date] = None
     observacoes: Optional[str] = None
+    justificativa_alteracao: Optional[str] = None
+    justificativa_atraso: Optional[str] = None
 
 
 class ArtefatoResponse(ArtefatoBase):
@@ -200,8 +224,6 @@ class ProjetoBase(BaseModel):
         default="Simples",
         examples=["Simples", "Intermediária", "Complexa"]
     )
-    catmat: Optional[str] = Field(None, max_length=50, examples=["443811"])
-    catser: Optional[str] = Field(None, max_length=50, examples=["27502"])
 
     @field_validator("processo_sei", mode="before")
     @classmethod
@@ -247,8 +269,6 @@ class ProjetoUpdate(BaseModel):
     processo_sei: Optional[str] = Field(None, max_length=50)
     prioridade: Optional[str] = None
     complexidade: Optional[str] = None
-    catmat: Optional[str] = Field(None, max_length=50)
-    catser: Optional[str] = Field(None, max_length=50)
     status: Optional[StatusProjetoEnum] = None
 
     integrante_requisitante_id: Optional[int] = None
@@ -377,7 +397,9 @@ class ArtefatoResumoListagem(BaseModel):
     ultimo_comentario: Optional[str] = None
     total_comentarios: int = 0
     data_inicio: Optional[date] = None
+    data_fim_prevista: Optional[date] = None
     data_conclusao: Optional[date] = None
+    justificativa_atraso: Optional[str] = None
     comentarios: list[ComentarioResumoListagem] = []
 
 
@@ -459,3 +481,44 @@ class ProjetoTramitacaoResponse(BaseModel):
     observacao: str
     autor: str
     data_hora: datetime
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  OBSERVAÇÃO FASE EXTERNA (Diário de Bordo)                             ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+class ObservacaoFaseExternaCreate(BaseModel):
+    """Payload para adicionar uma observação na Fase Externa."""
+    texto: str = Field(..., min_length=1)
+
+
+class UsuarioResumoParaObservacao(BaseModel):
+    """Resumo do Usuário que criou a observação."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    nome: str
+
+
+class ObservacaoFaseExternaResponse(BaseModel):
+    """Resposta de uma Observação da Fase Externa."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    projeto_id: int
+    texto: str
+    criado_em: datetime
+    usuario: Optional[UsuarioResumoParaObservacao] = None
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  EVENTO DE HISTÓRICO (Timeline)                                        ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+class HistoricoEventoResponse(BaseModel):
+    """Evento para a timeline de histórico do projeto."""
+    id: str  # Pode ser um UUID ou string gerada
+    data_evento: datetime
+    titulo: str
+    descricao: str
+    tipo: str  # ex: "criacao", "inicio", "conclusao", "atraso"
+    icone: str  # ex: "folder", "play", "check", "alert"

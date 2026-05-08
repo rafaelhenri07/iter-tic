@@ -21,11 +21,11 @@ class FabricanteCreate(BaseModel):
     """Payload para criação de um fabricante."""
     nome: str
     site: Optional[str] = None
-    contato_nome: str
-    contato_cargo: str
-    contato_telefone1: str
+    contato_nome: Optional[str] = None
+    contato_cargo: Optional[str] = None
+    contato_telefone1: Optional[str] = None
     contato_telefone2: Optional[str] = None
-    contato_email: str
+    contato_email: Optional[str] = None
 
 
 class FabricanteUpdate(BaseModel):
@@ -51,10 +51,10 @@ class FabricanteResponse(BaseModel):
     id: int
     nome: str
     site: Optional[str] = None
-    contato_nome: str
-    contato_cargo: str
-    contato_telefone1: str
+    contato_nome: Optional[str] = None
+    contato_cargo: Optional[str] = None
+    contato_telefone1: Optional[str] = None
     contato_telefone2: Optional[str] = None
-    contato_email: str
+    contato_email: Optional[str] = None
     create_time: datetime
     update_time: Optional[datetime] = None

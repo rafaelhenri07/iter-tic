@@ -7,7 +7,24 @@
 
 import { z } from "zod";
 
-const RE_NUMERO_CONTRATO = /^\d{2,3}\/\d{4}$/;
+
+
+/* ── Sub-schema: Itens do contrato ────────────── */
+
+const itemContratoSchema = z.object({
+  objeto_contratado: z
+    .string({ error: "Objeto é obrigatório." })
+    .min(1, "Objeto é obrigatório."),
+  quantidade: z
+    .number({ error: "Quantidade é obrigatória." })
+    .int("Deve ser inteiro.")
+    .min(1, "Mínimo 1."),
+  valor_unitario: z
+    .number({ error: "Valor unitário é obrigatório." })
+    .min(0, "Não pode ser negativo."),
+  tipo_catalogo: z.enum(["CATMAT", "CATSER", ""]).optional().or(z.literal(null)),
+  codigo_catalogo: z.string().optional().or(z.literal(null)),
+});
 
 /* ── Sub-schema: um papel da equipe (titular + substitutos) ────────────── */
 
@@ -33,19 +50,17 @@ export const contratoCreateSchema = z
       .int()
       .min(1, "Selecione um projeto válido."),
 
-    /* Dados da Contratação */
-    numero_contrato: z
-      .string({ error: "Número do contrato é obrigatório." })
-      .min(1, "Número do contrato é obrigatório.")
-      .regex(
-        RE_NUMERO_CONTRATO,
-        "Formato inválido. Use NN/YYYY ou NNN/YYYY (ex: 42/2025)."
-      ),
+    /* Modalidade da Contratação */
+    modalidade_contrato: z.enum(["CONTRATO", "ARP"]).default("CONTRATO"),
 
-    empresa_contratada: z
-      .string({ error: "Empresa é obrigatória." })
-      .min(1, "Empresa contratada é obrigatória.")
-      .max(500, "Máximo de 500 caracteres."),
+    /* Dados da Contratação */
+    numero: z.coerce.number().int().positive("Número deve ser maior que 0."),
+    ano: z.coerce.number().int().min(2015, "Ano inválido.").max(2035, "Ano inválido."),
+
+    empresa_id: z
+      .number({ error: "Selecione a empresa contratada." })
+      .int()
+      .min(1, "Selecione uma empresa válida."),
 
     fabricante_id: z
       .number()
@@ -58,32 +73,30 @@ export const contratoCreateSchema = z
       { error: "Selecione o tipo de contrato." }
     ),
 
-    quantidade: z
-      .number({ error: "Quantidade é obrigatória." })
-      .int("Deve ser um número inteiro.")
-      .min(1, "Mínimo: 1."),
-
-    tecnologia_utilizada: z
-      .string()
-      .max(500, "Máximo de 500 caracteres.")
-      .optional()
-      .or(z.literal("")),
-
-    /* Valores */
-    valor_investimento: z
-      .number({ error: "Informe o valor de investimento." })
-      .min(0, "Não pode ser negativo."),
-
-    valor_custeio: z
-      .number({ error: "Informe o valor de custeio." })
-      .min(0, "Não pode ser negativo."),
+    /* Itens da Contratação */
+    itens: z
+      .array(itemContratoSchema)
+      .min(1, "Adicione pelo menos um item à contratação."),
 
     /* Vigência */
-    prazo: z
+    data_inicio_vigencia: z
       .string()
-      .max(300)
       .optional()
       .or(z.literal("")),
+
+    vigencia_meses: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .nullable(),
+
+    prorrogacao_meses: z
+      .number()
+      .int()
+      .min(0)
+      .max(120)
+      .default(0),
 
     data_assinatura: z
       .string({ error: "Data de assinatura é obrigatória." })
@@ -99,6 +112,9 @@ export const contratoCreateSchema = z
     ),
 
     observacoes: z.string().optional().or(z.literal("")),
+
+    /* Campo específico de ARP */
+    orgao_gerenciador: z.string().max(300).optional().or(z.literal("")),
 
     /* Equipe de Fiscalização (novo formato: titular + substitutos) */
     equipe: equipeSchema.optional(),
@@ -129,10 +145,30 @@ export function cleanContratoPayload(
   // Converter fabricante_id = 0 → null
   if (clean.fabricante_id === 0) clean.fabricante_id = null;
 
+  // Converter empresa_id = 0 → null (não deve acontecer, mas por segurança)
+  if (clean.empresa_id === 0) clean.empresa_id = null;
+
+  // Limpar campos de catálogo vazios nos itens
+  if (clean.itens && Array.isArray(clean.itens)) {
+    clean.itens = clean.itens.map((item: any) => ({
+      ...item,
+      tipo_catalogo: item.tipo_catalogo === "" ? null : item.tipo_catalogo,
+      codigo_catalogo: item.codigo_catalogo === "" ? null : item.codigo_catalogo,
+    }));
+  }
+
   // Limpar strings vazias → null
-  for (const key of ["tecnologia_utilizada", "prazo", "observacoes"]) {
+  for (const key of ["observacoes", "data_inicio_vigencia"]) {
     if (clean[key] === "") clean[key] = null;
   }
+
+  // orgao_gerenciador: limpar se CONTRATO ou vazio
+  if (clean.modalidade_contrato !== "ARP" || !clean.orgao_gerenciador) {
+    clean.orgao_gerenciador = null;
+  }
+
+  // vigencia_meses 0 ou undefined → null
+  if (!clean.vigencia_meses) clean.vigencia_meses = null;
 
   // Transformar equipe: converter titular_id=0 → null, filtrar substitutos
   if (clean.equipe) {

@@ -29,11 +29,11 @@ class Fabricante(Base):
     site: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
 
     # ── Contato principal ────────────────────────────────────────────────
-    contato_nome: Mapped[str] = mapped_column(String(150), nullable=False)
-    contato_cargo: Mapped[str] = mapped_column(String(100), nullable=False)
-    contato_telefone1: Mapped[str] = mapped_column(String(30), nullable=False)
+    contato_nome: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    contato_cargo: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    contato_telefone1: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     contato_telefone2: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    contato_email: Mapped[str] = mapped_column(String(200), nullable=False)
+    contato_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # ── Auditoria ────────────────────────────────────────────────────────
     create_time: Mapped[datetime] = mapped_column(
