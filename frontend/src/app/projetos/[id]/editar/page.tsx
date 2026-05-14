@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2, X, Save, FolderKanban } from "lucide-react";
+import { ArrowLeft, Loader2, X, Save, FolderKanban, Archive } from "lucide-react";
 import {
   projetoCreateSchema,
   type ProjetoCreateFormData,
@@ -32,6 +32,117 @@ const inputCls =
 
 const selectCls =
   "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+
+/* ── Multi-select de Servidores ─────────────────────────────────────────── */
+
+function MultiSelectServidores({
+  servidores,
+  selectedIds,
+  onChange,
+  excludeIds = [],
+  placeholder = "Nenhum selecionado",
+  loading,
+}: {
+  servidores: Servidor[];
+  selectedIds: number[];
+  onChange: (ids: number[]) => void;
+  excludeIds?: number[];
+  placeholder?: string;
+  loading?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+  const opcoes = servidores.filter((s) => !excludeIds.includes(s.id));
+  const opcoesFiltradas = opcoes.filter((s) => s.nome.toLowerCase().includes(busca.toLowerCase()));
+  const toggle = (id: number) =>
+    onChange(
+      selectedIds.includes(id)
+        ? selectedIds.filter((x) => x !== id)
+        : [...selectedIds, id]
+    );
+  const selected = servidores.filter((s) => selectedIds.includes(s.id));
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`${selectCls} text-left flex items-center justify-between min-h-[38px] h-auto`}
+      >
+        <span className="flex flex-wrap gap-1 flex-1">
+          {selected.length === 0 ? (
+            <span className="text-slate-400 text-sm">
+              {loading ? "Carregando..." : placeholder}
+            </span>
+          ) : (
+            selected.map((s) => (
+              <span
+                key={s.id}
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300"
+              >
+                {s.nome}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); toggle(s.id); }}
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-800"
+                >
+                  <X size={9} />
+                </button>
+              </span>
+            ))
+          )}
+        </span>
+        <svg
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 flex flex-col">
+            <div className="sticky top-0 z-10 bg-white p-2 border-b border-slate-100 dark:bg-slate-800 dark:border-slate-700/60">
+              <input
+                type="text"
+                placeholder="Buscar servidor..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="w-full rounded border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900/50"
+              />
+            </div>
+            {opcoesFiltradas.length === 0 ? (
+              <div className="px-3 py-4 text-sm text-slate-500 italic text-center">Nenhum servidor encontrado.</div>
+            ) : (
+              opcoesFiltradas.map((s) => {
+                const sel = selectedIds.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggle(s.id)}
+                    className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 ${sel ? "bg-indigo-50 dark:bg-indigo-950/30" : ""}`}
+                  >
+                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${sel ? "border-indigo-500 bg-indigo-500 text-white" : "border-slate-300"}`}>
+                      {sel && (
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="font-medium text-slate-800 dark:text-slate-200">{s.nome}</div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 /* ── Label + Erro ───────────────────────────────────────────────────────── */
 
@@ -104,14 +215,19 @@ export default function EditarProjetoPage({ params }: { params: Promise<{ id: st
       processo_sei: "",
       prioridade: "media",
       complexidade: "Simples",
-      integrante_requisitante_id: 0,
-      integrante_tecnico_id: 0,
-      integrante_administrativo_id: 0,
+      is_legado: false,
+      integrantes_requisitantes_ids: [],
+      integrantes_tecnicos_ids: [],
+      integrantes_administrativos_ids: [],
+      substitutos_requisitantes_ids: [],
+      substitutos_tecnicos_ids: [],
+      substitutos_administrativos_ids: [],
       acoes_pdtic_ids: [],
       itens_pacc_ids: [],
     },
   });
 
+  const isLegado = watch("is_legado");
   const selectedAcoes = watch("acoes_pdtic_ids") ?? [];
   const selectedItens = watch("itens_pacc_ids") ?? [];
 
@@ -126,9 +242,13 @@ export default function EditarProjetoPage({ params }: { params: Promise<{ id: st
           processo_sei: data.processo_sei || "",
           prioridade: data.prioridade || "media",
           complexidade: data.complexidade || "Simples",
-          integrante_requisitante_id: data.integrante_requisitante?.id || 0,
-          integrante_tecnico_id: data.integrante_tecnico?.id || 0,
-          integrante_administrativo_id: data.integrante_administrativo?.id || 0,
+          is_legado: data.is_legado ?? false,
+          integrantes_requisitantes_ids: data.integrantes_requisitantes?.map(s => s.id) || [],
+          integrantes_tecnicos_ids: data.integrantes_tecnicos?.map(s => s.id) || [],
+          integrantes_administrativos_ids: data.integrantes_administrativos?.map(s => s.id) || [],
+          substitutos_requisitantes_ids: data.substitutos_requisitantes?.map(s => s.id) || [],
+          substitutos_tecnicos_ids: data.substitutos_tecnicos?.map(s => s.id) || [],
+          substitutos_administrativos_ids: data.substitutos_administrativos?.map(s => s.id) || [],
           acoes_pdtic_ids: data.acoes_pdtic?.map((a) => a.id) || [],
           itens_pacc_ids: data.itens_pacc?.map((i) => i.id) || [],
         });
@@ -229,6 +349,17 @@ export default function EditarProjetoPage({ params }: { params: Promise<{ id: st
 
         {/* ── Formulário ── */}
         <form onSubmit={handleSubmit(onSubmit)}>
+
+          {/* ══ Banner Projeto Anterior ══ */}
+          {isLegado && (
+            <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              <Archive size={16} className="shrink-0" />
+              <span>
+                <strong>Editando Projeto Anterior.</strong> Os campos Prioridade, Complexidade e Equipe de Planejamento não se aplicam e estão ocultos.
+              </span>
+            </div>
+          )}
+
           {/* ══ 1. DADOS BÁSICOS ══ */}
           <SectionTitle>Dados Básicos</SectionTitle>
           <div className="grid gap-6 sm:grid-cols-2">
@@ -248,65 +379,110 @@ export default function EditarProjetoPage({ params }: { params: Promise<{ id: st
               />
             </Field>
 
-            <Field label="Prioridade" required error={errors.prioridade?.message}>
-              <select {...register("prioridade")} className={selectCls}>
-                <option value="baixa">Baixa</option>
-                <option value="media">Média</option>
-                <option value="alta">Alta</option>
-              </select>
-            </Field>
+            {/* Prioridade e Complexidade — ocultos para Projeto Anterior */}
+            {!isLegado && (
+              <>
+                <Field label="Prioridade" required error={errors.prioridade?.message}>
+                  <select {...register("prioridade")} className={selectCls}>
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                  </select>
+                </Field>
 
-            <Field label="Complexidade" required error={errors.complexidade?.message}>
-              <select {...register("complexidade")} className={selectCls}>
-                <option value="Simples">Simples</option>
-                <option value="Intermediária">Intermediária</option>
-                <option value="Complexa">Complexa</option>
-              </select>
-            </Field>
+                <Field label="Complexidade" required error={errors.complexidade?.message}>
+                  <select {...register("complexidade")} className={selectCls}>
+                    <option value="Simples">Simples</option>
+                    <option value="Intermediária">Intermediária</option>
+                    <option value="Complexa">Complexa</option>
+                  </select>
+                </Field>
+              </>
+            )}
           </div>
 
-          {/* ══ 2. EQUIPE ══ */}
-          <SectionTitle>Equipe de Planejamento</SectionTitle>
-          <div className="grid gap-6 sm:grid-cols-1">
-            <Field label="Integrante Requisitante">
-              <select
-                {...register("integrante_requisitante_id", { valueAsNumber: true })}
-                className={selectCls}
-                disabled={loadingServidores}
-              >
-                <option value={0}>{loadingServidores ? "Carregando..." : "Selecione..."}</option>
-                {servidores.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nome} — {s.cargo}</option>
-                ))}
-              </select>
-            </Field>
+          {/* ══ 2. EQUIPE — oculta para Projeto Anterior ══ */}
+          {!isLegado && (
+            <>
+              <SectionTitle>Equipe de Planejamento</SectionTitle>
+              <div className="space-y-6">
+                {/* ── Bloco: Integrante Requisitante ── */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-5 bg-slate-50/30 dark:bg-slate-900/20">
+                  <div className="mb-4 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Integrante Requisitante</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Titular(es)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("integrantes_requisitantes_ids")}
+                        onChange={(ids) => setValue("integrantes_requisitantes_ids", ids)}
+                        placeholder="Selecione os titulares..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                    <Field label="Substituto(s)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("substitutos_requisitantes_ids")}
+                        onChange={(ids) => setValue("substitutos_requisitantes_ids", ids)}
+                        placeholder="Selecione os substitutos..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                  </div>
+                </div>
 
-            <Field label="Integrante Técnico">
-              <select
-                {...register("integrante_tecnico_id", { valueAsNumber: true })}
-                className={selectCls}
-                disabled={loadingServidores}
-              >
-                <option value={0}>{loadingServidores ? "Carregando..." : "Selecione..."}</option>
-                {servidores.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nome} — {s.cargo}</option>
-                ))}
-              </select>
-            </Field>
+                {/* ── Bloco: Integrante Técnico ── */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-5 bg-slate-50/30 dark:bg-slate-900/20">
+                  <div className="mb-4 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Integrante Técnico</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Titular(es)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("integrantes_tecnicos_ids")}
+                        onChange={(ids) => setValue("integrantes_tecnicos_ids", ids)}
+                        placeholder="Selecione os titulares..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                    <Field label="Substituto(s)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("substitutos_tecnicos_ids")}
+                        onChange={(ids) => setValue("substitutos_tecnicos_ids", ids)}
+                        placeholder="Selecione os substitutos..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                  </div>
+                </div>
 
-            <Field label="Integrante Administrativo">
-              <select
-                {...register("integrante_administrativo_id", { valueAsNumber: true })}
-                className={selectCls}
-                disabled={loadingServidores}
-              >
-                <option value={0}>{loadingServidores ? "Carregando..." : "Selecione..."}</option>
-                {servidores.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nome} — {s.cargo}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
+                {/* ── Bloco: Integrante Administrativo ── */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-5 bg-slate-50/30 dark:bg-slate-900/20">
+                  <div className="mb-4 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Integrante Administrativo</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Titular(es)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("integrantes_administrativos_ids")}
+                        onChange={(ids) => setValue("integrantes_administrativos_ids", ids)}
+                        placeholder="Selecione os titulares..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                    <Field label="Substituto(s)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("substitutos_administrativos_ids")}
+                        onChange={(ids) => setValue("substitutos_administrativos_ids", ids)}
+                        placeholder="Selecione os substitutos..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* ══ 3. PLANEJAMENTO ESTRATÉGICO ══ */}
           <SectionTitle>Planejamento Estratégico</SectionTitle>

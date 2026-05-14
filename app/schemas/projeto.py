@@ -14,7 +14,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.models.projeto import (
     StatusProjetoEnum,
@@ -36,6 +36,7 @@ class _UnidadeOrgResumo(BaseModel):
     id: int
     nome: str
     sigla: Optional[str] = None
+    caminho_completo: Optional[str] = None
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -56,9 +57,7 @@ class ServidorBase(BaseModel):
     funcao: Optional[str] = Field(
         None, max_length=200, examples=["Chefe de Seção"]
     )
-    departamento_id: int = Field(..., description="ID do Departamento.")
-    unidade_lotacao_id: Optional[int] = Field(None, description="ID da Unidade de Lotação.")
-    secao_id: Optional[int] = Field(None, description="ID da Seção.")
+    lotacao_id: int = Field(..., description="ID da Lotação.")
     email_funcional: Optional[EmailStr] = Field(
         None, max_length=200, examples=["servidor@orgao.gov.br"]
     )
@@ -76,9 +75,7 @@ class ServidorUpdate(BaseModel):
     nome: Optional[str] = Field(None, min_length=1, max_length=200)
     cargo: Optional[str] = Field(None, min_length=1, max_length=200)
     funcao: Optional[str] = Field(None, max_length=200)
-    departamento_id: Optional[int] = None
-    unidade_lotacao_id: Optional[int] = None
-    secao_id: Optional[int] = None
+    lotacao_id: Optional[int] = None
     email_funcional: Optional[EmailStr] = Field(None, max_length=200)
 
 
@@ -91,9 +88,7 @@ class ServidorResponse(ServidorBase):
     atualizado_em: datetime
 
     # Relacionamentos aninhados
-    departamento: Optional[_UnidadeOrgResumo] = None
-    unidade_lotacao: Optional[_UnidadeOrgResumo] = None
-    secao: Optional[_UnidadeOrgResumo] = None
+    lotacao: Optional[_UnidadeOrgResumo] = None
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -216,11 +211,11 @@ class ProjetoBase(BaseModel):
         ..., max_length=50,
         examples=["00052-00032300/2024-09"],
     )
-    prioridade: str = Field(
+    prioridade: Optional[str] = Field(
         default="media",
         examples=["baixa", "media", "alta"]
     )
-    complexidade: str = Field(
+    complexidade: Optional[str] = Field(
         default="Simples",
         examples=["Simples", "Intermediária", "Complexa"]
     )
@@ -242,13 +237,20 @@ class ProjetoCreate(ProjetoBase):
 
     - As listas de vínculos (PDTIC e PACC) podem vir vazias.
     - A equipe é opcional na criação.
+    - Se is_legado=True, prioridade/complexidade/equipe são ignorados.
     """
     status: StatusProjetoEnum = StatusProjetoEnum.FASE_INTERNA
+    is_legado: bool = False
 
-    # Equipe (opcional na criação)
-    integrante_requisitante_id: Optional[int] = None
-    integrante_tecnico_id: Optional[int] = None
-    integrante_administrativo_id: Optional[int] = None
+    # Equipe — Titulares (opcional na criação)
+    integrantes_requisitantes_ids: list[int] = Field(default_factory=list)
+    integrantes_tecnicos_ids: list[int] = Field(default_factory=list)
+    integrantes_administrativos_ids: list[int] = Field(default_factory=list)
+
+    # Equipe — Substitutos (opcional na criação)
+    substitutos_requisitantes_ids: list[int] = Field(default_factory=list)
+    substitutos_tecnicos_ids: list[int] = Field(default_factory=list)
+    substitutos_administrativos_ids: list[int] = Field(default_factory=list)
 
     # Vínculos com Planejamento Estratégico (podem ser vazios na criação)
     acoes_pdtic_ids: list[int] = Field(
@@ -262,6 +264,15 @@ class ProjetoCreate(ProjetoBase):
         examples=[[1, 2]],
     )
 
+    @model_validator(mode="after")
+    def ajustar_legado(self):
+        """Se projeto legado, força status CONTRATADO e anula classificação."""
+        if self.is_legado:
+            self.status = StatusProjetoEnum.CONTRATADO
+            self.prioridade = None
+            self.complexidade = None
+        return self
+
 
 class ProjetoUpdate(BaseModel):
     """Atualização parcial de projeto."""
@@ -271,9 +282,13 @@ class ProjetoUpdate(BaseModel):
     complexidade: Optional[str] = None
     status: Optional[StatusProjetoEnum] = None
 
-    integrante_requisitante_id: Optional[int] = None
-    integrante_tecnico_id: Optional[int] = None
-    integrante_administrativo_id: Optional[int] = None
+    integrantes_requisitantes_ids: Optional[list[int]] = None
+    integrantes_tecnicos_ids: Optional[list[int]] = None
+    integrantes_administrativos_ids: Optional[list[int]] = None
+
+    substitutos_requisitantes_ids: Optional[list[int]] = None
+    substitutos_tecnicos_ids: Optional[list[int]] = None
+    substitutos_administrativos_ids: Optional[list[int]] = None
 
     acoes_pdtic_ids: Optional[list[int]] = None
     itens_pacc_ids: Optional[list[int]] = None
@@ -302,7 +317,7 @@ class _AcaoPdticResumo(BaseModel):
     codigo_acao: str
     descricao: str
     status: str
-    tipo_necessidade: str
+    tipo_necessidade: list[str] = []
 
 
 class _ItemPaccResumo(BaseModel):
@@ -324,13 +339,19 @@ class ProjetoResponse(ProjetoBase):
 
     id: int
     status: StatusProjetoEnum
+    is_legado: bool = False
     criado_em: datetime
     atualizado_em: datetime
 
-    # Equipe (IDs)
-    integrante_requisitante_id: Optional[int] = None
-    integrante_tecnico_id: Optional[int] = None
-    integrante_administrativo_id: Optional[int] = None
+    # Equipe — Titulares (IDs)
+    integrantes_requisitantes_ids: list[int] = []
+    integrantes_tecnicos_ids: list[int] = []
+    integrantes_administrativos_ids: list[int] = []
+
+    # Equipe — Substitutos (IDs)
+    substitutos_requisitantes_ids: list[int] = []
+    substitutos_tecnicos_ids: list[int] = []
+    substitutos_administrativos_ids: list[int] = []
 
     # Fase Externa (Licitação)
     data_envio_licitacao: Optional[date] = None
@@ -340,10 +361,15 @@ class ProjetoResponse(ProjetoBase):
 class ProjetoComDetalhesResponse(ProjetoResponse):
     """Resposta enriquecida: equipe populada + artefatos + vínculos PDTIC/PACC."""
 
-    # Equipe completa (eager-loaded)
-    integrante_requisitante: Optional[ServidorResponse] = None
-    integrante_tecnico: Optional[ServidorResponse] = None
-    integrante_administrativo: Optional[ServidorResponse] = None
+    # Equipe completa — Titulares (eager-loaded)
+    integrantes_requisitantes: list[ServidorResponse] = []
+    integrantes_tecnicos: list[ServidorResponse] = []
+    integrantes_administrativos: list[ServidorResponse] = []
+
+    # Equipe completa — Substitutos (eager-loaded)
+    substitutos_requisitantes: list[ServidorResponse] = []
+    substitutos_tecnicos: list[ServidorResponse] = []
+    substitutos_administrativos: list[ServidorResponse] = []
 
     # Vínculos com planejamento
     acoes_pdtic: list[_AcaoPdticResumo] = []
@@ -418,9 +444,10 @@ class ProjetoListagemResponse(BaseModel):
     id: int
     nome: str
     processo_sei: str
-    prioridade: str
-    complexidade: str
+    prioridade: Optional[str] = None
+    complexidade: Optional[str] = None
     status: StatusProjetoEnum
+    is_legado: bool = False
     criado_em: datetime
 
     # Contagens (calculadas na rota)

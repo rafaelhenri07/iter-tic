@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, Loader2, X, Plus, FolderKanban } from "lucide-react";
+import { ArrowLeft, Loader2, X, Plus, FolderKanban, Archive, Info } from "lucide-react";
 import {
   projetoCreateSchema,
   type ProjetoCreateFormData,
@@ -32,6 +32,117 @@ const inputCls =
 
 const selectCls =
   "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+
+/* ── Multi-select de Servidores ─────────────────────────────────────────── */
+
+function MultiSelectServidores({
+  servidores,
+  selectedIds,
+  onChange,
+  excludeIds = [],
+  placeholder = "Nenhum selecionado",
+  loading,
+}: {
+  servidores: Servidor[];
+  selectedIds: number[];
+  onChange: (ids: number[]) => void;
+  excludeIds?: number[];
+  placeholder?: string;
+  loading?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+  const opcoes = servidores.filter((s) => !excludeIds.includes(s.id));
+  const opcoesFiltradas = opcoes.filter((s) => s.nome.toLowerCase().includes(busca.toLowerCase()));
+  const toggle = (id: number) =>
+    onChange(
+      selectedIds.includes(id)
+        ? selectedIds.filter((x) => x !== id)
+        : [...selectedIds, id]
+    );
+  const selected = servidores.filter((s) => selectedIds.includes(s.id));
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`${selectCls} text-left flex items-center justify-between min-h-[38px] h-auto`}
+      >
+        <span className="flex flex-wrap gap-1 flex-1">
+          {selected.length === 0 ? (
+            <span className="text-slate-400 text-sm">
+              {loading ? "Carregando..." : placeholder}
+            </span>
+          ) : (
+            selected.map((s) => (
+              <span
+                key={s.id}
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300"
+              >
+                {s.nome}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); toggle(s.id); }}
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-800"
+                >
+                  <X size={9} />
+                </button>
+              </span>
+            ))
+          )}
+        </span>
+        <svg
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 flex flex-col">
+            <div className="sticky top-0 z-10 bg-white p-2 border-b border-slate-100 dark:bg-slate-800 dark:border-slate-700/60">
+              <input
+                type="text"
+                placeholder="Buscar servidor..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="w-full rounded border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900/50"
+              />
+            </div>
+            {opcoesFiltradas.length === 0 ? (
+              <div className="px-3 py-4 text-sm text-slate-500 italic text-center">Nenhum servidor encontrado.</div>
+            ) : (
+              opcoesFiltradas.map((s) => {
+                const sel = selectedIds.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggle(s.id)}
+                    className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 ${sel ? "bg-indigo-50 dark:bg-indigo-950/30" : ""}`}
+                  >
+                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${sel ? "border-indigo-500 bg-indigo-500 text-white" : "border-slate-300"}`}>
+                      {sel && (
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="font-medium text-slate-800 dark:text-slate-200">{s.nome}</div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 /* ── Label + Erro ───────────────────────────────────────────────────────── */
 
@@ -98,16 +209,21 @@ export default function NovoProjetoPage() {
     defaultValues: {
       nome: "",
       processo_sei: "",
+      is_legado: false,
       prioridade: "media",
       complexidade: "Simples",
-      integrante_requisitante_id: 0,
-      integrante_tecnico_id: 0,
-      integrante_administrativo_id: 0,
+      integrantes_requisitantes_ids: [],
+      integrantes_tecnicos_ids: [],
+      integrantes_administrativos_ids: [],
+      substitutos_requisitantes_ids: [],
+      substitutos_tecnicos_ids: [],
+      substitutos_administrativos_ids: [],
       acoes_pdtic_ids: [],
       itens_pacc_ids: [],
     },
   });
 
+  const isLegado = watch("is_legado");
   const selectedAcoes = watch("acoes_pdtic_ids") ?? [];
   const selectedItens = watch("itens_pacc_ids") ?? [];
 
@@ -160,8 +276,11 @@ export default function NovoProjetoPage() {
       const payload = cleanProjetoPayload(data);
       const novoProjeto = await criarProjeto(payload);
 
-      setSubmitPhase("Inicializando artefatos...");
-      await inicializarArtefatos(novoProjeto.id);
+      // Projetos legados NÃO inicializam artefatos
+      if (!data.is_legado) {
+        setSubmitPhase("Inicializando artefatos...");
+        await inicializarArtefatos(novoProjeto.id);
+      }
 
       showToast("success", `Projeto "${data.nome}" criado com sucesso!`);
       router.push("/projetos");
@@ -200,6 +319,67 @@ export default function NovoProjetoPage() {
 
         {/* ── Formulário ── */}
         <form onSubmit={handleSubmit(onSubmit)}>
+
+          {/* ══ TOGGLE LEGADO ══ */}
+          <div className="mt-8 mb-2">
+            <label
+              className={`flex items-center gap-4 rounded-xl border-2 px-5 py-4 cursor-pointer transition-all ${
+                isLegado
+                  ? "border-amber-400 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-950/30"
+                  : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600"
+              }`}
+            >
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                isLegado
+                  ? "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400"
+                  : "bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500"
+              }`}>
+                <Archive size={20} />
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                    Projeto Anterior (Contratação passada)
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-start gap-1">
+                  <Info size={12} className="shrink-0 mt-0.5 text-slate-400" />
+                  Pula a fase de elaboração. Ideal para cadastrar contratos que já estão vigentes ou finalizados.
+                </p>
+              </div>
+
+              {/* Toggle Switch */}
+              <div className="relative shrink-0">
+                <input
+                  type="checkbox"
+                  {...register("is_legado")}
+                  className="sr-only peer"
+                />
+                <div className={`h-6 w-11 rounded-full transition-colors ${
+                  isLegado
+                    ? "bg-amber-500"
+                    : "bg-slate-300 dark:bg-slate-600"
+                }`} />
+                <div className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                  isLegado ? "translate-x-5" : "translate-x-0"
+                }`} />
+              </div>
+            </label>
+          </div>
+
+          {/* ══ Banner informativo (quando legado) ══ */}
+          {isLegado && (
+            <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                 style={{ animation: "modalIn 0.2s ease-out" }}>
+              <Archive size={16} className="shrink-0" />
+              <span>
+                <strong>Modo Projeto Anterior ativo.</strong> O projeto será criado com status "Contratado" e sem artefatos obrigatórios. 
+                Os campos Prioridade, Complexidade e Equipe estão ocultos.
+              </span>
+            </div>
+          )}
+
           {/* ══ 1. DADOS BÁSICOS ══ */}
           <SectionTitle>Dados Básicos</SectionTitle>
           <div className="grid gap-6 sm:grid-cols-2">
@@ -220,65 +400,110 @@ export default function NovoProjetoPage() {
               />
             </Field>
 
-            <Field label="Prioridade" required error={errors.prioridade?.message}>
-              <select {...register("prioridade")} className={selectCls}>
-                <option value="baixa">Baixa</option>
-                <option value="media">Média</option>
-                <option value="alta">Alta</option>
-              </select>
-            </Field>
+            {/* Prioridade e Complexidade — ocultos para legado */}
+            {!isLegado && (
+              <>
+                <Field label="Prioridade" required error={errors.prioridade?.message}>
+                  <select {...register("prioridade")} className={selectCls}>
+                    <option value="baixa">Baixa</option>
+                    <option value="media">Média</option>
+                    <option value="alta">Alta</option>
+                  </select>
+                </Field>
 
-            <Field label="Complexidade" required error={errors.complexidade?.message}>
-              <select {...register("complexidade")} className={selectCls}>
-                <option value="Simples">Simples</option>
-                <option value="Intermediária">Intermediária</option>
-                <option value="Complexa">Complexa</option>
-              </select>
-            </Field>
+                <Field label="Complexidade" required error={errors.complexidade?.message}>
+                  <select {...register("complexidade")} className={selectCls}>
+                    <option value="Simples">Simples</option>
+                    <option value="Intermediária">Intermediária</option>
+                    <option value="Complexa">Complexa</option>
+                  </select>
+                </Field>
+              </>
+            )}
           </div>
 
-          {/* ══ 2. EQUIPE ══ */}
-          <SectionTitle>Equipe de Planejamento</SectionTitle>
-          <div className="grid gap-6 sm:grid-cols-1">
-            <Field label="Integrante Requisitante">
-              <select
-                {...register("integrante_requisitante_id", { valueAsNumber: true })}
-                className={selectCls}
-                disabled={loadingServidores}
-              >
-                <option value={0}>{loadingServidores ? "Carregando..." : "Selecione..."}</option>
-                {servidores.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nome} — {s.cargo}</option>
-                ))}
-              </select>
-            </Field>
+          {/* ══ 2. EQUIPE — oculta para legado ══ */}
+          {!isLegado && (
+            <>
+              <SectionTitle>Equipe de Planejamento</SectionTitle>
+              <div className="space-y-6">
+                {/* ── Bloco: Integrante Requisitante ── */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-5 bg-slate-50/30 dark:bg-slate-900/20">
+                  <div className="mb-4 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Integrante Requisitante</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Titular(es)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("integrantes_requisitantes_ids")}
+                        onChange={(ids) => setValue("integrantes_requisitantes_ids", ids)}
+                        placeholder="Selecione os titulares..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                    <Field label="Substituto(s)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("substitutos_requisitantes_ids")}
+                        onChange={(ids) => setValue("substitutos_requisitantes_ids", ids)}
+                        placeholder="Selecione os substitutos..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                  </div>
+                </div>
 
-            <Field label="Integrante Técnico">
-              <select
-                {...register("integrante_tecnico_id", { valueAsNumber: true })}
-                className={selectCls}
-                disabled={loadingServidores}
-              >
-                <option value={0}>{loadingServidores ? "Carregando..." : "Selecione..."}</option>
-                {servidores.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nome} — {s.cargo}</option>
-                ))}
-              </select>
-            </Field>
+                {/* ── Bloco: Integrante Técnico ── */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-5 bg-slate-50/30 dark:bg-slate-900/20">
+                  <div className="mb-4 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Integrante Técnico</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Titular(es)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("integrantes_tecnicos_ids")}
+                        onChange={(ids) => setValue("integrantes_tecnicos_ids", ids)}
+                        placeholder="Selecione os titulares..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                    <Field label="Substituto(s)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("substitutos_tecnicos_ids")}
+                        onChange={(ids) => setValue("substitutos_tecnicos_ids", ids)}
+                        placeholder="Selecione os substitutos..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                  </div>
+                </div>
 
-            <Field label="Integrante Administrativo">
-              <select
-                {...register("integrante_administrativo_id", { valueAsNumber: true })}
-                className={selectCls}
-                disabled={loadingServidores}
-              >
-                <option value={0}>{loadingServidores ? "Carregando..." : "Selecione..."}</option>
-                {servidores.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nome} — {s.cargo}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
+                {/* ── Bloco: Integrante Administrativo ── */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-5 bg-slate-50/30 dark:bg-slate-900/20">
+                  <div className="mb-4 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Integrante Administrativo</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Titular(es)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("integrantes_administrativos_ids")}
+                        onChange={(ids) => setValue("integrantes_administrativos_ids", ids)}
+                        placeholder="Selecione os titulares..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                    <Field label="Substituto(s)">
+                      <MultiSelectServidores
+                        servidores={servidores}
+                        selectedIds={watch("substitutos_administrativos_ids")}
+                        onChange={(ids) => setValue("substitutos_administrativos_ids", ids)}
+                        placeholder="Selecione os substitutos..."
+                        loading={loadingServidores}
+                      />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* ══ 3. PLANEJAMENTO ESTRATÉGICO ══ */}
           <SectionTitle>Planejamento Estratégico</SectionTitle>
@@ -394,7 +619,11 @@ export default function NovoProjetoPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex h-10 items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-500 px-6 text-sm font-bold text-white shadow-md shadow-violet-500/25 transition-all hover:brightness-110 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+                className={`flex h-10 items-center gap-2 rounded-lg px-6 text-sm font-bold text-white shadow-md transition-all hover:brightness-110 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isLegado
+                    ? "bg-gradient-to-r from-amber-500 to-amber-600 shadow-amber-500/25"
+                    : "bg-gradient-to-r from-violet-600 to-purple-500 shadow-violet-500/25"
+                }`}
               >
                 {submitting ? (
                   <>
@@ -403,8 +632,8 @@ export default function NovoProjetoPage() {
                   </>
                 ) : (
                   <>
-                    <Plus size={14} />
-                    Criar Projeto
+                    {isLegado ? <Archive size={14} /> : <Plus size={14} />}
+                    {isLegado ? "Cadastrar Projeto Anterior" : "Criar Projeto"}
                   </>
                 )}
               </button>

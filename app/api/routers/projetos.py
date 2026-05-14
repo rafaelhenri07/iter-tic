@@ -13,6 +13,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -28,6 +29,8 @@ from app.models.projeto import (
     ObservacaoFaseExterna,
     Projeto,
     ProjetoTramitacao,
+    ProjetoEquipe,
+    PapelProjetoEnum,
     Servidor,
     StatusArtefatoEnum,
     StatusProjetoEnum,
@@ -111,6 +114,15 @@ def _calcular_data_fim_prevista(
 # ║  SERVIDORES                                                             ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
+def _servidor_lotacao_options():
+    """Constrói cadeia de selectinload para carregar lotação + pais (caminho_completo)."""
+    from app.models.estrutura_organizacional import UnidadeOrganizacional
+    opt = selectinload(Servidor.lotacao).selectinload(UnidadeOrganizacional.unidade_pai)
+    for _ in range(4):
+        opt = opt.selectinload(UnidadeOrganizacional.unidade_pai)
+    return opt
+
+
 
 @router.get(
     "/servidores",
@@ -123,11 +135,7 @@ async def listar_servidores(
 ):
     stmt = (
         select(Servidor)
-        .options(
-            selectinload(Servidor.departamento),
-            selectinload(Servidor.unidade_lotacao),
-            selectinload(Servidor.secao),
-        )
+        .options(_servidor_lotacao_options())
         .order_by(Servidor.nome)
     )
     if q:
@@ -158,18 +166,32 @@ async def criar_servidor(
             detail=f"Matrícula '{payload.matricula}' já cadastrada.",
         )
 
+    from app.models.estrutura_organizacional import UnidadeOrganizacional
+
+    # Verificar se a lotação existe
+    lotacao = await db.get(UnidadeOrganizacional, payload.lotacao_id)
+    if not lotacao:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Lotação com id={payload.lotacao_id} não encontrada.",
+        )
+
     servidor = Servidor(**payload.model_dump())
     db.add(servidor)
-    await db.flush()
-    
-    # Re-consultar para eager loading
+
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Erro de integridade ao salvar servidor. Verifique os dados.",
+        )
+
+    # Re-consultar com eager loading recursivo para caminho_completo
     stmt = (
         select(Servidor)
-        .options(
-            selectinload(Servidor.departamento),
-            selectinload(Servidor.unidade_lotacao),
-            selectinload(Servidor.secao),
-        )
+        .options(_servidor_lotacao_options())
         .where(Servidor.id == servidor.id)
     )
     servidor = (await db.execute(stmt)).scalar_one()
@@ -187,11 +209,7 @@ async def obter_servidor(
 ):
     stmt = (
         select(Servidor)
-        .options(
-            selectinload(Servidor.departamento),
-            selectinload(Servidor.unidade_lotacao),
-            selectinload(Servidor.secao),
-        )
+        .options(_servidor_lotacao_options())
         .where(Servidor.id == servidor_id)
     )
     servidor = (await db.execute(stmt)).scalar_one_or_none()
@@ -239,11 +257,7 @@ async def atualizar_servidor(
     # Para garantir o carregamento das FKs no retorno, re-consultamos
     stmt = (
         select(Servidor)
-        .options(
-            selectinload(Servidor.departamento),
-            selectinload(Servidor.unidade_lotacao),
-            selectinload(Servidor.secao),
-        )
+        .options(_servidor_lotacao_options())
         .where(Servidor.id == servidor.id)
     )
     servidor = (await db.execute(stmt)).scalar_one()
@@ -287,15 +301,16 @@ async def listar_projetos(
     status_filtro: StatusProjetoEnum | None = Query(
         None, alias="status", description="Filtrar por status"
     ),
+    is_legado: bool | None = Query(
+        None, description="Filtrar por tipo: true=legados, false=nova esteira"
+    ),
     q: str | None = Query(None, description="Busca por nome ou processo SEI"),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = (
         select(Projeto)
         .options(
-            selectinload(Projeto.integrante_requisitante),
-            selectinload(Projeto.integrante_tecnico),
-            selectinload(Projeto.integrante_administrativo),
+            selectinload(Projeto.equipe_membros).selectinload(ProjetoEquipe.servidor),
             selectinload(Projeto.acoes_pdtic),
             selectinload(Projeto.itens_pacc),
             selectinload(Projeto.artefatos).selectinload(Artefato.comentarios),
@@ -306,6 +321,8 @@ async def listar_projetos(
 
     if status_filtro:
         stmt = stmt.where(Projeto.status == status_filtro)
+    if is_legado is not None:
+        stmt = stmt.where(Projeto.is_legado == is_legado)
     if q:
         like = f"%{q}%"
         stmt = stmt.where(
@@ -369,6 +386,14 @@ async def listar_projetos(
                     ],
                 )
             )
+        reqs = [m.servidor.nome for m in p.equipe_membros if m.papel == PapelProjetoEnum.REQUISITANTE]
+        tecs = [m.servidor.nome for m in p.equipe_membros if m.papel == PapelProjetoEnum.TECNICO]
+        adms = [m.servidor.nome for m in p.equipe_membros if m.papel == PapelProjetoEnum.ADMINISTRATIVO]
+
+        nome_req = f"{reqs[0]} (+{len(reqs)-1})" if len(reqs) > 1 else (reqs[0] if reqs else None)
+        nome_tec = f"{tecs[0]} (+{len(tecs)-1})" if len(tecs) > 1 else (tecs[0] if tecs else None)
+        nome_adm = f"{adms[0]} (+{len(adms)-1})" if len(adms) > 1 else (adms[0] if adms else None)
+
         response.append(
             ProjetoListagemResponse(
                 id=p.id,
@@ -377,27 +402,16 @@ async def listar_projetos(
                 prioridade=p.prioridade,
                 complexidade=p.complexidade,
                 status=p.status,
+                is_legado=p.is_legado,
                 criado_em=p.criado_em,
                 qtd_acoes_pdtic=len(p.acoes_pdtic),
                 qtd_itens_pacc=len(p.itens_pacc),
                 qtd_artefatos_total=len(p.artefatos),
                 qtd_artefatos_concluidos=concluidos,
                 artefatos_resumo=artefatos_resumo,
-                nome_requisitante=(
-                    p.integrante_requisitante.nome
-                    if p.integrante_requisitante
-                    else None
-                ),
-                nome_tecnico=(
-                    p.integrante_tecnico.nome
-                    if p.integrante_tecnico
-                    else None
-                ),
-                nome_administrativo=(
-                    p.integrante_administrativo.nome
-                    if p.integrante_administrativo
-                    else None
-                ),
+                nome_requisitante=nome_req,
+                nome_tecnico=nome_tec,
+                nome_administrativo=nome_adm,
                 data_envio_licitacao=p.data_envio_licitacao,
                 situacao_licitacao_texto=p.situacao_licitacao_texto,
                 tramitacoes_resumo=[
@@ -451,20 +465,37 @@ async def criar_projeto(
             ),
         )
 
-    # ── Validar existência dos servidores ────────────────────────────────────
-    for campo, label in [
-        ("integrante_requisitante_id", "Integrante Requisitante"),
-        ("integrante_tecnico_id", "Integrante Técnico"),
-        ("integrante_administrativo_id", "Integrante Administrativo"),
-    ]:
-        sid = getattr(payload, campo)
-        if sid is not None:
-            servidor = await db.get(Servidor, sid)
-            if not servidor:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"{label} (id={sid}) não encontrado.",
-                )
+    # ── Validar existência dos servidores (pula para projetos legados) ──────
+    equipe = []
+    if not payload.is_legado:
+        for sids, papel in [
+            (payload.integrantes_requisitantes_ids, PapelProjetoEnum.REQUISITANTE),
+            (payload.integrantes_tecnicos_ids, PapelProjetoEnum.TECNICO),
+            (payload.integrantes_administrativos_ids, PapelProjetoEnum.ADMINISTRATIVO),
+        ]:
+            for sid in sids:
+                servidor = await db.get(Servidor, sid)
+                if not servidor:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Servidor (id={sid}) não encontrado.",
+                    )
+                equipe.append(ProjetoEquipe(servidor_id=sid, papel=papel, is_titular=True))
+
+        # Substitutos
+        for sids, papel in [
+            (payload.substitutos_requisitantes_ids, PapelProjetoEnum.REQUISITANTE),
+            (payload.substitutos_tecnicos_ids, PapelProjetoEnum.TECNICO),
+            (payload.substitutos_administrativos_ids, PapelProjetoEnum.ADMINISTRATIVO),
+        ]:
+            for sid in sids:
+                servidor = await db.get(Servidor, sid)
+                if not servidor:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Servidor (id={sid}) não encontrado.",
+                    )
+                equipe.append(ProjetoEquipe(servidor_id=sid, papel=papel, is_titular=False))
 
     # ── Validar ações PDTIC ─────────────────────────────────────────────────
     acoes = []
@@ -489,10 +520,23 @@ async def criar_projeto(
         itens.append(item)
 
     # ── Criar projeto ───────────────────────────────────────────────────────
-    dados = payload.model_dump(exclude={"acoes_pdtic_ids", "itens_pacc_ids"})
+    dados = payload.model_dump(
+        exclude={
+            "acoes_pdtic_ids", 
+            "itens_pacc_ids", 
+            "integrantes_requisitantes_ids", 
+            "integrantes_tecnicos_ids", 
+            "integrantes_administrativos_ids",
+            "substitutos_requisitantes_ids",
+            "substitutos_tecnicos_ids",
+            "substitutos_administrativos_ids",
+        }
+    )
     projeto = Projeto(**dados)
     projeto.acoes_pdtic = acoes
     projeto.itens_pacc = itens
+    if equipe:
+        projeto.equipe_membros = equipe
 
     db.add(projeto)
     await db.flush()
@@ -519,6 +563,7 @@ async def obter_projeto(
     db: AsyncSession = Depends(get_db),
 ):
     projeto = await _carregar_projeto_completo(projeto_id, db)
+    _preencher_equipe_response(projeto)
     return projeto
 
 
@@ -536,6 +581,7 @@ async def obter_painel_projeto(
     db: AsyncSession = Depends(get_db),
 ):
     projeto = await _carregar_projeto_completo(projeto_id, db)
+    _preencher_equipe_response(projeto)
 
     total = len(projeto.artefatos)
     concluidos = sum(
@@ -591,18 +637,62 @@ async def atualizar_projeto(
             )
 
     # ── Validar servidores se alterados ──────────────────────────────────────
-    for campo in [
-        "integrante_requisitante_id",
-        "integrante_tecnico_id",
-        "integrante_administrativo_id",
-    ]:
-        if campo in dados and dados[campo] is not None:
-            servidor = await db.get(Servidor, dados[campo])
-            if not servidor:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Servidor id={dados[campo]} não encontrado.",
-                )
+    from sqlalchemy import delete
+    
+    reqs_ids = dados.get("integrantes_requisitantes_ids")
+    tecs_ids = dados.get("integrantes_tecnicos_ids")
+    adms_ids = dados.get("integrantes_administrativos_ids")
+    sub_reqs_ids = dados.get("substitutos_requisitantes_ids")
+    sub_tecs_ids = dados.get("substitutos_tecnicos_ids")
+    sub_adms_ids = dados.get("substitutos_administrativos_ids")
+
+    equipe_changed = any(v is not None for v in [reqs_ids, tecs_ids, adms_ids, sub_reqs_ids, sub_tecs_ids, sub_adms_ids])
+
+    if equipe_changed:
+        # Pega a equipe atual para o que não foi enviado no payload
+        if reqs_ids is None:
+            reqs_ids = [m.servidor_id for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.REQUISITANTE and m.is_titular]
+        if tecs_ids is None:
+            tecs_ids = [m.servidor_id for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.TECNICO and m.is_titular]
+        if adms_ids is None:
+            adms_ids = [m.servidor_id for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.ADMINISTRATIVO and m.is_titular]
+        if sub_reqs_ids is None:
+            sub_reqs_ids = [m.servidor_id for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.REQUISITANTE and not m.is_titular]
+        if sub_tecs_ids is None:
+            sub_tecs_ids = [m.servidor_id for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.TECNICO and not m.is_titular]
+        if sub_adms_ids is None:
+            sub_adms_ids = [m.servidor_id for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.ADMINISTRATIVO and not m.is_titular]
+        
+        # Validar servidores
+        for sid in set(reqs_ids + tecs_ids + adms_ids + sub_reqs_ids + sub_tecs_ids + sub_adms_ids):
+            if not await db.get(Servidor, sid):
+                raise HTTPException(status_code=404, detail=f"Servidor id={sid} não encontrado.")
+        
+        # Atualizar equipe (limpar e recriar)
+        await db.execute(delete(ProjetoEquipe).where(ProjetoEquipe.projeto_id == projeto_id))
+        
+        equipe_nova = []
+        for sid in reqs_ids:
+            equipe_nova.append(ProjetoEquipe(servidor_id=sid, papel=PapelProjetoEnum.REQUISITANTE, is_titular=True))
+        for sid in tecs_ids:
+            equipe_nova.append(ProjetoEquipe(servidor_id=sid, papel=PapelProjetoEnum.TECNICO, is_titular=True))
+        for sid in adms_ids:
+            equipe_nova.append(ProjetoEquipe(servidor_id=sid, papel=PapelProjetoEnum.ADMINISTRATIVO, is_titular=True))
+        for sid in sub_reqs_ids:
+            equipe_nova.append(ProjetoEquipe(servidor_id=sid, papel=PapelProjetoEnum.REQUISITANTE, is_titular=False))
+        for sid in sub_tecs_ids:
+            equipe_nova.append(ProjetoEquipe(servidor_id=sid, papel=PapelProjetoEnum.TECNICO, is_titular=False))
+        for sid in sub_adms_ids:
+            equipe_nova.append(ProjetoEquipe(servidor_id=sid, papel=PapelProjetoEnum.ADMINISTRATIVO, is_titular=False))
+            
+        projeto.equipe_membros = equipe_nova
+        
+    dados.pop("integrantes_requisitantes_ids", None)
+    dados.pop("integrantes_tecnicos_ids", None)
+    dados.pop("integrantes_administrativos_ids", None)
+    dados.pop("substitutos_requisitantes_ids", None)
+    dados.pop("substitutos_tecnicos_ids", None)
+    dados.pop("substitutos_administrativos_ids", None)
 
     # ── Atualizar vínculos PDTIC se fornecidos ──────────────────────────────
     if "acoes_pdtic_ids" in dados:
@@ -638,6 +728,9 @@ async def atualizar_projeto(
 
     await db.flush()
     await db.refresh(projeto)
+    
+    projeto = await _carregar_projeto_completo(projeto_id, db)
+    _preencher_equipe_response(projeto)
     return projeto
 
 
@@ -1383,9 +1476,7 @@ async def _carregar_projeto_completo(
     stmt = (
         select(Projeto)
         .options(
-            selectinload(Projeto.integrante_requisitante),
-            selectinload(Projeto.integrante_tecnico),
-            selectinload(Projeto.integrante_administrativo),
+            selectinload(Projeto.equipe_membros).selectinload(ProjetoEquipe.servidor).selectinload(Servidor.lotacao),
             selectinload(Projeto.acoes_pdtic),
             selectinload(Projeto.itens_pacc),
             selectinload(Projeto.artefatos),
@@ -1411,3 +1502,24 @@ async def _verificar_promocao_projeto(
     unificados em 'Fase interna'.
     """
     pass
+
+def _preencher_equipe_response(projeto: Projeto):
+    """Mapeia equipe_membros nativo do ORM para propriedades efêmeras de resposta"""
+    # Titulares
+    projeto.integrantes_requisitantes = [m.servidor for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.REQUISITANTE and m.is_titular]
+    projeto.integrantes_tecnicos = [m.servidor for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.TECNICO and m.is_titular]
+    projeto.integrantes_administrativos = [m.servidor for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.ADMINISTRATIVO and m.is_titular]
+    
+    projeto.integrantes_requisitantes_ids = [s.id for s in projeto.integrantes_requisitantes]
+    projeto.integrantes_tecnicos_ids = [s.id for s in projeto.integrantes_tecnicos]
+    projeto.integrantes_administrativos_ids = [s.id for s in projeto.integrantes_administrativos]
+
+    # Substitutos
+    projeto.substitutos_requisitantes = [m.servidor for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.REQUISITANTE and not m.is_titular]
+    projeto.substitutos_tecnicos = [m.servidor for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.TECNICO and not m.is_titular]
+    projeto.substitutos_administrativos = [m.servidor for m in projeto.equipe_membros if m.papel == PapelProjetoEnum.ADMINISTRATIVO and not m.is_titular]
+    
+    projeto.substitutos_requisitantes_ids = [s.id for s in projeto.substitutos_requisitantes]
+    projeto.substitutos_tecnicos_ids = [s.id for s in projeto.substitutos_tecnicos]
+    projeto.substitutos_administrativos_ids = [s.id for s in projeto.substitutos_administrativos]
+

@@ -124,7 +124,7 @@ export default function ProjetoDetalhesPage({
   }
 
   const projeto = data.projeto;
-  const complexidade = COMPLEXIDADE_CONFIG[projeto.complexidade];
+  const complexidade = projeto.complexidade ? COMPLEXIDADE_CONFIG[projeto.complexidade] : null;
   const statusCfg = STATUS_PROJETO_CONFIG[projeto.status];
 
   return (
@@ -161,12 +161,19 @@ export default function ProjetoDetalhesPage({
             >
               {statusCfg.icon} {projeto.status}
             </span>
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${complexidade.cls}`}
-            >
-              <Shield size={11} />
-              {complexidade.label}
-            </span>
+            {projeto.is_legado && (
+              <span className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
+                📋 Anterior
+              </span>
+            )}
+            {complexidade && !projeto.is_legado && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${complexidade.cls}`}
+              >
+                <Shield size={11} />
+                {complexidade.label}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -230,13 +237,13 @@ export default function ProjetoDetalhesPage({
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">Prioridade</label>
                   <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[42px] flex items-center capitalize">
-                    {projeto.prioridade || "Média"}
+                    {projeto.prioridade ? projeto.prioridade : <span className="text-slate-400 italic">Não se aplica</span>}
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">Complexidade</label>
                   <div className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[42px] flex items-center capitalize">
-                    {projeto.complexidade}
+                    {projeto.complexidade ? projeto.complexidade : <span className="text-slate-400 italic">Não se aplica</span>}
                   </div>
                 </div>
               </div>
@@ -293,6 +300,18 @@ export default function ProjetoDetalhesPage({
         {/* ═══ ABA: ARTEFATOS (TABELA DE AUDITORIA READ-ONLY) ═══ */}
         {activeTab === "artefatos" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {projeto.is_legado ? (
+              <div className="rounded-2xl border border-dashed border-amber-200 dark:border-amber-800 px-6 py-10 flex flex-col items-center gap-3 text-center">
+                <span className="text-3xl">📦</span>
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Projeto Anterior — Sem Esteira de Artefatos</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md">Projetos anteriores representam contratações passadas e não possuem os artefatos da fase interna registrados no sistema.</p>
+              </div>
+            ) : projeto.artefatos.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border px-6 py-10 flex flex-col items-center gap-3 text-center">
+                <Inbox size={32} className="text-foreground-muted/30" />
+                <p className="text-sm font-medium text-foreground-muted">Nenhum artefato inicializado.</p>
+              </div>
+            ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-200">
               <table className="w-full border-collapse text-left text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-background-card">
                 <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 font-semibold border-b border-slate-200 dark:border-slate-700">
@@ -352,39 +371,93 @@ export default function ProjetoDetalhesPage({
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         )}
 
         {/* ═══ ABA: EQUIPE ═══ */}
         {activeTab === "equipe" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground-muted">
-              <Users size={16} className="text-violet-500" /> Equipe de Planejamento
-            </div>
-            <div className="grid grid-cols-1 gap-5">
-              {([
-                { label: "Integrante Requisitante", pessoa: projeto.integrante_requisitante },
-                { label: "Integrante Técnico", pessoa: projeto.integrante_tecnico },
-                { label: "Integrante Administrativo", pessoa: projeto.integrante_administrativo },
-              ] as const).map(({ label, pessoa }) => (
-                <div key={label} className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-4 bg-slate-50/30 dark:bg-slate-900/20">
-                  <div className="mb-2 text-xs font-bold uppercase tracking-wider text-foreground-muted">{label}</div>
-                  {pessoa ? (
-                    <div className="rounded-lg border border-border bg-background-secondary px-3 py-2 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-foreground">{pessoa.nome}</div>
-                        <div className="mt-0.5 flex items-center gap-3 text-xs text-foreground-muted">
-                          <span>{pessoa.cargo}</span>
-                          <span className="font-mono text-[11px]">Mat. {pessoa.matricula}</span>
+            {projeto.is_legado ? (
+              <div className="rounded-2xl border border-dashed border-amber-200 dark:border-amber-800 px-6 py-10 flex flex-col items-center gap-3 text-center">
+                <span className="text-3xl">📦</span>
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Projeto Anterior — Equipe Não Aplicável</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md">Projetos anteriores representam contratações passadas e não possuem equipe de planejamento cadastrada no sistema.</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground-muted">
+                  <Users size={16} className="text-violet-500" /> Equipe de Planejamento
+                </div>
+                <div className="grid grid-cols-1 gap-5">
+                  {([
+                    {
+                      label: "Integrante Requisitante",
+                      titulares: projeto.integrantes_requisitantes || [],
+                      substitutos: projeto.substitutos_requisitantes || [],
+                    },
+                    {
+                      label: "Integrante Técnico",
+                      titulares: projeto.integrantes_tecnicos || [],
+                      substitutos: projeto.substitutos_tecnicos || [],
+                    },
+                    {
+                      label: "Integrante Administrativo",
+                      titulares: projeto.integrantes_administrativos || [],
+                      substitutos: projeto.substitutos_administrativos || [],
+                    },
+                  ] as const).map(({ label, titulares, substitutos }) => (
+                    <div key={label} className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-4 bg-slate-50/30 dark:bg-slate-900/20">
+                      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">{label}</div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Titulares */}
+                        <div>
+                          <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-foreground-muted">Titular(es)</div>
+                          {titulares.length > 0 ? (
+                            <div className="grid gap-2">
+                              {titulares.map(pessoa => (
+                                <div key={pessoa.id} className="rounded-lg border border-border bg-background-secondary px-3 py-2 flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-foreground truncate">{pessoa.nome}</div>
+                                    <div className="mt-0.5 flex items-center gap-3 text-xs text-foreground-muted">
+                                      <span className="truncate">{pessoa.cargo}</span>
+                                      <span className="font-mono text-[11px]">Mat. {pessoa.matricula}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-dashed border-border px-3 py-3 text-xs text-foreground-muted italic">Nenhum titular designado</div>
+                          )}
+                        </div>
+                        {/* Substitutos */}
+                        <div>
+                          <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-foreground-muted">Substituto(s)</div>
+                          {substitutos.length > 0 ? (
+                            <div className="grid gap-2">
+                              {substitutos.map(pessoa => (
+                                <div key={pessoa.id} className="rounded-lg border border-border bg-background-secondary px-3 py-2 flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-foreground truncate">{pessoa.nome}</div>
+                                    <div className="mt-0.5 flex items-center gap-3 text-xs text-foreground-muted">
+                                      <span className="truncate">{pessoa.cargo}</span>
+                                      <span className="font-mono text-[11px]">Mat. {pessoa.matricula}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-dashed border-border px-3 py-3 text-xs text-foreground-muted italic">Nenhum substituto designado</div>
+                          )}
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-border px-3 py-3 text-xs text-foreground-muted italic">Não designado</div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
         )}
 

@@ -20,6 +20,7 @@ from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -76,6 +77,13 @@ class TipoDataAlteradaEnum(str, enum.Enum):
     """Tipo de data alterada na auditoria de artefatos."""
     DATA_INICIO = "data_inicio"
     DATA_CONCLUSAO = "data_conclusao"
+
+
+class PapelProjetoEnum(str, enum.Enum):
+    """Papéis desempenhados na Equipe de Planejamento do Projeto."""
+    REQUISITANTE = "Requisitante"
+    TECNICO = "Técnico"
+    ADMINISTRATIVO = "Administrativo"
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -136,17 +144,9 @@ class Servidor(Base):
         String(200), nullable=True,
         comment="Função comissionada ou de confiança, se houver.",
     )
-    departamento_id: Mapped[int] = mapped_column(
+    lotacao_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("unidades_organizacionais.id"), nullable=False,
-        comment="ID do Departamento.",
-    )
-    unidade_lotacao_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("unidades_organizacionais.id"), nullable=True,
-        comment="ID da Unidade de Lotação.",
-    )
-    secao_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("unidades_organizacionais.id"), nullable=True,
-        comment="ID da Seção.",
+        comment="ID da Lotação do servidor.",
     )
     email_funcional: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True,
@@ -154,14 +154,8 @@ class Servidor(Base):
     )
 
     # ── Relationships ───────────────────────────────────────────────────────
-    departamento: Mapped["UnidadeOrganizacional"] = relationship(
-        "UnidadeOrganizacional", foreign_keys=[departamento_id]
-    )
-    unidade_lotacao: Mapped[Optional["UnidadeOrganizacional"]] = relationship(
-        "UnidadeOrganizacional", foreign_keys=[unidade_lotacao_id]
-    )
-    secao: Mapped[Optional["UnidadeOrganizacional"]] = relationship(
-        "UnidadeOrganizacional", foreign_keys=[secao_id]
+    lotacao: Mapped["UnidadeOrganizacional"] = relationship(
+        "UnidadeOrganizacional", foreign_keys=[lotacao_id]
     )
 
 
@@ -197,13 +191,13 @@ class Projeto(Base):
     )
 
     # ── Classificação ───────────────────────────────────────────────────────
-    prioridade: Mapped[str] = mapped_column(
-        String, nullable=False, server_default="media",
-        comment="Prioridade: baixa, media, alta",
+    prioridade: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True, server_default="media",
+        comment="Prioridade: baixa, media, alta. Nullable para projetos legados.",
     )
-    complexidade: Mapped[str] = mapped_column(
-        String, nullable=False, default="Simples",
-        comment="Complexidade: Simples, Intermediária ou Complexa",
+    complexidade: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True, default="Simples",
+        comment="Complexidade: Simples, Intermediária ou Complexa. Nullable para projetos legados.",
     )
 
     # ── Status ──────────────────────────────────────────────────────────────
@@ -217,25 +211,14 @@ class Projeto(Base):
         default=StatusProjetoEnum.FASE_INTERNA,
     )
 
-    # ── Equipe (FKs para Servidor) ──────────────────────────────────────────
-    integrante_requisitante_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("servidores.id", ondelete="SET NULL"),
-        nullable=True,
-        comment="Integrante requisitante da equipe de planejamento.",
+    # ── Flag de projeto legado (bypass da esteira interna) ─────────────────
+    is_legado: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false",
+        comment="Se True, projeto legado: pula artefatos, prioridade e complexidade.",
     )
-    integrante_tecnico_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("servidores.id", ondelete="SET NULL"),
-        nullable=True,
-        comment="Integrante técnico da equipe de planejamento.",
-    )
-    integrante_administrativo_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("servidores.id", ondelete="SET NULL"),
-        nullable=True,
-        comment="Integrante administrativo da equipe de planejamento.",
-    )
+
+    # ── Equipe (Múltiplos Titulares) ──────────────────────────────────────────
+    # Os membros da equipe de planejamento são armazenados na tabela projeto_equipe.
 
     # ── Fase Externa (Licitação) ─────────────────────────────────────────────
     data_envio_licitacao: Mapped[Optional[date]] = mapped_column(
@@ -260,15 +243,12 @@ class Projeto(Base):
 
     # ── Relationships ───────────────────────────────────────────────────────
 
-    # Equipe
-    integrante_requisitante: Mapped[Optional["Servidor"]] = relationship(
-        "Servidor", foreign_keys=[integrante_requisitante_id],
-    )
-    integrante_tecnico: Mapped[Optional["Servidor"]] = relationship(
-        "Servidor", foreign_keys=[integrante_tecnico_id],
-    )
-    integrante_administrativo: Mapped[Optional["Servidor"]] = relationship(
-        "Servidor", foreign_keys=[integrante_administrativo_id],
+    # Equipe de Planejamento (1:N via tabela projeto_equipe)
+    equipe_membros: Mapped[list["ProjetoEquipe"]] = relationship(
+        "ProjetoEquipe",
+        back_populates="projeto",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     # Vínculo com Planejamento Estratégico (N:M)
@@ -322,6 +302,50 @@ class Projeto(Base):
         return all(
             a.status == StatusArtefatoEnum.CONCLUIDO for a in self.artefatos
         )
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  2a. PROJETO EQUIPE (Tabela para Múltiplos Titulares)                  ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+class ProjetoEquipe(Base):
+    """Membro da equipe de planejamento de um projeto."""
+    __tablename__ = "projeto_equipe"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    projeto_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("projetos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    servidor_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("servidores.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    papel: Mapped[PapelProjetoEnum] = mapped_column(
+        Enum(
+            PapelProjetoEnum,
+            name="papel_projeto_enum",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+        comment="Papel do servidor na equipe.",
+    )
+    is_titular: Mapped[bool] = mapped_column(
+        default=True,
+        comment="True = Titular; False = Substituto.",
+    )
+
+    # ── Relationships ───────────────────────────────────────────────────────
+    projeto: Mapped["Projeto"] = relationship(back_populates="equipe_membros")
+    servidor: Mapped["Servidor"] = relationship(lazy="joined")
+
+    def __repr__(self) -> str:
+        tipo = "Titular" if self.is_titular else "Substituto"
+        return f"<ProjetoEquipe #{self.id} projeto_id={self.projeto_id} papel={self.papel.value} {tipo}>"
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗

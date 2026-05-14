@@ -104,6 +104,7 @@ export interface UnidadeOrgResumo {
   id: number;
   nome: string;
   sigla: string | null;
+  caminho_completo?: string | null;
 }
 
 /* ── Servidor ──────────────────────────────────────────────────────────── */
@@ -114,12 +115,8 @@ export interface Servidor {
   nome: string;
   cargo: string;
   funcao: string | null;
-  departamento_id: number;
-  unidade_lotacao_id: number | null;
-  secao_id: number | null;
-  departamento?: UnidadeOrgResumo | null;
-  unidade_lotacao?: UnidadeOrgResumo | null;
-  secao?: UnidadeOrgResumo | null;
+  lotacao_id: number;
+  lotacao?: UnidadeOrgResumo | null;
   email_funcional: string | null;
   criado_em: string;
   atualizado_em: string;
@@ -189,22 +186,29 @@ export interface ProjetoBase {
   id: number;
   nome: string;
   processo_sei: string;
-  prioridade: PrioridadeProjeto;
-  complexidade: ComplexidadeProjeto;
+  prioridade: PrioridadeProjeto | null;
+  complexidade: ComplexidadeProjeto | null;
   status: StatusProjeto;
+  is_legado: boolean;
   criado_em: string;
   atualizado_em: string;
-  integrante_requisitante_id: number | null;
-  integrante_tecnico_id: number | null;
-  integrante_administrativo_id: number | null;
+  integrantes_requisitantes_ids: number[];
+  integrantes_tecnicos_ids: number[];
+  integrantes_administrativos_ids: number[];
+  substitutos_requisitantes_ids: number[];
+  substitutos_tecnicos_ids: number[];
+  substitutos_administrativos_ids: number[];
   data_envio_licitacao: string | null;
   situacao_licitacao_texto: string | null;
 }
 
 export interface ProjetoComDetalhes extends ProjetoBase {
-  integrante_requisitante: Servidor | null;
-  integrante_tecnico: Servidor | null;
-  integrante_administrativo: Servidor | null;
+  integrantes_requisitantes: Servidor[];
+  integrantes_tecnicos: Servidor[];
+  integrantes_administrativos: Servidor[];
+  substitutos_requisitantes: Servidor[];
+  substitutos_tecnicos: Servidor[];
+  substitutos_administrativos: Servidor[];
   acoes_pdtic: AcaoPdticResumo[];
   itens_pacc: ItemPaccResumo[];
   artefatos: Artefato[];
@@ -261,9 +265,10 @@ export interface ProjetoListagem {
   id: number;
   nome: string;
   processo_sei: string;
-  prioridade: PrioridadeProjeto;
-  complexidade: ComplexidadeProjeto;
+  prioridade: PrioridadeProjeto | null;
+  complexidade: ComplexidadeProjeto | null;
   status: StatusProjeto;
+  is_legado: boolean;
   criado_em: string;
 
   qtd_acoes_pdtic: number;
