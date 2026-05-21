@@ -20,120 +20,12 @@ import {
   fetchPainelPacc,
 } from "@/lib/api";
 import { showToast } from "@/components/ui/Toast";
+import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import type { Servidor } from "@/types/projeto";
 import type { PdticAcao } from "@/types/pdtic";
 import type { PaccItemComAcao } from "@/types/pacc";
 
-/* ── Multi-select de Servidores ─────────────────────────────────────────── */
 
-function MultiSelectServidores({
-  servidores,
-  selectedIds,
-  onChange,
-  excludeIds = [],
-  placeholder = "Nenhum selecionado",
-  loading,
-}: {
-  servidores: Servidor[];
-  selectedIds: number[];
-  onChange: (ids: number[]) => void;
-  excludeIds?: number[];
-  placeholder?: string;
-  loading?: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [busca, setBusca] = useState("");
-  const opcoes = servidores.filter((s) => !excludeIds.includes(s.id));
-  const opcoesFiltradas = opcoes.filter((s) => s.nome.toLowerCase().includes(busca.toLowerCase()));
-  const toggle = (id: number) =>
-    onChange(
-      selectedIds.includes(id)
-        ? selectedIds.filter((x) => x !== id)
-        : [...selectedIds, id]
-    );
-  const selected = servidores.filter((s) => selectedIds.includes(s.id));
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`${selectCls} text-left flex items-center justify-between min-h-[38px] h-auto`}
-      >
-        <span className="flex flex-wrap gap-1 flex-1">
-          {selected.length === 0 ? (
-            <span className="text-slate-400 text-sm">
-              {loading ? "Carregando..." : placeholder}
-            </span>
-          ) : (
-            selected.map((s) => (
-              <span
-                key={s.id}
-                className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300"
-              >
-                {s.nome}
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); toggle(s.id); }}
-                  className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-800"
-                >
-                  <X size={9} />
-                </button>
-              </span>
-            ))
-          )}
-        </span>
-        <svg
-          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 flex flex-col">
-            <div className="sticky top-0 z-10 bg-white p-2 border-b border-slate-100 dark:bg-slate-800 dark:border-slate-700/60">
-              <input
-                type="text"
-                placeholder="Buscar servidor..."
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                className="w-full rounded border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-900/50"
-              />
-            </div>
-            {opcoesFiltradas.length === 0 ? (
-              <div className="px-3 py-4 text-sm text-slate-500 italic text-center">Nenhum servidor encontrado.</div>
-            ) : (
-              opcoesFiltradas.map((s) => {
-                const sel = selectedIds.includes(s.id);
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => toggle(s.id)}
-                    className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 ${sel ? "bg-indigo-50 dark:bg-indigo-950/30" : ""}`}
-                  >
-                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${sel ? "border-indigo-500 bg-indigo-500 text-white" : "border-slate-300"}`}>
-                      {sel && (
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="font-medium text-slate-800 dark:text-slate-200">{s.nome}</div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 /* ── Componente ────────────────────────────────────────────────────────── */
 
@@ -322,21 +214,27 @@ export function NovoProjetoModal({ onClose, onSuccess }: NovoProjetoModalProps) 
                 <div className="mb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Integrante Requisitante</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <FormField label="Titular(es)">
-                    <MultiSelectServidores
-                      servidores={servidores}
-                      selectedIds={watch("integrantes_requisitantes_ids")}
-                      onChange={(ids) => setValue("integrantes_requisitantes_ids", ids)}
-                      placeholder="Selecione os titulares..."
-                      loading={loadingServidores}
+                    <MultiSelectCombobox
+                      options={servidores
+                        .filter(s => !watch("substitutos_requisitantes_ids").includes(s.id))
+                        .map(s => ({ value: s.id, label: s.nome }))
+                        .sort((a, b) => a.label.localeCompare(b.label))}
+                      value={watch("integrantes_requisitantes_ids")}
+                      onChange={(ids) => setValue("integrantes_requisitantes_ids", ids as number[])}
+                      placeholder={loadingServidores ? "Carregando..." : "Selecione os titulares..."}
+                      disabled={loadingServidores}
                     />
                   </FormField>
                   <FormField label="Substituto(s)">
-                    <MultiSelectServidores
-                      servidores={servidores}
-                      selectedIds={watch("substitutos_requisitantes_ids")}
-                      onChange={(ids) => setValue("substitutos_requisitantes_ids", ids)}
-                      placeholder="Selecione os substitutos..."
-                      loading={loadingServidores}
+                    <MultiSelectCombobox
+                      options={servidores
+                        .filter(s => !watch("integrantes_requisitantes_ids").includes(s.id))
+                        .map(s => ({ value: s.id, label: s.nome }))
+                        .sort((a, b) => a.label.localeCompare(b.label))}
+                      value={watch("substitutos_requisitantes_ids")}
+                      onChange={(ids) => setValue("substitutos_requisitantes_ids", ids as number[])}
+                      placeholder={loadingServidores ? "Carregando..." : "Selecione os substitutos..."}
+                      disabled={loadingServidores}
                     />
                   </FormField>
                 </div>
@@ -347,21 +245,27 @@ export function NovoProjetoModal({ onClose, onSuccess }: NovoProjetoModalProps) 
                 <div className="mb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Integrante Técnico</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <FormField label="Titular(es)">
-                    <MultiSelectServidores
-                      servidores={servidores}
-                      selectedIds={watch("integrantes_tecnicos_ids")}
-                      onChange={(ids) => setValue("integrantes_tecnicos_ids", ids)}
-                      placeholder="Selecione os titulares..."
-                      loading={loadingServidores}
+                    <MultiSelectCombobox
+                      options={servidores
+                        .filter(s => !watch("substitutos_tecnicos_ids").includes(s.id))
+                        .map(s => ({ value: s.id, label: s.nome }))
+                        .sort((a, b) => a.label.localeCompare(b.label))}
+                      value={watch("integrantes_tecnicos_ids")}
+                      onChange={(ids) => setValue("integrantes_tecnicos_ids", ids as number[])}
+                      placeholder={loadingServidores ? "Carregando..." : "Selecione os titulares..."}
+                      disabled={loadingServidores}
                     />
                   </FormField>
                   <FormField label="Substituto(s)">
-                    <MultiSelectServidores
-                      servidores={servidores}
-                      selectedIds={watch("substitutos_tecnicos_ids")}
-                      onChange={(ids) => setValue("substitutos_tecnicos_ids", ids)}
-                      placeholder="Selecione os substitutos..."
-                      loading={loadingServidores}
+                    <MultiSelectCombobox
+                      options={servidores
+                        .filter(s => !watch("integrantes_tecnicos_ids").includes(s.id))
+                        .map(s => ({ value: s.id, label: s.nome }))
+                        .sort((a, b) => a.label.localeCompare(b.label))}
+                      value={watch("substitutos_tecnicos_ids")}
+                      onChange={(ids) => setValue("substitutos_tecnicos_ids", ids as number[])}
+                      placeholder={loadingServidores ? "Carregando..." : "Selecione os substitutos..."}
+                      disabled={loadingServidores}
                     />
                   </FormField>
                 </div>
@@ -372,21 +276,27 @@ export function NovoProjetoModal({ onClose, onSuccess }: NovoProjetoModalProps) 
                 <div className="mb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">Integrante Administrativo</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <FormField label="Titular(es)">
-                    <MultiSelectServidores
-                      servidores={servidores}
-                      selectedIds={watch("integrantes_administrativos_ids")}
-                      onChange={(ids) => setValue("integrantes_administrativos_ids", ids)}
-                      placeholder="Selecione os titulares..."
-                      loading={loadingServidores}
+                    <MultiSelectCombobox
+                      options={servidores
+                        .filter(s => !watch("substitutos_administrativos_ids").includes(s.id))
+                        .map(s => ({ value: s.id, label: s.nome }))
+                        .sort((a, b) => a.label.localeCompare(b.label))}
+                      value={watch("integrantes_administrativos_ids")}
+                      onChange={(ids) => setValue("integrantes_administrativos_ids", ids as number[])}
+                      placeholder={loadingServidores ? "Carregando..." : "Selecione os titulares..."}
+                      disabled={loadingServidores}
                     />
                   </FormField>
                   <FormField label="Substituto(s)">
-                    <MultiSelectServidores
-                      servidores={servidores}
-                      selectedIds={watch("substitutos_administrativos_ids")}
-                      onChange={(ids) => setValue("substitutos_administrativos_ids", ids)}
-                      placeholder="Selecione os substitutos..."
-                      loading={loadingServidores}
+                    <MultiSelectCombobox
+                      options={servidores
+                        .filter(s => !watch("integrantes_administrativos_ids").includes(s.id))
+                        .map(s => ({ value: s.id, label: s.nome }))
+                        .sort((a, b) => a.label.localeCompare(b.label))}
+                      value={watch("substitutos_administrativos_ids")}
+                      onChange={(ids) => setValue("substitutos_administrativos_ids", ids as number[])}
+                      placeholder={loadingServidores ? "Carregando..." : "Selecione os substitutos..."}
+                      disabled={loadingServidores}
                     />
                   </FormField>
                 </div>
@@ -405,51 +315,15 @@ export function NovoProjetoModal({ onClose, onSuccess }: NovoProjetoModalProps) 
                   <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-foreground-muted">
                     Ações PDTIC
                   </label>
-                  <select
-                    className={selectCls}
+                  <MultiSelectCombobox
+                    options={acoesPdtic
+                      .map(a => ({ value: a.id, label: `${a.codigo_acao} — ${a.descricao}` }))
+                      .sort((a, b) => a.label.localeCompare(b.label))}
+                    value={selectedAcoes}
+                    onChange={(val) => setValue("acoes_pdtic_ids", val as number[])}
+                    placeholder={loadingAcoes ? "Carregando..." : "Selecione as ações..."}
                     disabled={loadingAcoes}
-                    value=""
-                    onChange={(e) => {
-                      const id = Number(e.target.value);
-                      if (id && !selectedAcoes.includes(id)) {
-                        setValue("acoes_pdtic_ids", [...selectedAcoes, id]);
-                      }
-                      e.target.value = "";
-                    }}
-                  >
-                    <option value="">
-                      {loadingAcoes ? "Carregando..." : "Adicionar ação..."}
-                    </option>
-                    {acoesPdtic
-                      .filter((a) => !selectedAcoes.includes(a.id))
-                      .map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.codigo_acao} — {a.descricao}
-                        </option>
-                      ))}
-                  </select>
-                  {selectedAcoes.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {selectedAcoes.map((id) => {
-                        const acao = acoesPdtic.find((a) => a.id === id);
-                        return (
-                          <span
-                            key={id}
-                            className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"
-                          >
-                            {acao?.codigo_acao ?? id}
-                            <button
-                              type="button"
-                              onClick={() => setValue("acoes_pdtic_ids", selectedAcoes.filter((x) => x !== id))}
-                              className="ml-0.5 rounded-full p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                            >
-                              <X size={10} />
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
+                  />
                 </div>
 
                 {/* PACC */}
@@ -457,51 +331,15 @@ export function NovoProjetoModal({ onClose, onSuccess }: NovoProjetoModalProps) 
                   <label className="mb-1.5 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-foreground-muted">
                     Itens PACC
                   </label>
-                  <select
-                    className={selectCls}
+                  <MultiSelectCombobox
+                    options={itensPacc
+                      .map(i => ({ value: i.id, label: `#${i.numero_item} — ${i.descricao_demanda}` }))
+                      .sort((a, b) => a.label.localeCompare(b.label))}
+                    value={selectedItens}
+                    onChange={(val) => setValue("itens_pacc_ids", val as number[])}
+                    placeholder={loadingItens ? "Carregando..." : "Selecione os itens..."}
                     disabled={loadingItens}
-                    value=""
-                    onChange={(e) => {
-                      const id = Number(e.target.value);
-                      if (id && !selectedItens.includes(id)) {
-                        setValue("itens_pacc_ids", [...selectedItens, id]);
-                      }
-                      e.target.value = "";
-                    }}
-                  >
-                    <option value="">
-                      {loadingItens ? "Carregando..." : "Adicionar item..."}
-                    </option>
-                    {itensPacc
-                      .filter((i) => !selectedItens.includes(i.id))
-                      .map((item) => (
-                        <option key={item.id} value={item.id}>
-                          #{item.numero_item} — {item.descricao_demanda}
-                        </option>
-                      ))}
-                  </select>
-                  {selectedItens.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {selectedItens.map((id) => {
-                        const item = itensPacc.find((i) => i.id === id);
-                        return (
-                          <span
-                            key={id}
-                            className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300"
-                          >
-                            #{item?.numero_item ?? id}
-                            <button
-                              type="button"
-                              onClick={() => setValue("itens_pacc_ids", selectedItens.filter((x) => x !== id))}
-                              className="ml-0.5 rounded-full p-0.5 hover:bg-teal-200 dark:hover:bg-teal-800 transition-colors"
-                            >
-                              <X size={10} />
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
+                  />
                 </div>
               </div>
             </div>

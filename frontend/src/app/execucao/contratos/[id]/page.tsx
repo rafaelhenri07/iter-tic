@@ -122,9 +122,9 @@ function EquipePapelField({
   papel: EquipePapelResponse | null | undefined;
   icon?: React.ReactNode;
 }) {
-  const titular = papel?.titular;
+  const titulares = papel?.titulares ?? [];
   const substitutos = papel?.substitutos ?? [];
-  const vazio = !titular && substitutos.length === 0;
+  const vazio = titulares.length === 0 && substitutos.length === 0;
 
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-700/60 p-4 space-y-3 bg-slate-50/30 dark:bg-slate-900/20">
@@ -138,13 +138,14 @@ function EquipePapelField({
         </div>
       ) : (
         <div className="space-y-2">
-          {titular && (
+          {titulares.map((titular) => (
             <ServidorCard
+              key={titular.id}
               servidor={titular}
               badge="Titular"
               badgeCls="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
             />
-          )}
+          ))}
           {substitutos.map((sub) => (
             <ServidorCard
               key={sub.id}
@@ -243,7 +244,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-cyan-500" />
+        <Loader2 size={32} className="animate-spin text-brand-primary" />
       </div>
     );
   }
@@ -264,8 +265,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
   const sitCfg = SITUACAO_CONTRATO_CONFIG[contrato.situacao_atual];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-background">
-      <div className="max-w-6xl mx-auto py-8 px-6">
+    <div className="mx-auto max-w-6xl space-y-6 pb-8">
         
         {/* ── Botão Voltar ── */}
         <Link
@@ -279,7 +279,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
         {/* ── Cabeçalho do Contrato ── */}
         <div className="flex flex-col gap-4 mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-teal-500 text-white shadow-lg shadow-cyan-500/20">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-primary/10 text-brand-primary">
               <FileSignature size={24} />
             </div>
             <div>
@@ -316,7 +316,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
             onClick={() => setActiveTab("visao-geral")}
             className={`whitespace-nowrap px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-colors ${
               activeTab === "visao-geral"
-                ? "border-b-2 border-cyan-500 text-cyan-600 dark:text-cyan-400"
+                ? "border-b-2 border-brand-primary text-brand-primary"
                 : "text-foreground-muted hover:text-foreground"
             }`}
           >
@@ -326,7 +326,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
             onClick={() => setActiveTab("equipe")}
             className={`whitespace-nowrap px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-colors ${
               activeTab === "equipe"
-                ? "border-b-2 border-cyan-500 text-cyan-600 dark:text-cyan-400"
+                ? "border-b-2 border-brand-primary text-brand-primary"
                 : "text-foreground-muted hover:text-foreground"
             }`}
           >
@@ -336,13 +336,13 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
             onClick={() => setActiveTab("aditivos")}
             className={`whitespace-nowrap flex items-center gap-2 px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-colors ${
               activeTab === "aditivos"
-                ? "border-b-2 border-cyan-500 text-cyan-600 dark:text-cyan-400"
+                ? "border-b-2 border-brand-primary text-brand-primary"
                 : "text-foreground-muted hover:text-foreground"
             }`}
           >
             Aditivos de Prazo
             {contrato.aditivos && contrato.aditivos.length > 0 && (
-               <span className="bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300 py-0.5 px-2 rounded-full text-[10px]">
+               <span className="bg-brand-primary/10 text-brand-primary py-0.5 px-2 rounded-full text-[10px]">
                   {contrato.aditivos.length}
                </span>
             )}
@@ -351,7 +351,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
             onClick={() => setActiveTab("historico")}
             className={`whitespace-nowrap px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-colors ${
               activeTab === "historico"
-                ? "border-b-2 border-cyan-500 text-cyan-600 dark:text-cyan-400"
+                ? "border-b-2 border-brand-primary text-brand-primary"
                 : "text-foreground-muted hover:text-foreground"
             }`}
           >
@@ -367,14 +367,10 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 <InfoField
                   label="Empresa Contratada"
-                  value={contrato.empresa_nome}
+                  value={contrato.fornecedor_nome}
                   icon={<Building2 size={12} />}
                 />
-                <InfoField
-                  label="Fabricante"
-                  value={contrato.fabricante_nome}
-                  icon={<Layers size={12} />}
-                />
+
                 {contrato.modalidade_contrato === 'ARP' && contrato.orgao_gerenciador && (
                   <InfoField
                     label="Órgão Gerenciador"
@@ -412,7 +408,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                       {contrato.itens && contrato.itens.length > 0 ? (
                         contrato.itens.map((item) => (
                           <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                            <td className="px-4 py-3 text-slate-800 dark:text-slate-200">{item.objeto_contratado}</td>
+                            <td className="px-4 py-3 text-slate-800 dark:text-slate-200">{(item as any).objeto_contratado || "Produto/Serviço"}</td>
                             <td className="px-4 py-3 text-xs text-slate-500 font-mono">
                               {item.tipo_catalogo && item.codigo_catalogo ? `${item.tipo_catalogo} - ${item.codigo_catalogo}` : "—"}
                             </td>
@@ -484,14 +480,14 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                 </div>
 
                 {contrato.projeto_origem ? (
-                  <div className="rounded-xl border-2 border-violet-200 bg-violet-50/50 p-5 dark:border-violet-900/50 dark:bg-violet-950/20">
+                  <div className="rounded-xl border border-brand-primary/30 bg-brand-primary/5 p-5 dark:border-brand-primary/40">
                     <div className="flex items-center gap-3">
-                      <FolderKanban size={20} className="text-violet-600 dark:text-violet-400" />
-                      <span className="text-base font-bold text-violet-800 dark:text-violet-300">
+                      <FolderKanban size={20} className="text-brand-primary" />
+                      <span className="text-base font-bold text-brand-primary">
                         {contrato.projeto_origem.nome}
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-sm text-violet-600/80 dark:text-violet-400/80">
+                    <div className="mt-2 flex items-center gap-1.5 text-sm text-brand-primary/80">
                       <FileText size={14} />
                       <span className="font-mono font-medium">
                         Processo SEI: {contrato.projeto_origem.processo_sei}
@@ -500,8 +496,8 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
 
                     {/* Ações PDTIC */}
                     {contrato.acoes_pdtic_vinculadas.length > 0 && (
-                      <div className="mt-5 border-t border-violet-200/60 pt-4 dark:border-violet-800/60">
-                        <div className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">
+                       <div className="mt-5 border-t border-brand-primary/20 pt-4">
+                        <div className="mb-2.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-brand-primary">
                           <Link2 size={12} />
                           Ações PDTIC Vinculadas
                         </div>
@@ -509,12 +505,12 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                           {contrato.acoes_pdtic_vinculadas.map((acao) => (
                             <div
                               key={acao.id}
-                              className="flex items-start gap-3 rounded-lg bg-white p-3 shadow-sm border border-violet-100 dark:bg-violet-900/30 dark:border-violet-800/50"
+                              className="flex items-start gap-3 rounded-lg bg-white p-3 shadow-sm border border-brand-primary/10 dark:bg-slate-900 dark:border-brand-primary/20"
                             >
-                              <span className="shrink-0 rounded bg-violet-100 px-2 py-1 text-xs font-extrabold text-violet-700 dark:bg-violet-800 dark:text-violet-300">
+                              <span className="shrink-0 rounded bg-brand-primary/10 px-2 py-1 text-xs font-extrabold text-brand-primary">
                                 {acao.codigo_acao}
                               </span>
-                              <span className="text-sm font-medium text-violet-900 dark:text-violet-200 leading-tight">
+                              <span className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-tight">
                                 {acao.descricao}
                               </span>
                             </div>
@@ -551,7 +547,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
           {activeTab === "equipe" && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground-muted">
-                <ShieldCheck size={16} className="text-cyan-500" />
+                <ShieldCheck size={16} className="text-brand-primary" />
                 Membros Designados
               </div>
               <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -583,12 +579,12 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground-muted">
-                  <Layers size={16} className="text-cyan-500" />
+                  <Layers size={16} className="text-brand-primary" />
                   Controle de Prazo
                 </div>
                 <button
                   onClick={() => { setShowAditivoForm(!showAditivoForm); setAditivoError(null); }}
-                  className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 px-4 py-2 text-xs font-bold text-white shadow-md shadow-cyan-500/25 hover:brightness-110 hover:shadow-lg transition-all"
+                  className="flex items-center gap-1.5 rounded-xl bg-brand-primary px-4 py-2 text-xs font-bold text-white shadow-md shadow-brand-primary/25 hover:bg-brand-primary-hover hover:shadow-lg transition-all"
                 >
                   <span className="text-lg leading-none">+</span>
                   Novo Aditivo
@@ -596,8 +592,8 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
               </div>
 
               {showAditivoForm && (
-                <div className="mb-6 rounded-2xl border border-cyan-200 bg-cyan-50/40 p-5 dark:border-cyan-800/50 dark:bg-cyan-950/20 shadow-sm">
-                  <h4 className="text-sm font-bold text-cyan-800 dark:text-cyan-400 mb-4">Adicionar Termo Aditivo de Prazo</h4>
+                <div className="mb-6 rounded-2xl border border-brand-primary/20 bg-brand-primary/5 p-5 shadow-sm">
+                  <h4 className="text-sm font-bold text-brand-primary mb-4">Adicionar Termo Aditivo de Prazo</h4>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="sm:col-span-1">
                       <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-foreground-muted">
@@ -608,7 +604,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                         value={aditivoNumero}
                         onChange={(e) => setAditivoNumero(e.target.value)}
                         placeholder="Ex: 1º Termo Aditivo"
-                        className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:bg-background"
+                        className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:bg-background"
                       />
                     </div>
                     <div>
@@ -619,7 +615,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                         type="date"
                         value={aditivoInicio}
                         onChange={(e) => setAditivoInicio(e.target.value)}
-                        className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:bg-background"
+                        className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:bg-background"
                       />
                     </div>
                     <div>
@@ -630,14 +626,14 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                         type="date"
                         value={aditivoFim}
                         onChange={(e) => setAditivoFim(e.target.value)}
-                        className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 dark:bg-background"
+                        className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm shadow-sm transition focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:bg-background"
                       />
                     </div>
                   </div>
                   {aditivoError && (
                     <p className="mt-3 text-xs font-semibold text-red-500">{aditivoError}</p>
                   )}
-                  <div className="mt-5 flex justify-end gap-3 border-t border-cyan-100 dark:border-cyan-900 pt-4">
+                  <div className="mt-5 flex justify-end gap-3 border-t border-brand-primary/10 pt-4">
                     <button
                       onClick={() => { setShowAditivoForm(false); setAditivoError(null); }}
                       className="rounded-xl border border-border px-5 py-2 text-sm font-semibold text-foreground-muted hover:bg-background-secondary transition-colors"
@@ -647,7 +643,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                     <button
                       onClick={handleSalvarAditivo}
                       disabled={savingAditivo}
-                      className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 px-6 py-2 text-sm font-bold text-white shadow-md transition-all hover:brightness-110 disabled:opacity-50"
+                      className="flex items-center gap-2 rounded-xl bg-brand-primary px-6 py-2 text-sm font-bold text-white shadow-md hover:bg-brand-primary-hover disabled:opacity-50"
                     >
                       {savingAditivo ? <Loader2 size={16} className="animate-spin" /> : null}
                       Salvar Aditivo
@@ -671,7 +667,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                         <tr key={ad.id} className="hover:bg-background-secondary/40 transition-colors">
                           <td className="px-5 py-4 font-semibold text-foreground">{ad.numero_aditivo}</td>
                           <td className="px-5 py-4 text-foreground-muted">{formatDate(ad.data_inicio_vigencia)}</td>
-                          <td className="px-5 py-4 font-bold text-cyan-600 dark:text-cyan-400">{formatDate(ad.data_fim_vigencia)}</td>
+                          <td className="px-5 py-4 font-bold text-brand-primary">{formatDate(ad.data_fim_vigencia)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -689,7 +685,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
           {activeTab === "historico" && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground-muted">
-                <History size={16} className="text-cyan-500" />
+                <History size={16} className="text-brand-primary" />
                 Linha do Tempo
               </div>
 
@@ -701,13 +697,13 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                      onChange={(e) => setObsTexto(e.target.value)}
                      placeholder="Adicione uma observação ao histórico do contrato..."
                      rows={2}
-                     className="w-full rounded-xl border border-border bg-background-secondary px-4 py-3 text-sm text-foreground placeholder:text-foreground-muted/60 resize-none focus:border-cyan-500 focus:bg-background focus:outline-none focus:ring-2 focus:ring-cyan-500/20 shadow-sm transition-all"
+                     className="w-full rounded-xl border border-border bg-background-secondary px-4 py-3 text-sm text-foreground placeholder:text-foreground-muted/60 resize-none focus:border-brand-primary focus:bg-background focus:outline-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm transition-all"
                    />
                 </div>
                 <button
                   onClick={handleEnviarObservacao}
                   disabled={!obsTexto.trim() || sendingObs}
-                  className="flex h-[46px] items-center gap-2 self-start rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 px-5 text-sm font-bold text-white shadow-md shadow-cyan-500/20 transition-all hover:shadow-lg hover:brightness-110 disabled:opacity-40"
+                  className="flex h-[46px] items-center gap-2 self-start rounded-xl bg-brand-primary px-5 text-sm font-bold text-white shadow-md shadow-brand-primary/20 transition-all hover:shadow-lg hover:bg-brand-primary-hover disabled:opacity-40"
                 >
                   {sendingObs ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                   Registrar
@@ -725,11 +721,11 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                         <div className={`absolute -left-[27px] top-1 flex h-5 w-5 items-center justify-center rounded-full border-[3px] border-background ${
                           isEdition
                             ? "bg-gray-300 dark:bg-gray-600"
-                            : "bg-cyan-500 dark:bg-cyan-400 shadow-sm shadow-cyan-500/30"
+                            : "bg-brand-primary shadow-sm shadow-brand-primary/30"
                         }`}>
                           {isEdition
                             ? <Cog size={10} className="text-white dark:text-gray-900" />
-                            : <MessageSquare size={10} className="text-white dark:text-cyan-950" />
+                            : <MessageSquare size={10} className="text-white" />
                           }
                         </div>
 
@@ -737,13 +733,13 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                         <div className={`rounded-2xl border p-4 shadow-sm ${
                           isEdition
                             ? "border-gray-200 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-900/30"
-                            : "border-cyan-100 bg-cyan-50/30 dark:border-cyan-900/50 dark:bg-cyan-950/20"
+                            : "border-brand-primary/10 bg-brand-primary/5 dark:border-brand-primary/20"
                         }`}>
                           <div className="flex items-center justify-between mb-2">
                             <span className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${
                               isEdition
                                 ? "text-gray-500 dark:text-gray-400"
-                                : "text-cyan-600 dark:text-cyan-400"
+                                : "text-brand-primary"
                             }`}>
                               {isEdition ? <><Cog size={12}/> Edição Automática</> : <><MessageSquare size={12}/> Observação Manual</>}
                             </span>
@@ -782,7 +778,6 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
           <span>Contrato ID #{contrato.id}</span>
         </div>
 
-      </div>
     </div>
   );
 }

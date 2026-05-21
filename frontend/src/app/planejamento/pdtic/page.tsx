@@ -13,11 +13,17 @@ import {
   GitBranchPlus,
   FolderPlus,
   Pencil,
+  CirclePause,
+  History,
   Trash2,
   Settings,
+  MoreVertical,
+  PauseCircle,
+  RefreshCw,
 } from "lucide-react";
-import { EditarAcaoModal } from "@/components/pdtic/EditarAcaoModal";
-import { ExcluirAcaoDialog } from "@/components/pdtic/ExcluirAcaoDialog";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { DesativarAcaoDialog } from "@/components/pdtic/DesativarAcaoDialog";
+import { ExcluirDefinitivoDialog } from "@/components/pdtic/ExcluirDefinitivoDialog";
 import { ToastContainer, showToast } from "@/components/ui/Toast";
 import {
   fetchPeriodos,
@@ -25,7 +31,7 @@ import {
   criarPeriodoPdtic,
   gerarRevisaoPdtic,
 } from "@/lib/api";
-import { formatarNomeRevisao } from "@/lib/formatters";
+import { formatarNomeRevisao, formatMonthYear } from "@/lib/formatters";
 import type {
   PdticPeriodo,
   PdticPainelResponse,
@@ -136,6 +142,7 @@ function AdminDropdown({
   );
 }
 
+
 /* ── Modal de Novo Período ────────────────────────────────────────────── */
 
 function NovoPeriodoModal({
@@ -180,7 +187,7 @@ function NovoPeriodoModal({
         style={{ animation: "modalIn 0.25s ease-out" }}
       >
         <h3 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
-          <FolderPlus size={18} className="text-indigo-500" />
+          <FolderPlus size={18} className="text-brand-primary" />
           Novo Período PDTIC
         </h3>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -193,7 +200,7 @@ function NovoPeriodoModal({
                 type="number"
                 value={anoInicio}
                 onChange={(e) => setAnoInicio(Number(e.target.value))}
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-background-card px-3 text-sm text-foreground outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20"
+                className="mt-1 h-9 w-full rounded-lg border border-border bg-background-card px-3 text-sm text-foreground outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
               />
             </div>
             <div>
@@ -204,7 +211,7 @@ function NovoPeriodoModal({
                 type="number"
                 value={anoFim}
                 onChange={(e) => setAnoFim(Number(e.target.value))}
-                className="mt-1 h-9 w-full rounded-lg border border-border bg-background-card px-3 text-sm text-foreground outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20"
+                className="mt-1 h-9 w-full rounded-lg border border-border bg-background-card px-3 text-sm text-foreground outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
               />
             </div>
           </div>
@@ -222,7 +229,7 @@ function NovoPeriodoModal({
             <button
               type="submit"
               disabled={submitting}
-              className="h-8 rounded-lg bg-indigo-500 px-4 text-xs font-bold text-white hover:bg-indigo-600 disabled:opacity-50"
+              className="h-8 rounded-lg bg-brand-primary px-4 text-xs font-bold text-white hover:bg-brand-primary-hover shadow-brand-primary/25 disabled:opacity-50"
             >
               {submitting ? "Criando..." : "Criar Período"}
             </button>
@@ -244,8 +251,8 @@ export default function PdticPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Modais
-  const [editModalAcao, setEditModalAcao] = useState<PdticAcao | null>(null);
-  const [deleteDialogAcao, setDeleteDialogAcao] = useState<PdticAcao | null>(null);
+  const [desativarDialogAcao, setDesativarDialogAcao] = useState<PdticAcao | null>(null);
+  const [excluirDefDialogAcao, setExcluirDefDialogAcao] = useState<PdticAcao | null>(null);
   const [showNovoPeriodoModal, setShowNovoPeriodoModal] = useState(false);
   const [fetchKey, setFetchKey] = useState(0);
 
@@ -354,8 +361,8 @@ export default function PdticPage() {
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 text-indigo-600 dark:from-indigo-500/20 dark:to-indigo-500/10 dark:text-indigo-400">
-            <BookOpen size={20} />
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+            <BookOpen size={22} />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">PDTIC</h1>
@@ -469,58 +476,43 @@ export default function PdticPage() {
 
       {/* ── Barra de Filtros Unificada ──────────────────────────── */}
       {painel && (
-        <div className="flex items-center gap-px rounded-lg border border-border bg-background-card shadow-sm overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Busca */}
-          <div className="relative flex-1 min-w-[180px]">
+          <div className="relative flex-1 min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted" />
             <input
               type="text"
               placeholder="Buscar ações..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-10 w-full bg-transparent pl-9 pr-4 text-sm text-foreground
-                         placeholder:text-foreground-muted/60 outline-none"
+              className="h-9 w-full rounded-lg border border-border bg-background-card pl-9 pr-3 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
             />
           </div>
 
-          {/* Divisor */}
-          <div className="h-5 w-px bg-border" />
-
           {/* Filtro de auditoria */}
-          <div className="relative">
-            <select
-              value={filtroAuditoria}
-              onChange={(e) => setFiltroAuditoria(e.target.value as FiltroAuditoria)}
-              className="h-10 appearance-none bg-transparent px-3 pr-7 text-xs font-medium
-                         text-foreground outline-none cursor-pointer"
-            >
-              {FILTRO_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground-muted" />
-          </div>
-
-          {/* Divisor */}
-          <div className="h-5 w-px bg-border" />
+          <select
+            value={filtroAuditoria}
+            onChange={(e) => setFiltroAuditoria(e.target.value as FiltroAuditoria)}
+            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+          >
+            {FILTRO_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
 
           {/* Filtro de status */}
-          <div className="relative">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusAcao | "todas")}
-              className="h-10 appearance-none bg-transparent px-3 pr-7 text-xs font-medium
-                         text-foreground outline-none cursor-pointer"
-            >
-              <option value="todas">Todos os status</option>
-              {(Object.keys(STATUS_ACAO_COLOR) as StatusAcao[]).map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <ChevronDown size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground-muted" />
-          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusAcao | "todas")}
+            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+          >
+            <option value="todas">Todos os status</option>
+            {(Object.keys(STATUS_ACAO_COLOR) as StatusAcao[]).map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
         </div>
       )}
 
@@ -531,7 +523,7 @@ export default function PdticPage() {
           <p className="text-sm font-medium text-foreground-muted">Nenhum período PDTIC cadastrado</p>
           <button
             onClick={() => setShowNovoPeriodoModal(true)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-primary/10 px-4 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/20 dark:bg-brand-primary/20"
           >
             <FolderPlus size={14} />
             Criar primeiro período
@@ -549,16 +541,16 @@ export default function PdticPage() {
           Nenhuma ação encontrada para os filtros selecionados.
         </div>
       ) : (
-        <div className="rounded-xl border border-border bg-background-card shadow-sm overflow-hidden">
+        <div className="rounded-xl border border-border bg-background-card shadow-sm overflow-visible">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-slate-50/60 dark:bg-slate-800/40">
+              <tr className="border-b border-border bg-slate-50/60 dark:bg-slate-800/40 [&>th:first-child]:rounded-tl-xl [&>th:last-child]:rounded-tr-xl">
                 <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Ação</th>
                 <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Departamento</th>
                 <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500">Previsão de Contratação</th>
                 <th className="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">Orçamento Estimado</th>
                 <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Status</th>
-                <th className="px-5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">Ações</th>
+                <th className="px-5 py-3 text-center w-[144px] text-[10px] font-bold uppercase tracking-wider text-slate-500">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -581,7 +573,7 @@ export default function PdticPage() {
                         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
                           isExcluida
                             ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
-                            : "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400"
+                            : "bg-brand-primary/10 text-brand-primary"
                         }`}>
                           {acao.codigo_acao}
                         </span>
@@ -606,9 +598,8 @@ export default function PdticPage() {
                       </span>
                     </td>
 
-                    {/* Previsão */}
                     <td className="px-5 py-3.5">
-                      <span className="text-sm text-slate-700 dark:text-slate-300">{acao.previsao_contratacao || "—"}</span>
+                      <span className="text-sm text-slate-700 dark:text-slate-300">{formatMonthYear(acao.previsao_contratacao)}</span>
                     </td>
 
                     {/* Orçamento */}
@@ -628,21 +619,42 @@ export default function PdticPage() {
                     {/* Ações */}
                     <td className="px-5 py-3.5 text-center">
                       {!isExcluida && (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setEditModalAcao(acao); }}
-                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20"
-                            title="Editar ação"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setDeleteDialogAcao(acao); }}
-                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-                            title="Desativar ação"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                        <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Tooltip content="Editar Dados">
+                            <button
+                              onClick={() => router.push(`/planejamento/pdtic/${acao.id}/editar`)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                          </Tooltip>
+
+                          <Tooltip content="Atualizar Revisão">
+                            <button
+                              onClick={() => router.push(`/planejamento/pdtic/${acao.id}/editar?revisao=true`)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20"
+                            >
+                              <History size={15} />
+                            </button>
+                          </Tooltip>
+
+                          <Tooltip content="Desativar">
+                            <button
+                              onClick={() => setDesativarDialogAcao(acao)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-orange-600 transition-colors hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/20"
+                            >
+                              <CirclePause size={15} />
+                            </button>
+                          </Tooltip>
+
+                          <Tooltip content="Excluir">
+                            <button
+                              onClick={() => setExcluirDefDialogAcao(acao)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </Tooltip>
                         </div>
                       )}
                     </td>
@@ -664,26 +676,21 @@ export default function PdticPage() {
       )}
 
 
-
-
-
-      {editModalAcao && painel && (
-        <EditarAcaoModal
-          open={!!editModalAcao}
-          onClose={() => setEditModalAcao(null)}
-          acao={editModalAcao}
+      {desativarDialogAcao && painel && (
+        <DesativarAcaoDialog
+          open={!!desativarDialogAcao}
+          onClose={() => setDesativarDialogAcao(null)}
+          acao={desativarDialogAcao}
           revisoes={painel.revisoes}
-          anosRange={anosRange}
           onSuccess={refresh}
         />
       )}
 
-      {deleteDialogAcao && painel && (
-        <ExcluirAcaoDialog
-          open={!!deleteDialogAcao}
-          onClose={() => setDeleteDialogAcao(null)}
-          acao={deleteDialogAcao}
-          revisoes={painel.revisoes}
+      {excluirDefDialogAcao && (
+        <ExcluirDefinitivoDialog
+          open={!!excluirDefDialogAcao}
+          onClose={() => setExcluirDefDialogAcao(null)}
+          acao={excluirDefDialogAcao}
           onSuccess={refresh}
         />
       )}

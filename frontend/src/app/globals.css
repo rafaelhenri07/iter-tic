@@ -28,7 +28,7 @@
 
   /* Brand */
   --brand-primary: #6366f1;
-  --brand-primary-hover: #4f46e5;
+  --brand-primary-hover: color-mix(in srgb, var(--brand-primary) 85%, black);
 
   /* Borders */
   --border: #e2e8f0;
@@ -58,7 +58,7 @@
   --header-border: #1f2937;
 
   --brand-primary: #818cf8;
-  --brand-primary-hover: #6366f1;
+  --brand-primary-hover: color-mix(in srgb, var(--brand-primary) 85%, black);
 
   --border: #1f2937;
   --border-hover: #374151;

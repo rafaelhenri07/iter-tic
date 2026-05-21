@@ -54,9 +54,7 @@ export function ServidorModal({
       nome: servidor?.nome ?? "",
       cargo: servidor?.cargo ?? "",
       funcao: servidor?.funcao ?? "",
-      departamento_id: servidor?.departamento_id ?? 0,
-      unidade_lotacao_id: servidor?.unidade_lotacao_id ?? 0,
-      secao_id: servidor?.secao_id ?? 0,
+      lotacao_id: servidor?.lotacao_id ?? 0,
       email_funcional: servidor?.email_funcional ?? "",
     },
   });
@@ -111,7 +109,7 @@ export function ServidorModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
               <UserPlus size={16} />
             </div>
             <div>
@@ -151,48 +149,16 @@ export function ServidorModal({
             </FormField>
 
             <FormField
-              label="Departamento"
+              label="Lotação"
               required
               icon={<Building size={10} />}
-              error={errors.departamento_id?.message}
+              error={errors.lotacao_id?.message}
             >
-              <select {...register("departamento_id", { valueAsNumber: true })} className={selectCls}>
+              <select {...register("lotacao_id", { valueAsNumber: true })} className={selectCls}>
                 <option value="">Selecione...</option>
                 {unidades.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.sigla ? `${u.sigla} - ${u.nome}` : u.nome}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              label="Unidade de Lotação"
-              icon={<Building size={10} />}
-              error={errors.unidade_lotacao_id?.message}
-            >
-              <select {...register("unidade_lotacao_id", { valueAsNumber: true })} className={selectCls}>
-                <option value="">Opcional...</option>
-                {unidades.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.sigla ? `${u.sigla} - ${u.nome}` : u.nome}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-
-            <FormField
-              label="Seção"
-              icon={<Building size={10} />}
-              error={errors.secao_id?.message}
-            >
-              <select {...register("secao_id", { valueAsNumber: true })} className={selectCls}>
-                <option value="">Opcional...</option>
-                {unidades.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.sigla ? `${u.sigla} - ${u.nome}` : u.nome}
+                    {u.caminho_completo}
                   </option>
                 ))}
               </select>
@@ -265,7 +231,7 @@ export function ServidorModal({
             <button
               type="submit"
               disabled={submitting}
-              className="flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-500 px-5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition-all hover:shadow-lg hover:shadow-indigo-500/30 disabled:opacity-50"
+              className="flex h-9 items-center gap-2 rounded-lg bg-brand-primary px-5 text-sm font-semibold text-white shadow-md shadow-brand-primary/25 transition-all hover:bg-brand-primary-hover hover:shadow-lg disabled:opacity-50"
             >
               {submitting ? (
                 <>

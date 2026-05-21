@@ -97,7 +97,7 @@ class PdticRevisaoResponse(PdticRevisaoBase):
 # ║  AÇÃO PDTIC                                                             ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
-_RE_MM_YYYY = re.compile(r"^(0[1-9]|1[0-2])/\d{4}$")
+
 
 
 class PdticAcaoBase(BaseModel):
@@ -144,15 +144,15 @@ class PdticAcaoBase(BaseModel):
 
     previsao_contratacao: Optional[str] = Field(
         None,
-        pattern=r"^(0[1-9]|1[0-2])/\d{4}$",
-        examples=["06/2025"],
-        description="Formato MM/YYYY",
+        examples=["2025-06"],
+        pattern=r"^\d{4}-\d{2}$",
+        description="Data prevista para contratação (ISO: YYYY-MM)",
     )
     previsao_renovacao: Optional[str] = Field(
         None,
-        pattern=r"^(0[1-9]|1[0-2])/\d{4}$",
-        examples=["01/2028"],
-        description="Formato MM/YYYY",
+        examples=["2028-01"],
+        pattern=r"^\d{4}-\d{2}$",
+        description="Data prevista para renovação (ISO: YYYY-MM)",
     )
 
     valores_investimento: Optional[dict[str, float]] = Field(
@@ -243,12 +243,8 @@ class PdticAcaoUpdate(BaseModel):
 
     total_gut: Optional[int] = Field(None, ge=0, le=125)
 
-    previsao_contratacao: Optional[str] = Field(
-        None, pattern=r"^(0[1-9]|1[0-2])/\d{4}$"
-    )
-    previsao_renovacao: Optional[str] = Field(
-        None, pattern=r"^(0[1-9]|1[0-2])/\d{4}$"
-    )
+    previsao_contratacao: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}$")
+    previsao_renovacao: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}$")
 
     valores_investimento: Optional[dict[str, float]] = None
     valores_custeio: Optional[dict[str, float]] = None

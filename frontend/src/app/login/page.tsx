@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, Lock, Mail, Eye, EyeOff, ShieldCheck, AlertCircle } from "lucide-react";
+import { Loader2, Lock, Hash, Eye, EyeOff, ShieldCheck, AlertCircle } from "lucide-react";
+import Link from "next/link";
 import Cookies from "js-cookie";
 import { useAuth } from "@/components/providers/AuthProvider";
 
@@ -15,7 +16,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const { setUser } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [matricula, setMatricula] = useState("");
   const [senha, setSenha] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,12 +33,12 @@ function LoginForm() {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, senha }),
+        body: JSON.stringify({ matricula, senha }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => null);
-        throw new Error(body?.detail || "Email ou senha incorretos");
+        throw new Error(body?.detail || "Matrícula ou senha incorretos");
       }
 
       const data = await res.json();
@@ -71,26 +72,26 @@ function LoginForm() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Email */}
+        {/* Matrícula */}
         <div>
           <label
-            htmlFor="login-email"
+            htmlFor="login-matricula"
             className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400"
           >
-            E-mail institucional
+            Matrícula
           </label>
           <div className="relative">
-            <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Hash size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
-              id="login-email"
-              name="email"
-              type="email"
-              autoComplete="email"
+              id="login-matricula"
+              name="matricula"
+              type="text"
+              autoComplete="username"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={matricula}
+              onChange={(e) => setMatricula(e.target.value)}
               disabled={loading}
-              placeholder="usuario@orgao.gov.br"
+              placeholder="Ex: 123.456-7"
               className="block w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-sm text-white placeholder:text-slate-600 outline-none transition-all duration-200 focus:border-indigo-500/50 focus:bg-white/[0.07] focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50"
             />
           </div>
@@ -146,6 +147,16 @@ function LoginForm() {
             </>
           )}
         </button>
+
+        {/* Esqueci minha senha */}
+        <div className="text-center">
+          <Link
+            href="/esqueci-senha"
+            className="text-xs text-slate-500 transition-colors hover:text-indigo-400"
+          >
+            Esqueci minha senha
+          </Link>
+        </div>
       </form>
     </>
   );

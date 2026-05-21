@@ -155,7 +155,7 @@ class Servidor(Base):
 
     # ── Relationships ───────────────────────────────────────────────────────
     lotacao: Mapped["UnidadeOrganizacional"] = relationship(
-        "UnidadeOrganizacional", foreign_keys=[lotacao_id]
+        "UnidadeOrganizacional", foreign_keys=[lotacao_id], lazy="selectin"
     )
 
 
@@ -229,6 +229,11 @@ class Projeto(Base):
         Text, nullable=True,
         comment="Descrição livre do andamento na área de compras/licitação.",
     )
+    observacoes: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True,
+        comment="Anotações gerais e informações adicionais sobre o projeto.",
+    )
+
 
     # ── Timestamps ──────────────────────────────────────────────────────────
     criado_em: Mapped[datetime] = mapped_column(

@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Folder,
   Lock,
+  MessageSquare,
 } from "lucide-react";
 import { differenceInDays, parseISO, isValid, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -106,7 +107,7 @@ export default function ProjetoDetalhesPage({
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-violet-500" />
+        <Loader2 size={32} className="animate-spin text-brand-primary" />
       </div>
     );
   }
@@ -141,7 +142,7 @@ export default function ProjetoDetalhesPage({
 
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-500 text-white shadow-lg shadow-violet-500/25">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
               <FolderKanban size={22} />
             </div>
             <div>
@@ -194,7 +195,7 @@ export default function ProjetoDetalhesPage({
             onClick={() => setActiveTab(tab.key)}
             className={`whitespace-nowrap px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-colors ${
               activeTab === tab.key
-                ? "border-b-2 border-violet-500 text-violet-600 dark:text-violet-400"
+                ? "border-b-2 border-brand-primary text-brand-primary"
                 : "text-foreground-muted hover:text-foreground"
             }`}
           >
@@ -213,7 +214,7 @@ export default function ProjetoDetalhesPage({
             {/* Seção 1: DADOS BÁSICOS */}
             <section>
               <div className="mb-6 border-b border-border pb-2">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-500">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
                   Dados Básicos
                 </h2>
               </div>
@@ -252,7 +253,7 @@ export default function ProjetoDetalhesPage({
             {/* Seção 2: PLANEJAMENTO ESTRATÉGICO */}
             <section className="mt-10">
               <div className="mb-6 border-b border-border pb-2">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-500">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
                   Planejamento Estratégico
                 </h2>
               </div>
@@ -293,6 +294,26 @@ export default function ProjetoDetalhesPage({
                 </div>
               </div>
             </section>
+
+            {/* Seção 3: INFORMAÇÕES COMPLEMENTARES */}
+            {projeto.observacoes && (
+              <section className="mt-10">
+                <div className="mb-6 border-b border-border pb-2">
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
+                    Informações Complementares
+                  </h2>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">
+                    Observações
+                  </label>
+                  <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[100px] whitespace-pre-wrap leading-relaxed">
+                    {projeto.observacoes}
+                  </div>
+                </div>
+              </section>
+            )}
 
           </div>
         )}
@@ -345,7 +366,7 @@ export default function ProjetoDetalhesPage({
 
                     return (
                       <tr key={art.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
-                        <td className="px-4 py-3 font-bold text-blue-900 dark:text-blue-400 whitespace-nowrap">{art.tipo}</td>
+                        <td className="px-4 py-3 font-bold text-brand-primary whitespace-nowrap">{art.tipo}</td>
                         <td className="px-4 py-3">{fmtDate(art.data_inicio)}</td>
                         <td className="px-4 py-3">
                           {art.data_fim_prevista ? (
@@ -387,7 +408,7 @@ export default function ProjetoDetalhesPage({
             ) : (
               <>
                 <div className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-foreground-muted">
-                  <Users size={16} className="text-violet-500" /> Equipe de Planejamento
+                  <Users size={16} className="text-brand-primary" /> Equipe de Planejamento
                 </div>
                 <div className="grid grid-cols-1 gap-5">
                   {([
@@ -408,7 +429,7 @@ export default function ProjetoDetalhesPage({
                     },
                   ] as const).map(({ label, titulares, substitutos }) => (
                     <div key={label} className="rounded-xl border border-slate-200 dark:border-slate-700/60 p-4 bg-slate-50/30 dark:bg-slate-900/20">
-                      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">{label}</div>
+                      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-brand-primary">{label}</div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Titulares */}
                         <div>
@@ -472,24 +493,25 @@ export default function ProjetoDetalhesPage({
         {activeTab === "historico" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="mb-6 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-500">
-              <Clock size={16} className="text-violet-500" /> Linha do Tempo
+              <Clock size={16} className="text-brand-primary" /> Linha do Tempo
             </div>
             {loadingEventos ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 size={24} className="animate-spin text-violet-500" />
+                <Loader2 size={24} className="animate-spin text-brand-primary" />
               </div>
             ) : eventos.length > 0 ? (
               <div className="relative space-y-0 pl-7 before:absolute before:left-[11px] before:top-2 before:h-[calc(100%-16px)] before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
                 {eventos.map((evt) => {
                   let Icon = Clock;
-                  let colorClass = "text-violet-500";
-                  let bgClass = "bg-violet-50 dark:bg-violet-900/20";
-                  let borderClass = "border-violet-200 dark:border-violet-800";
+                  let colorClass = "text-brand-primary";
+                  let bgClass = "bg-brand-primary/10";
+                  let borderClass = "border-brand-primary/20";
                   
                   if (evt.icone === "folder") { Icon = Folder; }
                   else if (evt.icone === "play") { Icon = Play; colorClass = "text-blue-500"; bgClass = "bg-blue-50 dark:bg-blue-900/20"; borderClass = "border-blue-200 dark:border-blue-800"; }
                   else if (evt.icone === "check") { Icon = Check; colorClass = "text-emerald-500"; bgClass = "bg-emerald-50 dark:bg-emerald-900/20"; borderClass = "border-emerald-200 dark:border-emerald-800"; }
                   else if (evt.icone === "alert") { Icon = AlertTriangle; colorClass = "text-amber-500"; bgClass = "bg-amber-50 dark:bg-amber-900/20"; borderClass = "border-amber-300 dark:border-amber-700"; }
+                  else if (evt.icone === "message") { Icon = MessageSquare; colorClass = "text-sky-500"; bgClass = "bg-sky-50 dark:bg-sky-900/20"; borderClass = "border-sky-200 dark:border-sky-800"; }
 
                   return (
                     <div key={evt.id} className="relative pb-6 last:pb-0">
@@ -621,20 +643,20 @@ function FaseExternaSection({
 
   if (projeto.status === "Fase interna" && todosArtefatosConcluidos) {
     return (
-      <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-violet-300 bg-gradient-to-br from-violet-50 to-purple-50 p-6 dark:border-violet-700 dark:from-violet-950/30 dark:to-purple-950/20">
-        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-200/30 dark:bg-violet-700/10" />
+      <div className="relative overflow-hidden rounded-xl border-2 border-dashed border-brand-primary/30 bg-brand-primary/5 p-6 dark:border-brand-primary/20">
+        <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-brand-primary/10" />
 
         <div className="relative">
           <div className="flex items-center gap-2 mb-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
               <Send size={16} />
             </div>
-            <h3 className="text-sm font-bold text-violet-800 dark:text-violet-300">
+            <h3 className="text-sm font-bold text-brand-primary">
               Fase Externa
             </h3>
           </div>
 
-          <p className="text-sm text-violet-700/80 dark:text-violet-400/80 mb-4 max-w-xl">
+          <p className="text-sm text-foreground-muted mb-4 max-w-xl">
             Todos os artefatos da fase interna foram concluídos. O projeto está
             pronto para iniciar a fase externa.
           </p>
@@ -642,7 +664,7 @@ function FaseExternaSection({
           <button
             onClick={handleEnviar}
             disabled={actionLoading}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-primary/25 transition-all hover:bg-brand-primary-hover hover:shadow-xl hover:shadow-brand-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {actionLoading ? (
               <Loader2 size={16} className="animate-spin" />
@@ -671,11 +693,11 @@ function FaseExternaSection({
 
   if (projeto.status === "Fase externa") {
     return (
-      <div className="relative overflow-hidden rounded-xl border border-violet-200 bg-background-card p-6 shadow-sm dark:border-violet-800">
+      <div className="relative overflow-hidden rounded-xl border border-brand-primary/20 bg-background-card p-6 shadow-sm">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary/10 text-brand-primary">
               <PackageCheck size={16} />
             </div>
             <div>
@@ -705,12 +727,12 @@ function FaseExternaSection({
             onChange={(e) => setNovaObs(e.target.value)}
             rows={3}
             placeholder="Descreva o andamento atual, pendências ou movimentações..."
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-400/20 transition-colors resize-none"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted/50 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 transition-colors resize-none"
           />
           <button
             onClick={handleAddObservacao}
             disabled={savingObs || !novaObs.trim()}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-700 transition-all hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed dark:border-violet-700 dark:bg-violet-900/20 dark:text-violet-400 dark:hover:bg-violet-900/40"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-brand-primary/30 bg-brand-primary/10 px-4 py-2 text-xs font-bold text-brand-primary transition-all hover:bg-brand-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {savingObs ? (
               <Loader2 size={13} className="animate-spin" />
@@ -728,7 +750,7 @@ function FaseExternaSection({
           </h4>
           {loadingObs ? (
             <div className="flex justify-center py-4">
-              <Loader2 size={24} className="animate-spin text-violet-500" />
+              <Loader2 size={24} className="animate-spin text-brand-primary" />
             </div>
           ) : observacoes.length > 0 ? (
             <div className="space-y-3">

@@ -16,7 +16,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, computed_field
 
-from app.models.contrato import TipoContratoEnum, SituacaoContratoEnum, TipoRegistroHistoricoEnum, ModalidadeContratoEnum
+from app.models.contrato import TipoContratoEnum, SituacaoContratoEnum, TipoRegistroHistoricoEnum, ModalidadeContratoEnum, TipoInstrumentoEnum
 from app.schemas.aditivo import AditivoResponse  # noqa: E402
 
 
@@ -57,7 +57,7 @@ class _ServidorResumo(BaseModel):
 
 class EquipePapelInput(BaseModel):
     """Entrada para um papel específico da equipe."""
-    titular_id: Optional[int] = None
+    titulares_ids: list[int] = []
     substitutos_ids: list[int] = []
 
 
@@ -79,7 +79,7 @@ class EquipeMembroResponse(BaseModel):
 
 class EquipePapelResponse(BaseModel):
     """Resposta agrupada de um papel (titular + substitutos)."""
-    titular: Optional[_ServidorResumo] = None
+    titulares: list[_ServidorResumo] = []
     substitutos: list[_ServidorResumo] = []
 
 
@@ -119,22 +119,26 @@ class ObservacaoContratoCreate(BaseModel):
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 class ItemContratoCreate(BaseModel):
-    objeto_contratado: str = Field(..., min_length=1, max_length=500)
     quantidade: int = Field(default=1, ge=1)
     valor_unitario: Decimal = Field(default=Decimal(0), ge=0)
     tipo_catalogo: Optional[str] = Field(None, max_length=10, description="CATMAT ou CATSER")
     codigo_catalogo: Optional[str] = Field(None, max_length=50)
+    catalogo_produto_id: int = Field(..., description="ID do item no Catálogo de Produtos/Serviços")
+    data_inicio_vigencia: Optional[date] = None
+    data_fim_vigencia: Optional[date] = None
 
 class ItemContratoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     contrato_id: int
-    objeto_contratado: str
     quantidade: int
     valor_unitario: Decimal
     valor_total: Decimal
     tipo_catalogo: Optional[str] = None
     codigo_catalogo: Optional[str] = None
+    catalogo_produto_id: int
+    data_inicio_vigencia: Optional[date] = None
+    data_fim_vigencia: Optional[date] = None
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -147,12 +151,17 @@ class ContratoCreate(BaseModel):
 
     projeto_id: int
     modalidade_contrato: ModalidadeContratoEnum = ModalidadeContratoEnum.CONTRATO
+    tipo_instrumento: Optional[str] = Field(
+        None, description="Tipo de instrumento: CONTRATO ou NOTA_EMPENHO (somente para modalidade CONTRATO).",
+    )
     numero: int = Field(..., gt=0, examples=[42])
     ano: int = Field(..., ge=2015, le=2035, examples=[2025])
-    empresa_id: int = Field(
-        ..., description="ID da empresa contratada (FK para tabela empresas).",
+    fornecedor_id: Optional[int] = Field(
+        None, description="ID do fornecedor vinculado (FK para tabela fornecedores).",
     )
-    fabricante_id: Optional[int] = Field(None, description="ID do fabricante (FK para tabela fabricantes)")
+    tipo_fornecedor_contrato: Optional[str] = Field(
+        None, description="Tipo: REVENDEDOR, FABRICANTE ou REVENDEDOR_E_FABRICANTE.",
+    )
     tipo_contrato: TipoContratoEnum
     itens: list[ItemContratoCreate] = Field(default_factory=list, description="Itens do contrato")
 
@@ -204,9 +213,10 @@ class ContratoUpdate(BaseModel):
     numero: Optional[int] = Field(None, gt=0)
     ano: Optional[int] = Field(None, ge=2015, le=2035)
     modalidade_contrato: Optional[ModalidadeContratoEnum] = None
+    tipo_instrumento: Optional[str] = None
     orgao_gerenciador: Optional[str] = Field(None, max_length=300)
-    empresa_id: Optional[int] = Field(None, description="ID da empresa contratada")
-    fabricante_id: Optional[int] = None
+    fornecedor_id: Optional[int] = Field(None, description="ID do fornecedor vinculado")
+    tipo_fornecedor_contrato: Optional[str] = None
     tipo_contrato: Optional[TipoContratoEnum] = None
     itens: Optional[list[ItemContratoCreate]] = None
 
@@ -238,12 +248,12 @@ class ContratoResponse(BaseModel):
     numero: int
     ano: int
     modalidade_contrato: ModalidadeContratoEnum = ModalidadeContratoEnum.CONTRATO
+    tipo_instrumento: Optional[str] = None
     orgao_gerenciador: Optional[str] = None
     projeto_id: int
-    empresa_id: Optional[int] = None
-    empresa_nome: Optional[str] = None
-    fabricante_id: Optional[int] = None
-    fabricante_nome: Optional[str] = None
+    fornecedor_id: Optional[int] = None
+    fornecedor_nome: Optional[str] = None
+    tipo_fornecedor_contrato: Optional[str] = None
     tipo_contrato: TipoContratoEnum
     itens: list[ItemContratoResponse] = []
 
@@ -283,8 +293,10 @@ class ContratoListagemResponse(BaseModel):
     numero: int
     ano: int
     modalidade_contrato: ModalidadeContratoEnum = ModalidadeContratoEnum.CONTRATO
-    empresa_id: Optional[int] = None
-    empresa_nome: Optional[str] = None
+    tipo_instrumento: Optional[str] = None
+    fornecedor_id: Optional[int] = None
+    fornecedor_nome: Optional[str] = None
+    tipo_fornecedor_contrato: Optional[str] = None
     tipo_contrato: TipoContratoEnum
     situacao_atual: SituacaoContratoEnum
     valor_total: Decimal = Field(default=Decimal(0))

@@ -202,12 +202,31 @@ export async function atualizarAcaoPdtic(
   return res.json() as Promise<PdticAcao>;
 }
 
-export async function excluirAcaoPdtic(
+export async function editarSimplesAcaoPdtic(
+  acaoId: number,
+  payload: unknown
+): Promise<PdticAcao> {
+  const res = await fetch(
+    `${API_BASE}/pdtic/acoes/${acaoId}/editar-simples`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(payload),
+    }
+  );
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`API error ${res.status}: ${detail}`);
+  }
+  return res.json() as Promise<PdticAcao>;
+}
+
+export async function desativarAcaoPdtic(
   acaoId: number,
   revisaoExclusaoId: number
 ): Promise<PdticAcao> {
-  const res = await fetch(`${API_BASE}/pdtic/acoes/${acaoId}`, {
-    method: "DELETE",
+  const res = await fetch(`${API_BASE}/pdtic/acoes/${acaoId}/desativar`, {
+    method: "PUT",
     headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({ revisao_exclusao_id: revisaoExclusaoId }),
   });
@@ -216,6 +235,19 @@ export async function excluirAcaoPdtic(
     throw new Error(`API error ${res.status}: ${detail}`);
   }
   return res.json() as Promise<PdticAcao>;
+}
+
+export async function excluirDefinitivoAcaoPdtic(
+  acaoId: number
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/pdtic/acoes/${acaoId}`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`API error ${res.status}: ${detail}`);
+  }
 }
 
 /* ── PACC ──────────────────────────────────────────────────────────────── */
@@ -296,6 +328,19 @@ export async function excluirItemPacc(
   return res.json() as Promise<PaccItem>;
 }
 
+export async function excluirDefinitivoItemPacc(
+  itemId: number
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/pacc/itens/${itemId}/definitivo`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`API error ${res.status}: ${detail}`);
+  }
+}
+
 /**
  * Busca ações PDTIC ativas de um período específico.
  * Usa `apenas_ativas=true` para alimentar o select relacional do formulário PACC.
@@ -344,6 +389,10 @@ export async function inicializarArtefatos(
 export async function fetchServidores(q?: string): Promise<Servidor[]> {
   const qs = q ? `?q=${encodeURIComponent(q)}` : "";
   return fetcher<Servidor[]>(`/projetos/servidores${qs}`);
+}
+
+export async function fetchServidor(id: number): Promise<Servidor> {
+  return fetcher<Servidor>(`/projetos/servidores/${id}`);
 }
 
 export async function criarServidor(payload: Record<string, unknown>): Promise<Servidor> {
@@ -568,108 +617,59 @@ export async function adicionarComentarioArtefato(
 }
 
 
-/* ── FABRICANTES ────────────────────────────────────────────────────────── */
+/* ── CATÁLOGO DE PRODUTOS ──────────────────────────────────────────────── */
 
-export interface Fabricante {
-  id: number;
-  nome: string;
-  site: string | null;
-  contato_nome: string;
-  contato_cargo: string;
-  contato_telefone1: string;
-  contato_telefone2: string | null;
-  contato_email: string;
-  create_time: string;
-  update_time: string | null;
+import type { CatalogoProduto, CatalogoProdutoPayload } from "@/types/catalogo";
+
+export type { CatalogoProduto, CatalogoProdutoPayload };
+
+export async function fetchCatalogo(search?: string): Promise<CatalogoProduto[]> {
+  const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+  return fetcher<CatalogoProduto[]>(`/catalogo${qs}`);
 }
 
-export interface FabricantePayload {
-  nome: string;
-  site?: string | null;
-  contato_nome: string;
-  contato_cargo: string;
-  contato_telefone1: string;
-  contato_telefone2?: string | null;
-  contato_email: string;
+export async function criarItemCatalogo(payload: CatalogoProdutoPayload): Promise<CatalogoProduto> {
+  return poster<CatalogoProduto>("/catalogo", payload);
 }
 
-export async function fetchFabricantes(): Promise<Fabricante[]> {
-  return fetcher<Fabricante[]>("/fabricantes");
-}
-
-export async function fetchFabricante(id: number): Promise<Fabricante> {
-  return fetcher<Fabricante>(`/fabricantes/${id}`);
-}
-
-export async function criarFabricante(payload: FabricantePayload): Promise<Fabricante> {
-  return poster<Fabricante>("/fabricantes", payload);
-}
-
-export async function atualizarFabricante(
+export async function atualizarItemCatalogo(
   id: number,
-  payload: Partial<FabricantePayload>
-): Promise<Fabricante> {
-  return patcher<Fabricante>(`/fabricantes/${id}`, payload);
+  payload: CatalogoProdutoPayload,
+): Promise<CatalogoProduto> {
+  return patcher<CatalogoProduto>(`/catalogo/${id}`, payload);
 }
 
-export async function excluirFabricante(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/fabricantes/${id}`, {
-    method: "DELETE",
-    headers: { ...getAuthHeaders() },
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
+export async function excluirItemCatalogo(id: number): Promise<void> {
+  return deleter(`/catalogo/${id}`);
 }
 
-/* ── EMPRESAS ───────────────────────────────────────────────────────────── */
+/* ── FORNECEDORES ──────────────────────────────────────────────────────── */
 
-export interface Empresa {
-  id: number;
-  nome: string;
-  cnpj: string;
-  site: string | null;
-  contato_nome: string;
-  telefone: string;
-  email: string;
-  servicos_ofertados: string[];
-  create_time: string;
-  update_time: string | null;
+import type { FornecedorResponse, FornecedorResumo } from "@/types/fornecedor";
+
+export type { FornecedorResponse, FornecedorResumo };
+
+export async function fetchFornecedores(): Promise<FornecedorResponse[]> {
+  return fetcher<FornecedorResponse[]>("/fornecedores");
 }
 
-export interface EmpresaPayload {
-  nome: string;
-  cnpj: string;
-  site?: string | null;
-  contato_nome: string;
-  telefone: string;
-  email: string;
-  servicos_ofertados?: string[];
+export async function fetchFornecedor(id: number): Promise<FornecedorResponse> {
+  return fetcher<FornecedorResponse>(`/fornecedores/${id}`);
 }
 
-export async function fetchEmpresas(): Promise<Empresa[]> {
-  return fetcher<Empresa[]>("/empresas");
+export async function criarFornecedor(payload: Record<string, unknown>): Promise<FornecedorResponse> {
+  return poster<FornecedorResponse>("/fornecedores", payload);
 }
 
-export async function fetchEmpresa(id: number): Promise<Empresa> {
-  return fetcher<Empresa>(`/empresas/${id}`);
-}
-
-export async function criarEmpresa(payload: EmpresaPayload): Promise<Empresa> {
-  return poster<Empresa>("/empresas", payload);
-}
-
-export async function atualizarEmpresa(
+export async function atualizarFornecedor(
   id: number,
-  payload: Partial<EmpresaPayload>
-): Promise<Empresa> {
-  return patcher<Empresa>(`/empresas/${id}`, payload);
+  payload: Record<string, unknown>,
+): Promise<FornecedorResponse> {
+  return patcher<FornecedorResponse>(`/fornecedores/${id}`, payload);
 }
 
-export async function excluirEmpresa(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/empresas/${id}`, {
-    method: "DELETE",
-    headers: { ...getAuthHeaders() },
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
+export async function excluirFornecedor(id: number): Promise<void> {
+  return deleter(`/fornecedores/${id}`);
 }
 
 /* ── CONFIGURAÇÕES (White Label) ───────────────────────────────────────── */
@@ -801,6 +801,7 @@ export interface ServidorItem {
   matricula: string;
   cargo: string;
   lotacao: string;
+  email_funcional?: string | null;
 }
 
 export async function getServidores(): Promise<ServidorItem[]> {

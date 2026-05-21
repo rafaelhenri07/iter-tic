@@ -219,6 +219,11 @@ class ProjetoBase(BaseModel):
         default="Simples",
         examples=["Simples", "Intermediária", "Complexa"]
     )
+    observacoes: Optional[str] = Field(
+        None,
+        description="Anotações gerais e informações adicionais sobre o projeto.",
+    )
+
 
     @field_validator("processo_sei", mode="before")
     @classmethod
@@ -281,6 +286,8 @@ class ProjetoUpdate(BaseModel):
     prioridade: Optional[str] = None
     complexidade: Optional[str] = None
     status: Optional[StatusProjetoEnum] = None
+    observacoes: Optional[str] = None
+
 
     integrantes_requisitantes_ids: Optional[list[int]] = None
     integrantes_tecnicos_ids: Optional[list[int]] = None
@@ -437,6 +444,13 @@ class TramitacaoResumoListagem(BaseModel):
     data_hora: datetime
 
 
+class UltimaMovimentacaoResumo(BaseModel):
+    """Última movimentação do Histórico de Movimentações (ObservacaoFaseExterna)."""
+    texto: str
+    autor: str
+    data: datetime
+
+
 class ProjetoListagemResponse(BaseModel):
     """Resposta otimizada para listagem/grid de projetos."""
     model_config = ConfigDict(from_attributes=True)
@@ -471,6 +485,10 @@ class ProjetoListagemResponse(BaseModel):
     # Tramitações (resumo para a listagem)
     tramitacoes_resumo: list[TramitacaoResumoListagem] = []
     total_tramitacoes: int = 0
+
+    # Fase Externa — dados enriquecidos para tooltip
+    ultima_movimentacao: Optional[UltimaMovimentacaoResumo] = None
+    duracao_fase_externa_dias: Optional[int] = None
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗

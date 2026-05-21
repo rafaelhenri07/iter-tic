@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.pacc import ExercicioPacc, ItemPacc, RevisaoPacc
 from app.models.pdtic import AcaoPdtic
+from app.models.estrutura_organizacional import UnidadeOrganizacional
 from app.schemas.pacc import (
     PaccExercicioCreate,
     PaccExercicioComRevisoesResponse,
@@ -332,7 +333,21 @@ async def obter_item(
         .options(
             selectinload(ItemPacc.revisao_inclusao),
             selectinload(ItemPacc.revisao_exclusao),
-            selectinload(ItemPacc.acao_pdtic),
+            selectinload(ItemPacc.acao_pdtic)
+            .selectinload(AcaoPdtic.departamentos_rel)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(ItemPacc.acao_pdtic)
+            .selectinload(AcaoPdtic.unidades_demandantes_rel)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(ItemPacc.acao_pdtic)
+            .selectinload(AcaoPdtic.unidades_responsaveis_rel)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai),
         )
         .where(ItemPacc.id == item_id)
     )
@@ -382,10 +397,26 @@ async def obter_painel_exercicio(
     )
     revisoes = (await db.execute(stmt_rev)).scalars().all()
 
-    # Itens — todos do exercício, com ação PDTIC eager-loaded
+    # Itens — todos do exercício, com ação PDTIC e suas sub-relações eager-loaded
     stmt_itens = (
         select(ItemPacc)
-        .options(selectinload(ItemPacc.acao_pdtic))
+        .options(
+            selectinload(ItemPacc.acao_pdtic)
+            .selectinload(AcaoPdtic.departamentos_rel)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(ItemPacc.acao_pdtic)
+            .selectinload(AcaoPdtic.unidades_demandantes_rel)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(ItemPacc.acao_pdtic)
+            .selectinload(AcaoPdtic.unidades_responsaveis_rel)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai),
+        )
         .where(ItemPacc.exercicio_id == exercicio_id)
         .order_by(ItemPacc.numero_item, ItemPacc.id)
     )
@@ -612,6 +643,36 @@ async def excluir_item_logicamente(
     await db.flush()
     await db.refresh(item)
     return item
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  ITENS — EXCLUSÃO DEFINITIVA (hard-delete — erro de cadastro)           ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+@router.delete(
+    "/itens/{item_id}/definitivo",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Excluir item PACC definitivamente (hard-delete)",
+    description=(
+        "Remove o item permanentemente do banco de dados. "
+        "Use APENAS para corrigir ERROS DE CADASTRO. "
+        "Para itens cancelados em revisão oficial, utilize DELETE /itens/{item_id} (exclusão lógica)."
+    ),
+)
+async def excluir_item_definitivamente(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    item = await db.get(ItemPacc, item_id)
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Item {item_id} não encontrado.",
+        )
+
+    await db.delete(item)
+    await db.flush()
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗

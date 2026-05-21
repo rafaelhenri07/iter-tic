@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, Trash2, X } from "lucide-react";
 import type { PdticAcao, PdticRevisao } from "@/types/pdtic";
 import { selectCls } from "@/components/ui/FormField";
-import { excluirAcaoPdtic } from "@/lib/api";
+import { excluirDefinitivoAcaoPdtic } from "@/lib/api";
 import { showToast } from "@/components/ui/Toast";
 
 interface ExcluirAcaoDialogProps {
@@ -51,7 +51,7 @@ export function ExcluirAcaoDialog({
 
     setSubmitting(true);
     try {
-      await excluirAcaoPdtic(acao.id, Number(selectedRevisaoId));
+      await excluirDefinitivoAcaoPdtic(acao.id);
       showToast(
         "success",
         `Ação ${acao.codigo_acao} excluída com sucesso.`

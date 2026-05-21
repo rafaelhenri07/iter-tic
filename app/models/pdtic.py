@@ -209,14 +209,14 @@ class AcaoPdtic(Base):
     total_gut: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     previsao_contratacao: Mapped[Optional[str]] = mapped_column(
-        String(10),
+        String(7),
         nullable=True,
-        comment="Formato MM/YYYY",
+        comment="Data prevista (ISO: YYYY-MM)",
     )
     previsao_renovacao: Mapped[Optional[str]] = mapped_column(
-        String(10),
+        String(7),
         nullable=True,
-        comment="Formato MM/YYYY",
+        comment="Data prevista (ISO: YYYY-MM)",
     )
 
     # ── Valores financeiros por ano (JSONB) ─────────────────────────────────
@@ -296,5 +296,17 @@ class AcaoPdtic(Base):
     def esta_ativa(self) -> bool:
         """Retorna True se a ação não foi excluída em nenhuma revisão."""
         return self.revisao_exclusao_id is None
+
+    @property
+    def departamentos_ids(self) -> list[int]:
+        return [u.id for u in self.departamentos_rel]
+
+    @property
+    def unidades_demandantes_ids(self) -> list[int]:
+        return [u.id for u in self.unidades_demandantes_rel]
+
+    @property
+    def unidades_responsaveis_ids(self) -> list[int]:
+        return [u.id for u in self.unidades_responsaveis_rel]
 
 

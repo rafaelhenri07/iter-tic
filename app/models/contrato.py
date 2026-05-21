@@ -59,6 +59,12 @@ class ModalidadeContratoEnum(str, enum.Enum):
     ARP = "ARP"
 
 
+class TipoInstrumentoEnum(str, enum.Enum):
+    """Tipo de instrumento contratual (apenas para modalidade CONTRATO)."""
+    CONTRATO = "CONTRATO"
+    NOTA_EMPENHO = "NOTA_EMPENHO"
+
+
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  CONTRATO (entidade central do Módulo 3)                               ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -102,6 +108,10 @@ class Contrato(Base):
         String(300), nullable=True,
         comment="Órgão gerenciador da ARP (somente para modalidade ARP).",
     )
+    tipo_instrumento: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True,
+        comment="Tipo de instrumento: CONTRATO ou NOTA_EMPENHO (somente para modalidade CONTRATO).",
+    )
 
     # ── Vínculo com Projeto ─────────────────────────────────────────────────
     projeto_id: Mapped[int] = mapped_column(
@@ -112,17 +122,15 @@ class Contrato(Base):
     )
 
     # ── Dados da Contratação ────────────────────────────────────────────────
-    empresa_id: Mapped[Optional[int]] = mapped_column(
+    fornecedor_id: Mapped[Optional[int]] = mapped_column(
         Integer,
-        ForeignKey("empresas.id", ondelete="RESTRICT"),
+        ForeignKey("fornecedores.id", ondelete="RESTRICT"),
         nullable=True,
-        comment="Empresa contratada (FK para empresas).",
+        comment="Fornecedor vinculado ao contrato (FK para fornecedores).",
     )
-    fabricante_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("fabricantes.id", ondelete="SET NULL"),
-        nullable=True,
-        comment="Fabricante do produto/solução (FK para fabricantes).",
+    tipo_fornecedor_contrato: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True,
+        comment="Tipo: REVENDEDOR, FABRICANTE ou REVENDEDOR_E_FABRICANTE.",
     )
     tipo_contrato: Mapped[TipoContratoEnum] = mapped_column(
         Enum(
@@ -188,12 +196,8 @@ class Contrato(Base):
     # ── Relationships ───────────────────────────────────────────────────────
     projeto: Mapped["Projeto"] = relationship("Projeto", lazy="selectin")
 
-    empresa_rel: Mapped[Optional["Empresa"]] = relationship(
-        "Empresa", foreign_keys=[empresa_id], lazy="selectin",
-    )
-
-    fabricante_rel: Mapped[Optional["Fabricante"]] = relationship(
-        "Fabricante", foreign_keys=[fabricante_id], lazy="selectin",
+    fornecedor_rel: Mapped[Optional["Fornecedor"]] = relationship(
+        "Fornecedor", foreign_keys=[fornecedor_id], lazy="selectin",
     )
 
     # Equipe de Fiscalização (1:N via tabela contrato_equipe)
@@ -296,10 +300,14 @@ class ItemContrato(Base):
         nullable=False,
         index=True,
     )
-    objeto_contratado: Mapped[str] = mapped_column(
-        String(500), nullable=False,
-        comment="Descrição detalhada do item/produto/serviço contratado.",
+    catalogo_produto_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("catalogo_produtos.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Referência ao item padronizado do Catálogo de Produtos/Serviços.",
     )
+
     quantidade: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1,
         comment="Quantidade de itens.",
@@ -319,8 +327,19 @@ class ItemContrato(Base):
         comment="Código numérico do catálogo (ComprasNet).",
     )
 
+    # ── Vigência Granular ──────────────────────────────────────────────────
+    data_inicio_vigencia: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True,
+        comment="Data de início do suporte/garantia específico do item.",
+    )
+    data_fim_vigencia: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True,
+        comment="Data de fim do suporte/garantia específico do item.",
+    )
+
     # ── Relationships ──────────────────────────────────────────────────────
     contrato: Mapped["Contrato"] = relationship("Contrato", back_populates="itens")
+    catalogo_produto: Mapped[Optional["CatalogoProduto"]] = relationship("CatalogoProduto")
 
     @property
     def valor_total(self) -> Decimal:
@@ -382,6 +401,6 @@ class ContratoHistorico(Base):
 
 # ── Forward reference imports ──────────────────────────────────────────────
 from app.models.projeto import Projeto, Servidor  # noqa: E402, F401
-from app.models.fabricante import Fabricante  # noqa: E402, F401
-from app.models.empresa import Empresa  # noqa: E402, F401
+from app.models.fornecedor import Fornecedor  # noqa: E402, F401
 from app.models.aditivo import Aditivo  # noqa: E402, F401
+from app.models.catalogo import CatalogoProduto  # noqa: E402, F401

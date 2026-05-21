@@ -51,9 +51,11 @@ _FIELD_LABELS: dict[str, str] = {
     "ano": "Ano",
     "modalidade_contrato": "Modalidade",
     "orgao_gerenciador": "Órgão Gerenciador",
-    "empresa_id": "Empresa Contratada",
-    "fabricante_id": "Fabricante",
+    "empresa_id": "Fornecedor",
+    "fornecedor_id": "Fornecedor",
+    "tipo_fornecedor_contrato": "Tipo de Fornecedor",
     "tipo_contrato": "Tipo de Contrato",
+    "tipo_instrumento": "Tipo de Instrumento",
     "quantidade": "Quantidade",
     "tecnologia_utilizada": "Tecnologia Utilizada",
     "valor_investimento": "Valor de Investimento",
@@ -115,11 +117,11 @@ async def _salvar_equipe(
         if papel_input is None:
             continue
 
-        # Titular
-        if papel_input.titular_id:
+        # Titulares
+        for tit_id in (papel_input.titulares_ids or []):
             db.add(ContratoEquipe(
                 contrato_id=contrato_id,
-                servidor_id=papel_input.titular_id,
+                servidor_id=tit_id,
                 papel=papel_enum,
                 is_titular=True,
             ))
@@ -155,7 +157,7 @@ def _montar_equipe_response(membros: list[ContratoEquipe]) -> EquipeFiscalizacao
     agrupado: dict[str, dict] = {}
 
     for papel_enum in PapelEquipeEnum:
-        agrupado[papel_enum.value] = {"titular": None, "substitutos": []}
+        agrupado[papel_enum.value] = {"titulares": [], "substitutos": []}
 
     for m in membros:
         srv = {
@@ -165,7 +167,7 @@ def _montar_equipe_response(membros: list[ContratoEquipe]) -> EquipeFiscalizacao
             "matricula": m.servidor.matricula,
         }
         if m.is_titular:
-            agrupado[m.papel.value]["titular"] = srv
+            agrupado[m.papel.value]["titulares"].append(srv)
         else:
             agrupado[m.papel.value]["substitutos"].append(srv)
 
@@ -202,8 +204,7 @@ async def listar_contratos(
         select(Contrato)
         .options(
             selectinload(Contrato.projeto),
-            selectinload(Contrato.empresa_rel),
-            selectinload(Contrato.fabricante_rel),
+            selectinload(Contrato.fornecedor_rel),
             selectinload(Contrato.equipe_membros).selectinload(ContratoEquipe.servidor),
         )
         .order_by(Contrato.criado_em.desc())
@@ -226,19 +227,28 @@ async def listar_contratos(
     result = []
     for c in contratos:
         # Buscar nome do gestor titular na equipe
+        gestores_titulares = [
+            m.servidor.nome
+            for m in (c.equipe_membros or [])
+            if m.papel == PapelEquipeEnum.GESTOR and m.is_titular
+        ]
         nome_gestor = None
-        for m in (c.equipe_membros or []):
-            if m.papel == PapelEquipeEnum.GESTOR and m.is_titular:
-                nome_gestor = m.servidor.nome
-                break
+        if gestores_titulares:
+            nome_gestor = gestores_titulares[0]
+            if len(gestores_titulares) > 1:
+                nome_gestor += f" (+{len(gestores_titulares) - 1})"
 
         result.append(ContratoListagemResponse(
             id=c.id,
             numero=c.numero,
             ano=c.ano,
             modalidade_contrato=c.modalidade_contrato,
-            empresa_id=c.empresa_id,
-            empresa_nome=c.empresa_rel.nome if c.empresa_rel else None,
+            tipo_instrumento=c.tipo_instrumento,
+            empresa_id=None,
+            empresa_nome=None,
+            fornecedor_id=c.fornecedor_id,
+            fornecedor_nome=c.fornecedor_rel.nome if c.fornecedor_rel else None,
+            tipo_fornecedor_contrato=c.tipo_fornecedor_contrato,
             tipo_contrato=c.tipo_contrato,
             situacao_atual=c.situacao_atual,
             valor_total=c.valor_total,
@@ -332,7 +342,12 @@ async def criar_contrato(
             contrato_id=contrato.id,
             objeto_contratado=item.objeto_contratado,
             quantidade=item.quantidade,
-            valor_unitario=item.valor_unitario
+            valor_unitario=item.valor_unitario,
+            tipo_catalogo=item.tipo_catalogo,
+            codigo_catalogo=item.codigo_catalogo,
+            catalogo_produto_id=item.catalogo_produto_id,
+            data_inicio_vigencia=item.data_inicio_vigencia,
+            data_fim_vigencia=item.data_fim_vigencia,
         ))
     await db.flush()
 
@@ -418,7 +433,12 @@ async def atualizar_contrato(
                 contrato_id=contrato_id,
                 objeto_contratado=item["objeto_contratado"],
                 quantidade=item["quantidade"],
-                valor_unitario=item["valor_unitario"]
+                valor_unitario=item["valor_unitario"],
+                tipo_catalogo=item.get("tipo_catalogo"),
+                codigo_catalogo=item.get("codigo_catalogo"),
+                catalogo_produto_id=item.get("catalogo_produto_id"),
+                data_inicio_vigencia=item.get("data_inicio_vigencia"),
+                data_fim_vigencia=item.get("data_fim_vigencia"),
             ))
         await db.flush()
 
@@ -567,8 +587,7 @@ async def _carregar_contrato_completo(
             selectinload(Contrato.projeto).selectinload(Projeto.acoes_pdtic),
             selectinload(Contrato.equipe_membros).selectinload(ContratoEquipe.servidor),
             selectinload(Contrato.historico),
-            selectinload(Contrato.fabricante_rel),
-            selectinload(Contrato.empresa_rel),
+            selectinload(Contrato.fornecedor_rel),
             selectinload(Contrato.aditivos),
             selectinload(Contrato.itens),
         )
@@ -622,12 +641,12 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
         numero=contrato.numero,
         ano=contrato.ano,
         modalidade_contrato=contrato.modalidade_contrato,
+        tipo_instrumento=contrato.tipo_instrumento,
         orgao_gerenciador=contrato.orgao_gerenciador,
         projeto_id=contrato.projeto_id,
-        empresa_id=contrato.empresa_id,
-        empresa_nome=contrato.empresa_rel.nome if contrato.empresa_rel else None,
-        fabricante_id=contrato.fabricante_id,
-        fabricante_nome=contrato.fabricante_rel.nome if contrato.fabricante_rel else None,
+        fornecedor_id=contrato.fornecedor_id,
+        fornecedor_nome=contrato.fornecedor_rel.nome if contrato.fornecedor_rel else None,
+        tipo_fornecedor_contrato=contrato.tipo_fornecedor_contrato,
         tipo_contrato=contrato.tipo_contrato,
         itens=contrato.itens,
         valor_total=contrato.valor_total,

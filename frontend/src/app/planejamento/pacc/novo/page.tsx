@@ -29,6 +29,7 @@ import {
 import { showToast } from "@/components/ui/Toast";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { SingleSelectCombobox } from "@/components/ui/SingleSelectCombobox";
 
 export default function NovoItemPaccPage() {
   const router = useRouter();
@@ -167,14 +168,14 @@ export default function NovoItemPaccPage() {
 
       {loadingContext ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="animate-spin text-blue-500" size={32} />
+          <Loader2 className="animate-spin text-brand-primary" size={32} />
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 pb-12">
           
           {/* ── Seção: Contexto ─────────────────────────────────────────── */}
           <div>
-            <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-blue-500">
+            <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800">
               Contexto da Inclusão
             </h3>
             <div className="grid gap-6 sm:grid-cols-2">
@@ -204,21 +205,37 @@ export default function NovoItemPaccPage() {
 
           {/* ── Seção: Vínculo e Demanda ────────────────────────────────── */}
           <div>
-            <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-blue-500">
+            <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800">
               Vínculo e Demanda
             </h3>
             <div className="space-y-6">
               <FormField label="Ação PDTIC Vinculada" required error={errors.acao_pdtic_id?.message}>
-                <select {...register("acao_pdtic_id", { valueAsNumber: true })} className={selectCls} disabled={submitting || loadingAcoes}>
-                  <option value={0}>
-                    {loadingAcoes ? "Carregando ações..." : "Selecione uma ação PDTIC..."}
-                  </option>
-                  {acoesPdtic.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.codigo_acao} — {a.descricao.substring(0, 80)}{a.descricao.length > 80 ? "…" : ""}
-                    </option>
-                  ))}
-                </select>
+                <Controller
+                  control={control}
+                  name="acao_pdtic_id"
+                  render={({ field }) => (
+                    <SingleSelectCombobox
+                      options={acoesPdtic
+                        .map((a) => ({
+                          value: a.id,
+                          label: `${a.codigo_acao} — ${
+                            a.descricao.length > 80
+                              ? a.descricao.substring(0, 80) + "…"
+                              : a.descricao
+                          }`,
+                        }))
+                        .sort((a, b) => a.label.localeCompare(b.label))}
+                      value={field.value}
+                      onChange={(val) => field.onChange(val || 0)}
+                      placeholder={
+                        loadingAcoes
+                          ? "Carregando ações..."
+                          : "Selecione uma ação PDTIC..."
+                      }
+                      disabled={submitting || loadingAcoes}
+                    />
+                  )}
+                />
               </FormField>
 
               <FormField label="Descrição da Demanda" required error={errors.descricao_demanda?.message}>
@@ -235,7 +252,7 @@ export default function NovoItemPaccPage() {
 
           {/* ── Seção: Detalhamento ─────────────────────────────────────── */}
           <div>
-            <h3 className="text-sm font-bold text-blue-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-blue-500">
+            <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800">
               Detalhamento do Item
             </h3>
             <div className="grid gap-6 sm:grid-cols-2">
@@ -292,7 +309,7 @@ export default function NovoItemPaccPage() {
                   <button
                     type="button"
                     onClick={() => setSeiList([...seiList, ""])}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-brand-primary hover:text-brand-primary-hover"
                     disabled={submitting}
                   >
                     <Plus size={14} />
@@ -314,7 +331,7 @@ export default function NovoItemPaccPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-blue-700 focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-brand-primary px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-primary-hover focus:ring-2 focus:ring-brand-primary/50 disabled:opacity-50"
             >
               {submitting ? (
                 <>

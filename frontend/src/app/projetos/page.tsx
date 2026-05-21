@@ -36,6 +36,12 @@ const PRIORIDADE_OPTIONS: { label: string; value: PrioridadeProjeto | "todas" }[
   { label: "Alta", value: "alta" },
 ];
 
+const TIPO_OPTIONS: { label: string; value: "todos" | "nova" | "legado" }[] = [
+  { label: "Todos os tipos", value: "todos" },
+  { label: "Projetos Atuais", value: "nova" },
+  { label: "Projetos Anteriores", value: "legado" },
+];
+
 /* ── Página principal ──────────────────────────────────────────────────── */
 
 export default function ProjetosPage() {
@@ -57,6 +63,7 @@ export default function ProjetosPage() {
   const [prioridadeFilter, setPrioridadeFilter] = useState<PrioridadeProjeto | "todas">(
     "todas"
   );
+  const [tipoFilter, setTipoFilter] = useState<"todos" | "nova" | "legado">("todos");
 
   // Fetch
   useEffect(() => {
@@ -88,6 +95,12 @@ export default function ProjetosPage() {
       resultado = resultado.filter((p) => p.prioridade === prioridadeFilter);
     }
 
+    if (tipoFilter !== "todos") {
+      resultado = resultado.filter((p) =>
+        tipoFilter === "legado" ? p.is_legado : !p.is_legado
+      );
+    }
+
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       resultado = resultado.filter(
@@ -100,7 +113,7 @@ export default function ProjetosPage() {
     }
 
     return resultado;
-  }, [projetos, statusFilter, prioridadeFilter, searchTerm]);
+  }, [projetos, statusFilter, prioridadeFilter, tipoFilter, searchTerm]);
 
   // Stats
   const stats = useMemo(() => {
@@ -118,11 +131,11 @@ export default function ProjetosPage() {
   }, [projetos]);
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-500 text-white shadow-lg shadow-violet-500/25">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
             <FolderKanban size={20} />
           </div>
           <div>
@@ -137,7 +150,7 @@ export default function ProjetosPage() {
 
         <Link
           href="/projetos/novo"
-          className="flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition-all hover:shadow-xl hover:shadow-violet-500/30"
+          className="flex h-10 items-center gap-2 rounded-xl bg-brand-primary px-5 text-sm font-semibold text-white shadow-lg shadow-brand-primary/25 transition-all hover:bg-brand-primary-hover hover:shadow-xl hover:shadow-brand-primary/30"
         >
           <Plus size={16} />
           Novo Projeto
@@ -175,7 +188,7 @@ export default function ProjetosPage() {
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Fase Externa
             </div>
-            <div className="mt-1 text-3xl font-bold text-violet-600 dark:text-violet-400">
+            <div className="mt-1 text-3xl font-bold text-brand-primary">
               {stats.faseExterna}
             </div>
           </div>
@@ -233,6 +246,19 @@ export default function ProjetosPage() {
               </option>
             ))}
           </select>
+
+          {/* Tipo de Projeto dropdown */}
+          <select
+            value={tipoFilter}
+            onChange={(e) => setTipoFilter(e.target.value as "todos" | "nova" | "legado")}
+            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+          >
+            {TIPO_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
@@ -242,7 +268,7 @@ export default function ProjetosPage() {
       ) : projetos.length === 0 ? (
         /* Empty state */
         <div className="flex h-72 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-background-card">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-100 text-violet-500 dark:bg-violet-900/30 dark:text-violet-400 mb-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-primary/10 text-brand-primary mb-4">
             <Inbox size={32} />
           </div>
           <h3 className="text-lg font-bold text-foreground mb-1">
@@ -254,7 +280,7 @@ export default function ProjetosPage() {
           </p>
           <Link
             href="/projetos/novo"
-            className="mt-5 flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-500 px-5 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg hover:shadow-violet-500/30"
+            className="mt-5 flex h-10 items-center gap-2 rounded-xl bg-brand-primary px-5 text-sm font-semibold text-white shadow-md transition-all hover:bg-brand-primary-hover hover:shadow-lg"
           >
             <Plus size={16} />
             Criar Primeiro Projeto

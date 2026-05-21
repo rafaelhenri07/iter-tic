@@ -26,9 +26,7 @@ export const servidorSchema = z.object({
     .optional()
     .or(z.literal("")),
 
-  departamento_id: z.number({ error: "Selecione o departamento" }).min(1, "Selecione o departamento."),
-  unidade_lotacao_id: z.number().nullable().optional(),
-  secao_id: z.number().nullable().optional(),
+  lotacao_id: z.number({ error: "Selecione a lotação" }).min(1, "Selecione a lotação."),
 
   email_funcional: z
     .string({ error: "E-mail funcional é obrigatório." })
@@ -44,7 +42,5 @@ export function cleanServidorPayload(
 ): Record<string, unknown> {
   const clean: Record<string, unknown> = { ...data };
   if (clean.funcao === "") clean.funcao = null;
-  if (!clean.unidade_lotacao_id) clean.unidade_lotacao_id = null;
-  if (!clean.secao_id) clean.secao_id = null;
   return clean;
 }

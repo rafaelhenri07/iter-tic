@@ -34,8 +34,13 @@ logger = logging.getLogger("auditoria")
 ROTA_ENTIDADE_MAP = {
     "/pdtic": "PDTIC",
     "/pacc": "PACC",
+    "/projetos/servidores": "Equipe",
     "/projetos": "Projeto",
     "/contratos": "Contrato",
+    "/fornecedores": "Fornecedor",
+    "/catalogo": "Catálogo",
+    "/usuarios": "Usuário",
+    "/estrutura-organizacional": "Estrutura Organizacional",
     "/fabricantes": "Fabricante",
     "/empresas": "Empresa",
     "/configuracoes": "Configuração",

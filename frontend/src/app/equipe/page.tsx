@@ -13,7 +13,7 @@ import {
   Hash,
   Building,
   Briefcase,
-  Shield,
+  ShieldCheck,
   Mail,
 } from "lucide-react";
 import Link from "next/link";
@@ -63,8 +63,8 @@ export default function EquipePage() {
         s.nome.toLowerCase().includes(q) ||
         s.matricula.toLowerCase().includes(q) ||
         s.cargo.toLowerCase().includes(q) ||
-        (s.departamento?.sigla || "").toLowerCase().includes(q) ||
-        (s.departamento?.nome || "").toLowerCase().includes(q) ||
+        (s.lotacao?.sigla || "").toLowerCase().includes(q) ||
+        (s.lotacao?.nome || "").toLowerCase().includes(q) ||
         (s.email_funcional || "").toLowerCase().includes(q)
     );
   }, [servidores, search]);
@@ -84,36 +84,26 @@ export default function EquipePage() {
     }
   }
 
-  // Open edit
-  function openEdit(s: Servidor) {
-    showToast("info", "A edição de servidor será implementada em breve.");
-  }
+  // Edit is handled via Link to /equipe/[id]/editar
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/25">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
             <Users size={22} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-foreground">
-              Gestão de Equipe
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Cadastro de agentes públicos do órgão
             </h1>
-            <p className="text-xs text-foreground-muted">
-              Cadastro de servidores da PCDF
-            </p>
           </div>
         </div>
-
-        <Link
-          href="/equipe/novo"
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:shadow-indigo-500/30 hover:brightness-110"
-        >
-          <Plus size={16} />
-          Novo Servidor
-        </Link>
+        <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400">
+          <ShieldCheck size={12} />
+          Área Restrita — ADMIN
+        </span>
       </div>
 
       {/* KPI */}
@@ -137,19 +127,28 @@ export default function EquipePage() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
-        />
-        <input
-          type="text"
-          placeholder="Buscar por nome, matrícula, cargo ou lotação..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-10 w-full rounded-xl border border-border bg-background-card pl-10 pr-4 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/20"
-        />
+      {/* Search & Actions */}
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="relative flex-1 w-full">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
+          />
+          <input
+            type="text"
+            placeholder="Buscar por nome, matrícula, cargo ou lotação..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10 w-full rounded-xl border border-border bg-background-card pl-10 pr-4 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+          />
+        </div>
+        <Link
+          href="/equipe/novo"
+          className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-primary px-5 text-sm font-semibold text-white shadow-md shadow-brand-primary/25 transition-all hover:bg-brand-primary-hover hover:shadow-lg w-full sm:w-auto"
+        >
+          <Plus size={16} />
+          Novo Servidor
+        </Link>
       </div>
 
       {/* Table */}
@@ -166,7 +165,7 @@ export default function EquipePage() {
           {servidores.length === 0 && (
             <Link
               href="/equipe/novo"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-primary/10 px-4 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/20"
             >
               <Plus size={14} />
               Cadastrar primeiro servidor
@@ -226,7 +225,7 @@ export default function EquipePage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 text-xs font-bold text-white">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-primary/10 text-xs font-bold text-brand-primary">
                             {s.nome.charAt(0).toUpperCase()}
                           </div>
                           <span className="font-medium text-foreground">
@@ -248,18 +247,8 @@ export default function EquipePage() {
                         <div className="flex flex-col gap-1">
                           <span className="inline-flex w-fit items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
                             <Building size={10} />
-                            {s.departamento?.sigla || s.departamento?.nome || "N/I"}
+                            {s.lotacao?.caminho_completo || s.lotacao?.sigla || s.lotacao?.nome || "N/I"}
                           </span>
-                          {(s.unidade_lotacao || s.secao) && (
-                            <span className="text-[10px] text-foreground-muted">
-                              {[
-                                s.unidade_lotacao?.sigla || s.unidade_lotacao?.nome,
-                                s.secao?.sigla || s.secao?.nome,
-                              ]
-                                .filter(Boolean)
-                                .join(" / ")}
-                            </span>
-                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -273,14 +262,14 @@ export default function EquipePage() {
                       </td>
 
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openEdit(s)}
-                            className="rounded-lg p-1.5 text-foreground-muted transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20"
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/equipe/${s.id}/editar`}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20"
                             title="Editar"
                           >
-                            <Pencil size={14} />
-                          </button>
+                            <Pencil size={15} />
+                          </Link>
                           {deletingId === s.id ? (
                             <div className="flex items-center gap-1">
                               <button
@@ -299,10 +288,10 @@ export default function EquipePage() {
                           ) : (
                             <button
                               onClick={() => setDeletingId(s.id)}
-                              className="rounded-lg p-1.5 text-foreground-muted transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
                               title="Excluir"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={15} />
                             </button>
                           )}
                         </div>

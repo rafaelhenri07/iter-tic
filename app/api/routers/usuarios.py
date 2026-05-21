@@ -3,17 +3,26 @@ ITER TIC - Rotas de Gestão de Usuários (exclusivo ADMIN)
 
 Todas as rotas são protegidas pela dependência `require_admin`.
 A "deleção" é um Soft Delete (is_active=False) para preservar o histórico de auditoria.
+Criação de usuário com fluxo de ativação por e-mail (sem senha no formulário).
 """
 
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.usuario import Usuario
+from app.models.projeto import Servidor  # noqa: kept for type reference
 from app.models.enums import RoleUsuarioEnum
-from app.core.security import require_admin, get_password_hash
+from app.core.security import (
+    require_admin,
+    get_password_hash,
+    sanitize_matricula,
+    create_activation_token,
+    hash_token,
+)
+from app.core.email_service import enviar_email_ativacao
 from app.schemas.usuario import UsuarioCreate, UsuarioUpdate, UsuarioAdminResponse
 
 router = APIRouter(prefix="/usuarios", tags=["Admin — Usuários"])
@@ -37,7 +46,14 @@ async def criar_usuario(
     db: AsyncSession = Depends(get_db),
     _admin: Usuario = Depends(require_admin),
 ):
-    """Cria um novo usuário/acesso no sistema (somente ADMIN)."""
+    """
+    Cria um novo usuário/acesso no sistema (somente ADMIN).
+    
+    Fluxo:
+    1. Se senha vier vazia → conta criada como pendente de ativação
+    2. Busca servidor vinculado para extrair matrícula
+    3. Gera token JWT de ativação (24h) e envia e-mail
+    """
     # Verifica se e-mail já existe
     existing = await db.execute(select(Usuario).where(Usuario.email == payload.email))
     if existing.scalar_one_or_none():
@@ -52,20 +68,64 @@ async def criar_usuario(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Role inválido. Use 'ADMIN' ou 'COMUM'.",
+            detail=f"Role inválido. Use 'ADMIN', 'GESTOR' ou 'COMUM'.",
         )
+
+    # Buscar matrícula do servidor vinculado (se houver)
+    matricula = None
+    servidor = None
+    if payload.servidor_id:
+        from app.models.projeto import Servidor
+        srv_result = await db.execute(select(Servidor).where(Servidor.id == payload.servidor_id))
+        servidor = srv_result.scalar_one_or_none()
+        if servidor:
+            matricula = sanitize_matricula(servidor.matricula)
+            
+            # Verificar se matrícula já está em uso por outro usuário
+            existing_mat = await db.execute(
+                select(Usuario).where(Usuario.matricula == matricula)
+            )
+            if existing_mat.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Já existe um usuário com a matrícula '{matricula}'.",
+                )
+
+    # Determinar se conta é ativa imediatamente ou pendente de ativação
+    senha_hash = None
+    is_pending = True
+    if payload.senha and payload.senha.strip():
+        # Senha fornecida (caso legado/admin root): ativar imediatamente
+        senha_hash = get_password_hash(payload.senha)
+        is_pending = False
 
     novo = Usuario(
         nome=payload.nome,
         email=payload.email,
-        senha_hash=get_password_hash(payload.senha),
+        matricula=matricula,
+        senha_hash=senha_hash,
         role=role,
-        is_active=True,
+        is_active=not is_pending,  # Pendente fica inativo até ativar
         servidor_id=payload.servidor_id,
     )
     db.add(novo)
     await db.commit()
     await db.refresh(novo)
+
+    # Gerar token de ativação e enviar e-mail
+    if is_pending:
+        token = create_activation_token(payload.email, purpose="ativacao")
+        novo.token_ativacao = hash_token(token)
+        await db.commit()
+        await db.refresh(novo)
+
+        # Enviar e-mail para o email do usuário (ou email_funcional do servidor)
+        email_destino = payload.email
+        if servidor and hasattr(servidor, 'email_funcional') and servidor.email_funcional:
+            email_destino = servidor.email_funcional
+
+        enviar_email_ativacao(email_destino, payload.nome, token)
+
     return novo
 
 

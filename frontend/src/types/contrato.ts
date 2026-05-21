@@ -13,6 +13,8 @@ export type SituacaoContrato =
 
 export type ModalidadeContrato = "CONTRATO" | "ARP";
 
+export type TipoInstrumento = "CONTRATO" | "NOTA_EMPENHO";
+
 /* ── Configuração visual (badges) ──────────────────────────────────────── */
 
 export const TIPO_CONTRATO_CONFIG: Record<
@@ -91,7 +93,7 @@ export interface ServidorResumo {
 /* ── Equipe de Fiscalização (novo: Titular + Substitutos) ──────────────── */
 
 export interface EquipePapelResponse {
-  titular: ServidorResumo | null;
+  titulares: ServidorResumo[];
   substitutos: ServidorResumo[];
 }
 
@@ -105,7 +107,7 @@ export interface EquipeFiscalizacao {
 /* ── Equipe de Fiscalização (input para criação/edição) ────────────────── */
 
 export interface EquipePapelInput {
-  titular_id: number | null;
+  titulares_ids: number[];
   substitutos_ids: number[];
 }
 
@@ -134,20 +136,24 @@ export interface HistoricoContrato {
 export interface ItemContrato {
   id: number;
   contrato_id: number;
-  objeto_contratado: string;
   quantidade: number;
   valor_unitario: number;
   valor_total: number;
+  catalogo_produto_id?: number | null;
   tipo_catalogo: string | null;
   codigo_catalogo: string | null;
+  data_inicio_vigencia: string | null;
+  data_fim_vigencia: string | null;
 }
 
 export interface ItemContratoPayload {
-  objeto_contratado: string;
   quantidade: number;
   valor_unitario: number;
+  catalogo_produto_id?: number | null;
   tipo_catalogo?: string | null;
   codigo_catalogo?: string | null;
+  data_inicio_vigencia?: string | null;
+  data_fim_vigencia?: string | null;
 }
 
 /* ── Contrato (resposta completa) ──────────────────────────────────────── */
@@ -157,12 +163,12 @@ export interface ContratoResponse {
   numero: number;
   ano: number;
   modalidade_contrato: ModalidadeContrato;
+  tipo_instrumento: TipoInstrumento | null;
   orgao_gerenciador: string | null;
   projeto_id: number;
-  empresa_id: number | null;
-  empresa_nome: string | null;
-  fabricante_id: number | null;
-  fabricante_nome: string | null;
+  fornecedor_id: number | null;
+  fornecedor_nome: string | null;
+  tipo_fornecedor_contrato: string | null;
   tipo_contrato: TipoContrato;
   itens: ItemContrato[];
   valor_total: number;
@@ -193,8 +199,10 @@ export interface ContratoListagem {
   numero: number;
   ano: number;
   modalidade_contrato: ModalidadeContrato;
-  empresa_id: number | null;
-  empresa_nome: string | null;
+  tipo_instrumento: TipoInstrumento | null;
+  fornecedor_id: number | null;
+  fornecedor_nome: string | null;
+  tipo_fornecedor_contrato: string | null;
   tipo_contrato: TipoContrato;
   situacao_atual: SituacaoContrato;
   valor_total: number;
@@ -229,9 +237,10 @@ export interface ContratoCreatePayload {
   numero: number;
   ano: number;
   modalidade_contrato: ModalidadeContrato;
+  tipo_instrumento?: TipoInstrumento | null;
   orgao_gerenciador?: string | null;
-  empresa_id: number;
-  fabricante_id?: number | null;
+  fornecedor_id?: number | null;
+  tipo_fornecedor_contrato?: string | null;
   tipo_contrato: TipoContrato;
   itens: ItemContratoPayload[];
   data_inicio_vigencia?: string | null;

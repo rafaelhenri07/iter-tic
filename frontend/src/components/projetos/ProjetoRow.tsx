@@ -224,9 +224,10 @@ function StatusTooltip({
   if (!isFaseExterna) return <>{children}</>;
 
   const envio = fmtDate(projeto.data_envio_licitacao);
-  const tramitacoes = projeto.tramitacoes_resumo ?? [];
+  const mov = projeto.ultima_movimentacao;
+  const duracao = projeto.duracao_fase_externa_dias;
 
-  if (!envio && tramitacoes.length === 0) return <>{children}</>;
+  if (!envio && !mov && duracao == null) return <>{children}</>;
 
   return (
     <div className="group/status relative">
@@ -234,11 +235,11 @@ function StatusTooltip({
       {/* Ponte invisível entre o pill e o popover */}
       <div className="pointer-events-none absolute left-0 right-0 top-full h-3 group-hover/status:pointer-events-auto" />
       <div className="pointer-events-none absolute top-[calc(100%+12px)] left-1/2 z-50 -translate-x-1/2 opacity-0 transition-opacity duration-200 group-hover/status:pointer-events-auto group-hover/status:opacity-100">
-        <div className="w-72 rounded-lg bg-slate-800 px-3.5 py-3 text-xs text-white shadow-xl">
+        <div className="w-80 rounded-lg bg-slate-800 px-3.5 py-3 text-xs text-white shadow-xl">
           {/* Seta */}
           <div className="absolute left-1/2 bottom-full -translate-x-1/2 border-4 border-transparent border-b-slate-800" />
 
-          {/* Data de envio */}
+          {/* 1. Data de envio */}
           {envio && (
             <div className="flex items-center gap-1.5">
               <span className="text-slate-400">Data de envio:</span>
@@ -246,30 +247,37 @@ function StatusTooltip({
             </div>
           )}
 
-          {/* Tramitações (todas) */}
-          {tramitacoes.length > 0 && (
+          {/* 2. Última Movimentação */}
+          {mov && (
             <>
               {envio && <div className="my-2 border-t border-slate-600/60" />}
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                Observações:
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                Última Movimentação
               </div>
-              <div className="space-y-1.5">
-                {tramitacoes.map((t) => (
-                  <div key={t.id}>
-                    <p className="text-slate-200 leading-snug">{t.observacao}</p>
-                    <p className="text-[9px] text-slate-500 mt-0.5">
-                      {new Date(t.data_hora).toLocaleString("pt-BR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                      {" · "}
-                      {t.autor}
-                    </p>
-                  </div>
-                ))}
+              <p className="text-slate-200 leading-snug">{mov.texto}</p>
+              <p className="text-[9px] text-slate-500 mt-0.5">
+                {new Date(mov.data).toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                {" · "}
+                {mov.autor}
+              </p>
+            </>
+          )}
+
+          {/* 3. Duração na Fase Externa */}
+          {duracao != null && (
+            <>
+              {(envio || mov) && <div className="my-2 border-t border-slate-600/60" />}
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400">Duração:</span>
+                <span className="font-semibold text-amber-400">
+                  {duracao} {duracao === 1 ? "dia" : "dias"}
+                </span>
               </div>
             </>
           )}
@@ -294,8 +302,8 @@ export function ProjetoRow({
   onArtefatoClick,
 }: ProjetoRowProps) {
   const router = useRouter();
-  const prioridade = PRIORIDADE_CONFIG[projeto.prioridade] ?? PRIORIDADE_CONFIG["media"];
-  const complexidade = COMPLEXIDADE_CONFIG[projeto.complexidade] ?? COMPLEXIDADE_CONFIG["Simples"];
+  const prioridade = projeto.prioridade ? PRIORIDADE_CONFIG[projeto.prioridade] : null;
+  const complexidade = projeto.complexidade ? COMPLEXIDADE_CONFIG[projeto.complexidade] : COMPLEXIDADE_CONFIG["Simples"];
 
   return (
     <tr
@@ -306,8 +314,15 @@ export function ProjetoRow({
         <span className="text-left text-[13px] font-semibold text-foreground leading-snug line-clamp-2">
           {projeto.nome}
         </span>
-        <div className="mt-1 block text-[11px] font-mono text-slate-400 dark:text-slate-500">
-          {projeto.processo_sei}
+        <div className="mt-1 flex items-center gap-2">
+          <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500">
+            {projeto.processo_sei}
+          </span>
+          {projeto.is_legado && (
+            <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
+              📋 Anterior
+            </span>
+          )}
         </div>
       </td>
 
@@ -316,10 +331,14 @@ export function ProjetoRow({
         className="px-4 py-3.5 align-middle cursor-default"
         onClick={(e) => e.stopPropagation()}
       >
-        <ArtefatoPipeline
-          artefatos={projeto.artefatos_resumo}
-          onArtefatoClick={(a) => onArtefatoClick?.(projeto.id, a)}
-        />
+        {projeto.is_legado ? (
+          <span className="text-[10px] text-slate-400 italic">Sem esteira</span>
+        ) : (
+          <ArtefatoPipeline
+            artefatos={projeto.artefatos_resumo}
+            onArtefatoClick={(a) => onArtefatoClick?.(projeto.id, a)}
+          />
+        )}
       </td>
 
       {/* STATUS DO PROJETO */}
@@ -338,11 +357,15 @@ export function ProjetoRow({
       {/* PRIORIDADE */}
       <td className="px-4 py-3.5 align-middle">
         <div className="flex items-center justify-center">
-          <span
-            className={`inline-block rounded-full py-0.5 px-2.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${prioridade.cls}`}
-          >
-            {prioridade.label}
-          </span>
+          {prioridade ? (
+            <span
+              className={`inline-block rounded-full py-0.5 px-2.5 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${prioridade.cls}`}
+            >
+              {prioridade.label}
+            </span>
+          ) : (
+            <span className="text-slate-400 dark:text-slate-600">—</span>
+          )}
         </div>
       </td>
 
@@ -352,10 +375,10 @@ export function ProjetoRow({
       <td className="px-4 py-3.5 align-middle text-center">
         <button
           onClick={(e) => { e.stopPropagation(); onEditProjeto?.(projeto); }}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-400"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20 mx-auto"
           title="Editar projeto"
         >
-          <Pencil size={14} />
+          <Pencil size={15} />
         </button>
       </td>
     </tr>

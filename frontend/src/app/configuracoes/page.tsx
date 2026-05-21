@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { useState, useEffect } from "react";
-import { Loader2, Save, Upload, Trash2 } from "lucide-react";
+import { Loader2, Save, Upload, Trash2, ShieldCheck } from "lucide-react";
 import { useConfig } from "@/components/providers/ConfigProvider";
 import { updateConfiguracao, type Configuracao } from "@/lib/api";
 import { showToast } from "@/components/ui/Toast";
@@ -80,11 +80,17 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Configurações do Sistema</h1>
-        <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">
-          Personalize a identidade visual (White Label) e as preferências gerais da plataforma.
-        </p>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Configurações do Sistema</h1>
+          <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">
+            Personalize a identidade visual e as preferências gerais da plataforma.
+          </p>
+        </div>
+        <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400 self-start sm:self-center">
+          <ShieldCheck size={12} />
+          Área Restrita — ADMIN
+        </span>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 pb-12">

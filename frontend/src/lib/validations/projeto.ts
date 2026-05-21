@@ -52,6 +52,7 @@ export const projetoCreateSchema = z
     /* Planejamento Estratégico (listas — default [] no form) */
     acoes_pdtic_ids: z.array(z.number().int()),
     itens_pacc_ids: z.array(z.number().int()),
+    observacoes: z.string().optional().or(z.literal("")),
   })
   .superRefine((data, ctx) => {
     // Para projetos NÃO legados, prioridade e complexidade são obrigatórios
@@ -88,6 +89,11 @@ export function cleanProjetoPayload(
   if (data.is_legado) {
     if (!cleaned.prioridade) cleaned.prioridade = null;
     if (!cleaned.complexidade) cleaned.complexidade = null;
+  }
+
+  // Limpar strings vazias → null
+  if (cleaned.observacoes === "") {
+    cleaned.observacoes = null;
   }
 
   return cleaned;

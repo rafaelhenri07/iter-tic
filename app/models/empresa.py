@@ -38,7 +38,10 @@ class Empresa(Base):
 
     # ── Contato principal ────────────────────────────────────────────────
     contato_nome: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
-    telefone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    telefones: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True, default=list,
+        comment="Lista de telefones de contato no formato (XX) XXXXX-XXXX.",
+    )
     email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # ── Portfólio de serviços ────────────────────────────────────────────

@@ -7,176 +7,27 @@ import { X, Loader2, UserCheck, Users, Plus, Trash2 } from "lucide-react";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
+import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import {
   contratoCreateSchema,
   type ContratoCreateFormData,
   cleanContratoPayload,
 } from "@/lib/validations/contrato";
 import {
-  criarContrato,
   atualizarContrato,
   fetchServidores,
   fetchProjetosLicitados,
-  fetchFabricantes,
-  fetchEmpresas,
+  fetchFornecedores,
+  fetchCatalogo,
+  criarContrato,
 } from "@/lib/api";
-import type { Fabricante, Empresa } from "@/lib/api";
+import type { FornecedorResponse } from "@/types/fornecedor";
 import { showToast } from "@/components/ui/Toast";
 import type { Servidor, ProjetoListagem } from "@/types/projeto";
 import type { ContratoResponse } from "@/types/contrato";
+import type { CatalogoProduto } from "@/types/catalogo";
 
-/* ── Multi-select de Substitutos ───────────────────────────────────────── */
 
-interface MultiSelectSubstitutosProps {
-  servidores: Servidor[];
-  selectedIds: number[];
-  onChange: (ids: number[]) => void;
-  titularId?: number;
-  loading?: boolean;
-}
-
-function MultiSelectSubstitutos({
-  servidores,
-  selectedIds,
-  onChange,
-  titularId,
-  loading,
-}: MultiSelectSubstitutosProps) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  // Filtrar: não mostrar o titular como opção de substituto
-  const opcoes = servidores.filter((s) => s.id !== (titularId || 0));
-
-  const toggleServidor = (id: number) => {
-    if (selectedIds.includes(id)) {
-      onChange(selectedIds.filter((sid) => sid !== id));
-    } else {
-      onChange([...selectedIds, id]);
-    }
-  };
-
-  const selectedServidores = servidores.filter((s) =>
-    selectedIds.includes(s.id)
-  );
-
-  return (
-    <div className="relative">
-      {/* Trigger */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`${selectCls} text-left flex items-center justify-between min-h-[38px] h-auto`}
-      >
-        <span className="flex flex-wrap gap-1 flex-1">
-          {selectedServidores.length === 0 ? (
-            <span className="text-foreground-muted/60 text-sm">
-              {loading ? "Carregando..." : "Selecione substituto(s)..."}
-            </span>
-          ) : (
-            selectedServidores.map((s) => (
-              <span
-                key={s.id}
-                className="inline-flex items-center gap-1 rounded-md bg-teal-100 px-2 py-0.5 text-[11px] font-medium text-teal-800 dark:bg-teal-900/40 dark:text-teal-300"
-              >
-                {s.nome}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleServidor(s.id);
-                  }}
-                  className="ml-0.5 rounded-full p-0.5 hover:bg-teal-200 dark:hover:bg-teal-800"
-                >
-                  <X size={10} />
-                </button>
-              </span>
-            ))
-          )}
-        </span>
-        <svg
-          className={`h-4 w-4 shrink-0 text-foreground-muted transition-transform ${
-            isOpen ? "rotate-180" : ""
-          }`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
-      </button>
-
-      {/* Dropdown */}
-      {isOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-background-card shadow-xl scrollbar-thin">
-            {opcoes.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-foreground-muted italic">
-                Nenhum servidor disponível
-              </div>
-            ) : (
-              opcoes.map((s) => {
-                const isSelected = selectedIds.includes(s.id);
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => toggleServidor(s.id)}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-background-secondary ${
-                      isSelected
-                        ? "bg-teal-50 dark:bg-teal-950/30"
-                        : ""
-                    }`}
-                  >
-                    <div
-                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                        isSelected
-                          ? "border-teal-500 bg-teal-500 text-white"
-                          : "border-border"
-                      }`}
-                    >
-                      {isSelected && (
-                        <svg
-                          className="h-3 w-3"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={3}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-medium text-foreground truncate">
-                        {s.nome}
-                      </div>
-                      <div className="text-[11px] text-foreground-muted">
-                        {s.cargo}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 /* ── Bloco visual de um papel da equipe ────────────────────────────────── */
 
@@ -184,9 +35,9 @@ interface EquipePapelBlockProps {
   label: string;
   papelKey: string;
   servidores: Servidor[];
-  titularValue: number;
-  substitutosValue: number[];
-  onTitularChange: (val: number) => void;
+  titularesIds: number[];
+  substitutosIds: number[];
+  onTitularesChange: (ids: number[]) => void;
   onSubstitutosChange: (ids: number[]) => void;
   loading: boolean;
   error?: string;
@@ -195,9 +46,9 @@ interface EquipePapelBlockProps {
 function EquipePapelBlock({
   label,
   servidores,
-  titularValue,
-  substitutosValue,
-  onTitularChange,
+  titularesIds,
+  substitutosIds,
+  onTitularesChange,
   onSubstitutosChange,
   loading,
 }: EquipePapelBlockProps) {
@@ -209,31 +60,30 @@ function EquipePapelBlock({
       </h4>
 
       {/* Titular */}
-      <FormField label="Titular" required>
-        <select
-          value={titularValue}
-          onChange={(e) => onTitularChange(Number(e.target.value))}
-          className={selectCls}
-        >
-          <option value={0}>
-            {loading ? "Carregando..." : "Selecione o titular..."}
-          </option>
-          {servidores.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.nome} — {s.cargo}
-            </option>
-          ))}
-        </select>
+      <FormField label="Titular(es)" required>
+        <MultiSelectCombobox
+          options={servidores
+            .filter((s) => !substitutosIds.includes(s.id))
+            .map((s) => ({ value: s.id, label: s.nome }))
+            .sort((a, b) => a.label.localeCompare(b.label))}
+          value={titularesIds}
+          onChange={(val) => onTitularesChange(val as number[])}
+          placeholder={loading ? "Carregando..." : "Selecione os titulares..."}
+          disabled={loading}
+        />
       </FormField>
 
       {/* Substitutos */}
       <FormField label="Substituto(s)">
-        <MultiSelectSubstitutos
-          servidores={servidores}
-          selectedIds={substitutosValue}
-          onChange={onSubstitutosChange}
-          titularId={titularValue}
-          loading={loading}
+        <MultiSelectCombobox
+          options={servidores
+            .filter((s) => !titularesIds.includes(s.id))
+            .map((s) => ({ value: s.id, label: s.nome }))
+            .sort((a, b) => a.label.localeCompare(b.label))}
+          value={substitutosIds}
+          onChange={(val) => onSubstitutosChange(val as number[])}
+          placeholder={loading ? "Carregando..." : "Selecione os substitutos..."}
+          disabled={loading}
         />
       </FormField>
     </div>
@@ -256,8 +106,8 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
   // Dados dinâmicos
   const [servidores, setServidores] = useState<Servidor[]>([]);
   const [projetosLicitados, setProjetosLicitados] = useState<ProjetoListagem[]>([]);
-  const [fabricantes, setFabricantes] = useState<Fabricante[]>([]);
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [fornecedores, setFornecedores] = useState<FornecedorResponse[]>([]);
+  const [catalogoProdutos, setCatalogoProdutos] = useState<CatalogoProduto[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   // Helper: extrair equipe do initialData
@@ -265,21 +115,21 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
     const equipe = initialData?.equipe;
     return {
       gestor: {
-        titular_id: equipe?.gestor?.titular?.id ?? 0,
+        titulares_ids: equipe?.gestor?.titulares?.map((s) => s.id) ?? [],
         substitutos_ids: equipe?.gestor?.substitutos?.map((s) => s.id) ?? [],
       },
       fiscal_requisitante: {
-        titular_id: equipe?.fiscal_requisitante?.titular?.id ?? 0,
+        titulares_ids: equipe?.fiscal_requisitante?.titulares?.map((s) => s.id) ?? [],
         substitutos_ids:
           equipe?.fiscal_requisitante?.substitutos?.map((s) => s.id) ?? [],
       },
       fiscal_tecnico: {
-        titular_id: equipe?.fiscal_tecnico?.titular?.id ?? 0,
+        titulares_ids: equipe?.fiscal_tecnico?.titulares?.map((s) => s.id) ?? [],
         substitutos_ids:
           equipe?.fiscal_tecnico?.substitutos?.map((s) => s.id) ?? [],
       },
       fiscal_administrativo: {
-        titular_id: equipe?.fiscal_administrativo?.titular?.id ?? 0,
+        titulares_ids: equipe?.fiscal_administrativo?.titulares?.map((s) => s.id) ?? [],
         substitutos_ids:
           equipe?.fiscal_administrativo?.substitutos?.map((s) => s.id) ?? [],
       },
@@ -302,14 +152,18 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
           numero: initialData.numero,
           ano: initialData.ano,
           modalidade_contrato: initialData.modalidade_contrato ?? "CONTRATO",
-          empresa_id: initialData.empresa_id ?? 0,
-          fabricante_id: initialData.fabricante_id ?? 0,
+
+          fornecedor_id: initialData.fornecedor_id ?? 0,
+          tipo_fornecedor_contrato: (initialData.tipo_fornecedor_contrato as any) ?? "",
           tipo_contrato: initialData.tipo_contrato as "Aquisição" | "Serviço continuado" | "Subscrição",
+          tipo_instrumento: (initialData as any).tipo_instrumento ?? "CONTRATO",
           itens: initialData.itens?.map(i => ({
-            objeto_contratado: i.objeto_contratado,
+            catalogo_produto_id: i.catalogo_produto_id ?? 0,
             quantidade: i.quantidade,
-            valor_unitario: i.valor_unitario
-          })) ?? [{ objeto_contratado: "", quantidade: 1, valor_unitario: 0 }],
+            valor_unitario: i.valor_unitario,
+            data_inicio_vigencia: i.data_inicio_vigencia ?? "",
+            data_fim_vigencia: i.data_fim_vigencia ?? "",
+          })) ?? [{ catalogo_produto_id: 0, quantidade: 1, valor_unitario: 0, data_inicio_vigencia: "", data_fim_vigencia: "" }],
           data_inicio_vigencia: initialData.data_inicio_vigencia ?? "",
           vigencia_meses: initialData.vigencia_meses ?? null,
           prorrogacao_meses: initialData.prorrogacao_meses ?? 0,
@@ -325,10 +179,12 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
           numero: "" as unknown as number,
           ano: new Date().getFullYear(),
           modalidade_contrato: "CONTRATO" as const,
-          empresa_id: 0,
-          fabricante_id: 0,
+
+          fornecedor_id: 0,
+          tipo_fornecedor_contrato: "",
           tipo_contrato: "Aquisição",
-          itens: [{ objeto_contratado: "", quantidade: 1, valor_unitario: 0 }],
+          tipo_instrumento: "CONTRATO",
+          itens: [{ catalogo_produto_id: 0, quantidade: 1, valor_unitario: 0, data_inicio_vigencia: "", data_fim_vigencia: "" }],
           data_inicio_vigencia: "",
           vigencia_meses: null,
           prorrogacao_meses: 0,
@@ -338,10 +194,10 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
           observacoes: "",
           orgao_gerenciador: "",
           equipe: {
-            gestor: { titular_id: 0, substitutos_ids: [] },
-            fiscal_requisitante: { titular_id: 0, substitutos_ids: [] },
-            fiscal_tecnico: { titular_id: 0, substitutos_ids: [] },
-            fiscal_administrativo: { titular_id: 0, substitutos_ids: [] },
+            gestor: { titulares_ids: [], substitutos_ids: [] },
+            fiscal_requisitante: { titulares_ids: [], substitutos_ids: [] },
+            fiscal_tecnico: { titulares_ids: [], substitutos_ids: [] },
+            fiscal_administrativo: { titulares_ids: [], substitutos_ids: [] },
           },
         },
   });
@@ -383,19 +239,20 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
   useEffect(() => {
     async function load() {
       try {
-        const [srvs, projs, fabs, emps] = await Promise.all([
+        const [srvs, projs, forns, cat] = await Promise.all([
           fetchServidores(),
           fetchProjetosLicitados(),
-          fetchFabricantes(),
-          fetchEmpresas(),
+          fetchFornecedores(),
+          fetchCatalogo(),
         ]);
         setServidores(srvs);
         setProjetosLicitados(projs);
-        setFabricantes(fabs);
-        setEmpresas(emps);
+        setFornecedores(forns);
+        setCatalogoProdutos(cat);
       } catch {
         setServidores([]);
         setProjetosLicitados([]);
+        setCatalogoProdutos([]);
       }
       setLoadingData(false);
     }
@@ -538,8 +395,16 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
 
             <div className="grid grid-cols-2 gap-4">
             <div className="flex gap-4">
-              <FormField label={isARP ? "Número da Ata" : "Número do Contrato"} required error={errors.numero?.message} className="flex-1">
-                <input {...register("numero")} type="number" placeholder="Ex: 42" className={inputCls} />
+              {!isARP && (
+                <FormField label="Instrumento" required error={errors.tipo_instrumento?.message} className="w-40">
+                  <select {...register("tipo_instrumento")} className={selectCls}>
+                    <option value="CONTRATO">Contrato</option>
+                    <option value="NOTA_EMPENHO">Nota de Empenho</option>
+                  </select>
+                </FormField>
+              )}
+              <FormField label="Número" required error={errors.numero?.message} className="flex-1">
+                <input {...register("numero")} type="number" placeholder="Ex: 42" className={inputCls + " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"} />
               </FormField>
               <FormField label="Ano" required error={errors.ano?.message} className="w-32">
                 <select {...register("ano", { valueAsNumber: true })} className={selectCls}>
@@ -565,24 +430,23 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
 
             <div className="mt-4">
               <FormField
-                label="Empresa Contratada"
-                required
-                error={errors.empresa_id?.message}
+                label="Fornecedor"
+                error={(errors as any).fornecedor_id?.message}
               >
                 <select
-                  {...register("empresa_id", { valueAsNumber: true })}
+                  {...register("fornecedor_id" as any, { valueAsNumber: true })}
                   className={selectCls}
                 >
                   <option value={0}>
                     {loadingData
-                      ? "Carregando empresas..."
-                      : empresas.length === 0
-                        ? "Nenhuma empresa cadastrada"
-                        : "Selecione a empresa contratada..."}
+                      ? "Carregando fornecedores..."
+                      : fornecedores.length === 0
+                        ? "Nenhum fornecedor cadastrado"
+                        : "Selecione o fornecedor..."}
                   </option>
-                  {empresas.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.nome} — CNPJ: {e.cnpj}
+                  {fornecedores.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.nome}{f.documento ? ` — ${f.documento}` : ""}
                     </option>
                   ))}
                 </select>
@@ -599,21 +463,17 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
 
             <div className="grid grid-cols-3 gap-4 mt-4">
               <FormField
-                label="Fabricante"
-                error={errors.fabricante_id?.message}
+                label="Tipo de Fornecedor"
+                error={(errors as any).tipo_fornecedor_contrato?.message}
               >
                 <select
-                  {...register("fabricante_id", { valueAsNumber: true })}
+                  {...register("tipo_fornecedor_contrato" as any)}
                   className={selectCls}
                 >
-                  <option value={0}>
-                    {loadingData ? "Carregando..." : "Selecione o fabricante..."}
-                  </option>
-                  {fabricantes.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.nome}
-                    </option>
-                  ))}
+                  <option value="">Não definido</option>
+                  <option value="REVENDEDOR">Revendedor</option>
+                  <option value="FABRICANTE">Fabricante</option>
+                  <option value="REVENDEDOR_E_FABRICANTE">Revendedor e Fabricante</option>
                 </select>
               </FormField>
 
@@ -626,7 +486,7 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
               </h3>
               <button
                 type="button"
-                onClick={() => appendItem({ objeto_contratado: "", quantidade: 1, valor_unitario: 0 })}
+                onClick={() => appendItem({ catalogo_produto_id: 0, quantidade: 1, valor_unitario: 0, data_inicio_vigencia: "", data_fim_vigencia: "" })}
                 className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
               >
                 <Plus size={14} /> Adicionar Item
@@ -651,18 +511,26 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
                         <Trash2 size={12} />
                       </button>
                     )}
-                    <div className="grid gap-4 sm:grid-cols-12 items-start">
-                      <div className="sm:col-span-6">
-                        <FormField label="Objeto Contratado" required error={itemError?.objeto_contratado?.message}>
-                          <input {...register(`itens.${index}.objeto_contratado` as const)} placeholder="Ex: Licença Microsoft 365" className={inputCls} />
+                    <div className="grid gap-4 grid-cols-1 md:grid-cols-12 items-end">
+                      <div className="col-span-1 md:col-span-6">
+                        <FormField label="Item do Catálogo" required error={(itemError as any)?.catalogo_produto_id?.message}>
+                          <select
+                            {...register(`itens.${index}.catalogo_produto_id` as const, { valueAsNumber: true })}
+                            className={selectCls}
+                          >
+                            <option value={0}>Selecione um item do catálogo...</option>
+                            {catalogoProdutos.map(cat => (
+                              <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                            ))}
+                          </select>
                         </FormField>
                       </div>
-                      <div className="sm:col-span-2">
-                        <FormField label="Qtd" required error={itemError?.quantidade?.message}>
-                          <input type="number" min={1} {...register(`itens.${index}.quantidade` as const, { valueAsNumber: true })} className={inputCls} />
+                      <div className="col-span-1 md:col-span-2">
+                        <FormField label="Quantidade" required error={itemError?.quantidade?.message}>
+                          <input type="number" min={1} {...register(`itens.${index}.quantidade` as const, { valueAsNumber: true })} className={inputCls + " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"} />
                         </FormField>
                       </div>
-                      <div className="sm:col-span-4">
+                      <div className="col-span-1 md:col-span-4">
                         <FormField label="Valor Unitário" required error={itemError?.valor_unitario?.message}>
                           <Controller
                             control={control}
@@ -677,6 +545,54 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
                             )}
                           />
                         </FormField>
+                      </div>
+
+                      {/* Segunda linha do Grid: Detalhes opcionais e Datas */}
+                      <div className="col-span-1 md:col-span-2">
+                        <FormField label="Catálogo Governo" error={itemError?.tipo_catalogo?.message}>
+                          <select {...register(`itens.${index}.tipo_catalogo` as const)} className={selectCls}>
+                            <option value="">Nenhum...</option>
+                            <option value="CATMAT">CATMAT</option>
+                            <option value="CATSER">CATSER</option>
+                          </select>
+                        </FormField>
+                      </div>
+                      <div className="col-span-1 md:col-span-2">
+                        <FormField label="Código Governo" error={itemError?.codigo_catalogo?.message}>
+                          <input {...register(`itens.${index}.codigo_catalogo` as const)} placeholder="Ex: 4501002" className={inputCls} />
+                        </FormField>
+                      </div>
+                      <div className="col-span-1 md:col-span-4">
+                        <Controller
+                          name={`itens.${index}.data_inicio_vigencia` as const}
+                          control={control}
+                          render={({ field }) => (
+                            <FormField label="INÍCIO DO SUPORTE/GARANTIA" error={itemError?.data_inicio_vigencia?.message}>
+                              <DatePickerField
+                                value={field.value || null}
+                                onChange={(d) => field.onChange(d ?? "")}
+                                placeholder="Selecione a data de início"
+                                id={`modal_item_inicio_${index}`}
+                              />
+                            </FormField>
+                          )}
+                        />
+                      </div>
+                      <div className="col-span-1 md:col-span-4">
+                        <Controller
+                          name={`itens.${index}.data_fim_vigencia` as const}
+                          control={control}
+                          render={({ field }) => (
+                            <FormField label="FIM DO SUPORTE/GARANTIA" error={itemError?.data_fim_vigencia?.message}>
+                              <DatePickerField
+                                value={field.value || null}
+                                onChange={(d) => field.onChange(d ?? "")}
+                                placeholder="Selecione a data de fim"
+                                id={`modal_item_fim_${index}`}
+                              />
+                            </FormField>
+                          )}
+                        />
                       </div>
                     </div>
                     <div className="mt-3 flex items-center justify-end border-t border-slate-200 pt-2 text-xs font-medium text-slate-500 dark:border-slate-700 dark:text-slate-400">
@@ -703,126 +619,116 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
             {/* ═══ 3. VIGÊNCIA E SITUAÇÃO ═══ */}
             <div className="border-t border-slate-200 dark:border-slate-700 mt-6 pt-4">
               <h3 className="text-sm font-semibold text-teal-600 uppercase tracking-wide mb-4">
-                3. Vigência e Situação
+                3. Vigência do Contrato e Situação
               </h3>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Controller
-                name="data_assinatura"
-                control={control}
-                render={({ field }) => (
-                  <FormField
-                    label="Data de Assinatura"
-                    required
-                    error={errors.data_assinatura?.message}
-                  >
-                    <DatePickerField
-                      value={field.value || null}
-                      onChange={(d) => field.onChange(d ?? "")}
-                      placeholder="Selecione a data de assinatura"
-                      id="data_assinatura_modal"
-                    />
-                  </FormField>
-                )}
-              />
-
-              <Controller
-                name="data_fim_vigencia"
-                control={control}
-                render={({ field }) => (
-                  <FormField
-                    label={isARP ? "Validade da Ata" : "Data Fim de Vigência"}
-                    required
-                    error={errors.data_fim_vigencia?.message}
-                  >
-                    <DatePickerField
-                      value={field.value || null}
-                      onChange={(d) => field.onChange(d ?? "")}
-                      placeholder="Selecione a data fim"
-                      id="data_fim_vigencia_modal"
-                    />
-                  </FormField>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <Controller
-                name="data_inicio_vigencia"
-                control={control}
-                render={({ field }) => (
-                  <FormField
-                    label="Data de Início da Vigência"
-                    error={errors.data_inicio_vigencia?.message}
-                  >
-                    <DatePickerField
-                      value={field.value || null}
-                      onChange={(d) => field.onChange(d ?? "")}
-                      placeholder="Se diferente da assinatura"
-                      id="data_inicio_vigencia_modal"
-                    />
-                  </FormField>
-                )}
-              />
-
-              <FormField
-                label="Vigência"
-                error={errors.vigencia_meses?.message}
-              >
-                {/* Campo hidden mantém o número para a API */}
-                <input type="hidden" {...register("vigencia_meses", { valueAsNumber: true })} />
-                <input
-                  type="text"
-                  readOnly
-                  tabIndex={-1}
-                  value={watchedFimVigencia ? `${watch("vigencia_meses") ?? 0} meses` : ""}
-                  className={inputCls + " cursor-not-allowed opacity-70"}
-                  placeholder="Calculado automaticamente"
+            <div className="space-y-4">
+              {/* LINHA 1: Linha do Tempo */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Controller
+                  name="data_assinatura"
+                  control={control}
+                  render={({ field }) => (
+                    <FormField
+                      label="Data de Assinatura"
+                      required
+                      error={errors.data_assinatura?.message}
+                    >
+                      <DatePickerField
+                        value={field.value || null}
+                        onChange={(d) => field.onChange(d ?? "")}
+                        placeholder="Selecione a data de assinatura"
+                        id="data_assinatura_modal"
+                      />
+                    </FormField>
+                  )}
                 />
-              </FormField>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <FormField
-                label="Prorrogação"
-                error={errors.prorrogacao_meses?.message}
-              >
-                <select {...register("prorrogacao_meses", { valueAsNumber: true })} className={selectCls}>
-                  <option value={0}>Não há prorrogação</option>
-                  {Array.from({ length: 120 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={m}>
-                      {m} {m === 1 ? "mês" : "meses"}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-
-              <FormField
-                label="Situação Atual"
-                required
-                error={errors.situacao_atual?.message}
-              >
-                <select {...register("situacao_atual")} className={selectCls}>
-                  <option value="Vigente">Vigente</option>
-                  <option value="Extinto">Extinto</option>
-                  <option value="Extinto, mas suporte vigente">Extinto, mas suporte vigente</option>
-                </select>
-              </FormField>
-            </div>
-
-            <div className="mt-4">
-              <FormField
-                label="Observações"
-                error={errors.observacoes?.message}
-              >
-                <textarea
-                  {...register("observacoes")}
-                  rows={2}
-                  placeholder="Informações adicionais..."
-                  className={inputCls + " h-auto py-2 resize-none"}
+                <Controller
+                  name="data_inicio_vigencia"
+                  control={control}
+                  render={({ field }) => (
+                    <FormField
+                      label="Data de Início da Vigência"
+                      error={errors.data_inicio_vigencia?.message}
+                    >
+                      <DatePickerField
+                        value={field.value || null}
+                        onChange={(d) => field.onChange(d ?? "")}
+                        placeholder="Se diferente da assinatura"
+                        id="data_inicio_vigencia_modal"
+                      />
+                    </FormField>
+                  )}
                 />
-              </FormField>
+
+                <Controller
+                  name="data_fim_vigencia"
+                  control={control}
+                  render={({ field }) => (
+                    <FormField
+                      label={isARP ? "Validade da Ata" : "Data Fim de Vigência"}
+                      required
+                      error={errors.data_fim_vigencia?.message}
+                    >
+                      <DatePickerField
+                        value={field.value || null}
+                        onChange={(d) => field.onChange(d ?? "")}
+                        placeholder="Selecione a data fim"
+                        id="data_fim_vigencia_modal"
+                      />
+                    </FormField>
+                  )}
+                />
+              </div>
+
+              {/* LINHA 2: Controle e Situação */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField
+                  label="Vigência"
+                  error={errors.vigencia_meses?.message}
+                >
+                  {/* Campo hidden mantém o número para a API */}
+                  <input type="hidden" {...register("vigencia_meses", { valueAsNumber: true })} />
+                  <input
+                    type="text"
+                    readOnly
+                    tabIndex={-1}
+                    value={watchedFimVigencia ? `${watch("vigencia_meses") ?? 0} meses` : ""}
+                    className={inputCls + " cursor-not-allowed opacity-70"}
+                    placeholder="Calculado automaticamente"
+                  />
+                </FormField>
+
+                <FormField
+                  label="Prorrogação"
+                  error={errors.prorrogacao_meses?.message}
+                >
+                  <select {...register("prorrogacao_meses", { valueAsNumber: true })} className={selectCls}>
+                    <option value={0}>Não há prorrogação</option>
+                    {Array.from({ length: 120 }, (_, i) => i + 1).map((m) => (
+                      <option key={m} value={m}>
+                        {m} {m === 1 ? "mês" : "meses"}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+
+                <FormField
+                  label="Situação Atual"
+                  required
+                  error={errors.situacao_atual?.message}
+                >
+                  <select {...register("situacao_atual")} className={selectCls}>
+                    <option value="Vigente">Vigente</option>
+                    <option value="Extinto">Extinto</option>
+                    <option value="Extinto, mas suporte vigente">Extinto, mas suporte vigente</option>
+                  </select>
+                </FormField>
+              </div>
+
+
             </div>
 
             {/* ═══ 4. EQUIPE DE FISCALIZAÇÃO ═══ */}
@@ -847,12 +753,12 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
                       label={papel.label}
                       papelKey={papel.key}
                       servidores={servidores}
-                      titularValue={field.value?.titular_id ?? 0}
-                      substitutosValue={field.value?.substitutos_ids ?? []}
-                      onTitularChange={(val) =>
+                      titularesIds={field.value?.titulares_ids ?? []}
+                      substitutosIds={field.value?.substitutos_ids ?? []}
+                      onTitularesChange={(ids) =>
                         field.onChange({
                           ...field.value,
-                          titular_id: val,
+                          titulares_ids: ids,
                         })
                       }
                       onSubstitutosChange={(ids) =>
@@ -866,6 +772,27 @@ export function EditarContratoModal({ onClose, onSuccess, initialData }: EditarC
                   )}
                 />
               ))}
+            </div>
+
+            {/* ═══ 5. INFORMAÇÕES COMPLEMENTARES ═══ */}
+            <div className="border-t border-slate-200 dark:border-slate-700 mt-6 pt-4">
+              <h3 className="text-sm font-semibold text-teal-600 uppercase tracking-wide mb-4 flex items-center gap-2">
+                5. Informações Complementares
+              </h3>
+            </div>
+            
+            <div className="col-span-full mb-4">
+              <FormField
+                label="Observações"
+                error={errors.observacoes?.message}
+              >
+                <textarea
+                  {...register("observacoes")}
+                  rows={4}
+                  placeholder="Anotações gerais e informações adicionais sobre o contrato..."
+                  className={inputCls + " h-auto py-2 resize-y"}
+                />
+              </FormField>
             </div>
 
             {/* Spacer para garantir que o último campo não fique colado no footer */}

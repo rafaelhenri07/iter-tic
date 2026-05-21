@@ -22,7 +22,7 @@ interface ProjetoCardProps {
 }
 
 export function ProjetoCard({ projeto }: ProjetoCardProps) {
-  const complexidade = COMPLEXIDADE_CONFIG[projeto.complexidade];
+  const complexidade = projeto.complexidade ? COMPLEXIDADE_CONFIG[projeto.complexidade] : null;
   const statusCfg = STATUS_PROJETO_CONFIG[projeto.status];
 
   const progressPct =
@@ -40,11 +40,13 @@ export function ProjetoCard({ projeto }: ProjetoCardProps) {
       {/* Barra de cor lateral (complexidade) */}
       <div
         className={`absolute left-0 top-0 h-full w-1.5 rounded-l-2xl ${
-          projeto.complexidade === "Complexa"
-            ? "bg-rose-500"
-            : projeto.complexidade === "Intermediária"
-              ? "bg-amber-500"
-              : "bg-emerald-500"
+          projeto.is_legado
+            ? "bg-amber-500"
+            : projeto.complexidade === "Complexa"
+              ? "bg-rose-500"
+              : projeto.complexidade === "Intermediária"
+                ? "bg-amber-500"
+                : "bg-emerald-500"
         }`}
       />
 
@@ -70,12 +72,18 @@ export function ProjetoCard({ projeto }: ProjetoCardProps) {
             >
               {statusCfg.icon} {projeto.status}
             </span>
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${complexidade.cls}`}
-            >
-              <Shield size={10} />
-              {complexidade.label}
-            </span>
+            {projeto.is_legado ? (
+              <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
+                📋 Anterior
+              </span>
+            ) : complexidade ? (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${complexidade.cls}`}
+              >
+                <Shield size={10} />
+                {complexidade.label}
+              </span>
+            ) : null}
           </div>
         </div>
 

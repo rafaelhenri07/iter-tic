@@ -25,4 +25,5 @@ class StatusAcaoEnum(str, enum.Enum):
 class RoleUsuarioEnum(str, enum.Enum):
     """Papel do usuário no sistema (RBAC)."""
     ADMIN = "ADMIN"
+    GESTOR = "GESTOR"
     COMUM = "COMUM"

@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, Loader2, UserCheck, X, FileSignature, Trash2, Plus } from "lucide-react";
 import { DatePickerField } from "@/components/ui/DatePickerField";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import {
   contratoCreateSchema,
   type ContratoCreateFormData,
@@ -16,21 +17,19 @@ import {
   criarContrato,
   fetchServidores,
   fetchProjetosLicitados,
-  fetchFabricantes,
-  fetchEmpresas,
+  fetchFornecedores,
+  fetchCatalogo,
 } from "@/lib/api";
-import type { Fabricante, Empresa } from "@/lib/api";
+import type { FornecedorResponse } from "@/types/fornecedor";
 import { showToast } from "@/components/ui/Toast";
 import { ToastContainer } from "@/components/ui/Toast";
 import type { Servidor, ProjetoListagem } from "@/types/projeto";
+import type { CatalogoProduto } from "@/types/catalogo";
 
 /* ── Estilos base ───────────────────────────────────────────────────────── */
 
-const inputCls =
-  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500";
-
-const selectCls =
-  "w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
+const inputCls = "w-full h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition-all focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200";
+const selectCls = "w-full h-10 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm transition-all focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200";
 
 /* ── Label + Erro ───────────────────────────────────────────────────────── */
 
@@ -63,159 +62,63 @@ function Field({
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="mt-10 mb-6 border-b border-slate-200 pb-2 text-sm font-bold uppercase tracking-wider text-teal-600 dark:border-slate-700 dark:text-teal-400">
+    <h3 className="mt-10 mb-6 border-b border-slate-200 pb-2 text-sm font-bold uppercase tracking-wider text-brand-primary dark:border-slate-700">
       {children}
     </h3>
   );
 }
 
-/* ── Multi-select de Substitutos ────────────────────────────────────────── */
 
-function MultiSelectSubstitutos({
-  servidores,
-  selectedIds,
-  onChange,
-  titularId,
-  loading,
-}: {
-  servidores: Servidor[];
-  selectedIds: number[];
-  onChange: (ids: number[]) => void;
-  titularId?: number;
-  loading?: boolean;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const opcoes = servidores.filter((s) => s.id !== (titularId || 0));
-  const toggle = (id: number) =>
-    onChange(
-      selectedIds.includes(id)
-        ? selectedIds.filter((x) => x !== id)
-        : [...selectedIds, id]
-    );
-  const selected = servidores.filter((s) => selectedIds.includes(s.id));
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`${selectCls} text-left flex items-center justify-between min-h-[38px] h-auto`}
-      >
-        <span className="flex flex-wrap gap-1 flex-1">
-          {selected.length === 0 ? (
-            <span className="text-slate-400 text-sm">
-              {loading ? "Carregando..." : "Nenhum substituto selecionado"}
-            </span>
-          ) : (
-            selected.map((s) => (
-              <span
-                key={s.id}
-                className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-medium text-teal-800 dark:bg-teal-900/40 dark:text-teal-300"
-              >
-                {s.nome}
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); toggle(s.id); }}
-                  className="ml-0.5 rounded-full p-0.5 hover:bg-teal-200 dark:hover:bg-teal-800"
-                >
-                  <X size={9} />
-                </button>
-              </span>
-            ))
-          )}
-        </span>
-        <svg
-          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute z-50 mt-1 w-full max-h-52 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
-            {opcoes.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-slate-500 italic">Nenhum servidor disponível</div>
-            ) : (
-              opcoes.map((s) => {
-                const sel = selectedIds.includes(s.id);
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => toggle(s.id)}
-                    className={`flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 ${sel ? "bg-teal-50 dark:bg-teal-950/30" : ""}`}
-                  >
-                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${sel ? "border-teal-500 bg-teal-500 text-white" : "border-slate-300"}`}>
-                      {sel && (
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                    <div>
-                      <div className="font-medium text-slate-800 dark:text-slate-200">{s.nome}</div>
-                      <div className="text-[11px] text-slate-500">{s.cargo}</div>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 /* ── Bloco de Papel da Equipe ───────────────────────────────────────────── */
 
 function EquipePapelBlock({
   label,
   servidores,
-  titularValue,
-  substitutosValue,
-  onTitularChange,
+  titularesIds,
+  substitutosIds,
+  onTitularesChange,
   onSubstitutosChange,
   loading,
 }: {
   label: string;
   papelKey: string;
   servidores: Servidor[];
-  titularValue: number;
-  substitutosValue: number[];
-  onTitularChange: (v: number) => void;
+  titularesIds: number[];
+  substitutosIds: number[];
+  onTitularesChange: (ids: number[]) => void;
   onSubstitutosChange: (ids: number[]) => void;
   loading: boolean;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-900/20">
-      <div className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+      <div className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-primary">
         <UserCheck size={12} />
         {label}
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Titular">
-          <select
-            value={titularValue}
-            onChange={(e) => onTitularChange(Number(e.target.value))}
-            className={selectCls}
-          >
-            <option value={0}>{loading ? "Carregando..." : "Selecione o titular..."}</option>
-            {servidores.map((s) => (
-              <option key={s.id} value={s.id}>{s.nome} — {s.cargo}</option>
-            ))}
-          </select>
+        <Field label="Titular(es)">
+          <MultiSelectCombobox
+            options={servidores
+              .filter(s => !substitutosIds.includes(s.id))
+              .map(s => ({ value: s.id, label: s.nome }))
+              .sort((a, b) => a.label.localeCompare(b.label))}
+            value={titularesIds}
+            onChange={(val) => onTitularesChange(val as number[])}
+            placeholder={loading ? "Carregando..." : "Selecione os titulares..."}
+            disabled={loading}
+          />
         </Field>
         <Field label="Substituto(s)">
-          <MultiSelectSubstitutos
-            servidores={servidores}
-            selectedIds={substitutosValue}
-            onChange={onSubstitutosChange}
-            titularId={titularValue}
-            loading={loading}
+          <MultiSelectCombobox
+            options={servidores
+              .filter(s => !titularesIds.includes(s.id))
+              .map(s => ({ value: s.id, label: s.nome }))
+              .sort((a, b) => a.label.localeCompare(b.label))}
+            value={substitutosIds}
+            onChange={(val) => onSubstitutosChange(val as number[])}
+            placeholder={loading ? "Carregando..." : "Selecione os substitutos..."}
+            disabled={loading}
           />
         </Field>
       </div>
@@ -230,8 +133,8 @@ export default function NovoContratoPage() {
   const [submitting, setSubmitting] = useState(false);
   const [servidores, setServidores] = useState<Servidor[]>([]);
   const [projetosLicitados, setProjetosLicitados] = useState<ProjetoListagem[]>([]);
-  const [fabricantes, setFabricantes] = useState<Fabricante[]>([]);
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [fornecedores, setFornecedores] = useState<FornecedorResponse[]>([]);
+  const [catalogoProdutos, setCatalogoProdutos] = useState<CatalogoProduto[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   const {
@@ -249,10 +152,11 @@ export default function NovoContratoPage() {
       numero: "" as unknown as number,
       ano: new Date().getFullYear(),
       modalidade_contrato: "CONTRATO" as const,
-      empresa_id: 0,
-      fabricante_id: 0,
+      fornecedor_id: 0,
+      tipo_fornecedor_contrato: "",
       tipo_contrato: "Aquisição",
-      itens: [{ tipo_catalogo: "", codigo_catalogo: "", objeto_contratado: "", quantidade: 1, valor_unitario: 0 }],
+      tipo_instrumento: "CONTRATO",
+      itens: [{ tipo_catalogo: "", codigo_catalogo: "", catalogo_produto_id: 0, quantidade: 1, valor_unitario: 0 }],
       data_inicio_vigencia: "",
       vigencia_meses: null,
       prorrogacao_meses: 0,
@@ -262,10 +166,10 @@ export default function NovoContratoPage() {
       observacoes: "",
       orgao_gerenciador: "",
       equipe: {
-        gestor: { titular_id: 0, substitutos_ids: [] },
-        fiscal_requisitante: { titular_id: 0, substitutos_ids: [] },
-        fiscal_tecnico: { titular_id: 0, substitutos_ids: [] },
-        fiscal_administrativo: { titular_id: 0, substitutos_ids: [] },
+        gestor: { titulares_ids: [], substitutos_ids: [] },
+        fiscal_requisitante: { titulares_ids: [], substitutos_ids: [] },
+        fiscal_tecnico: { titulares_ids: [], substitutos_ids: [] },
+        fiscal_administrativo: { titulares_ids: [], substitutos_ids: [] },
       },
     },
   });
@@ -303,19 +207,20 @@ export default function NovoContratoPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [srvs, projs, fabs, emps] = await Promise.all([
+        const [srvs, projs, forns, cat] = await Promise.all([
           fetchServidores(),
           fetchProjetosLicitados(),
-          fetchFabricantes(),
-          fetchEmpresas(),
+          fetchFornecedores(),
+          fetchCatalogo(),
         ]);
         setServidores(srvs);
         setProjetosLicitados(projs);
-        setFabricantes(fabs);
-        setEmpresas(emps);
+        setFornecedores(forns);
+        setCatalogoProdutos(cat);
       } catch {
         setServidores([]);
         setProjetosLicitados([]);
+        setCatalogoProdutos([]);
       }
       setLoadingData(false);
     }
@@ -350,8 +255,7 @@ export default function NovoContratoPage() {
   const isARP = watchedModalidade === "ARP";
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-background">
-      <div className="max-w-4xl mx-auto py-8 px-6">
+    <div className="mx-auto max-w-4xl space-y-6 pb-20">
 
         {/* ── Botão Voltar ── */}
         <button
@@ -365,7 +269,7 @@ export default function NovoContratoPage() {
 
         {/* ── Cabeçalho ── */}
         <div className="flex items-center gap-4 mb-2">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 text-white shadow-md shadow-cyan-500/20">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
             <FileSignature size={22} />
           </div>
           <div>
@@ -387,7 +291,7 @@ export default function NovoContratoPage() {
               onClick={() => setValue("modalidade_contrato", "CONTRATO")}
               className={`relative flex flex-col items-center gap-2 rounded-xl border-2 px-6 py-5 text-center transition-all ${
                 !isARP
-                  ? "border-teal-500 bg-teal-50/60 shadow-md ring-2 ring-teal-500/20 dark:bg-teal-950/30 dark:border-teal-400"
+                  ? "border-brand-primary bg-brand-primary/5 shadow-md ring-2 ring-brand-primary/20 dark:bg-brand-primary/5 dark:border-brand-primary"
                   : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
               }`}
             >
@@ -395,7 +299,7 @@ export default function NovoContratoPage() {
               <span className="text-sm font-bold text-slate-800 dark:text-slate-200">Contrato</span>
               <span className="text-[11px] text-slate-500 dark:text-slate-400">Contrato tradicional de TI</span>
               {!isARP && (
-                <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-teal-500 text-white text-xs">✓</span>
+                <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-brand-primary text-white text-xs">✓</span>
               )}
             </button>
             <button
@@ -442,8 +346,16 @@ export default function NovoContratoPage() {
           <SectionTitle>Dados da Contratação</SectionTitle>
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="flex gap-4">
-              <Field label={isARP ? "Número da Ata" : "Número do Contrato"} required error={errors.numero?.message} className="flex-1">
-                <input {...register("numero")} type="number" placeholder="Ex: 42" className={inputCls} />
+              {!isARP && (
+                <Field label="Instrumento" required error={errors.tipo_instrumento?.message} className="w-44">
+                  <select {...register("tipo_instrumento")} className={selectCls}>
+                    <option value="CONTRATO">Contrato</option>
+                    <option value="NOTA_EMPENHO">Nota de Empenho</option>
+                  </select>
+                </Field>
+              )}
+              <Field label="Número" required error={errors.numero?.message} className="flex-1">
+                <input {...register("numero")} type="number" placeholder="Ex: 42" className={inputCls + " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"} />
               </Field>
               <Field label="Ano" required error={errors.ano?.message} className="w-32">
                 <select {...register("ano", { valueAsNumber: true })} className={selectCls}>
@@ -462,18 +374,18 @@ export default function NovoContratoPage() {
               </select>
             </Field>
 
-            <Field label="Empresa Contratada" required error={errors.empresa_id?.message} className="sm:col-span-2">
-              <select {...register("empresa_id", { valueAsNumber: true })} className={selectCls}>
+            <Field label="Fornecedor" error={(errors as any).fornecedor_id?.message} className="sm:col-span-2">
+              <select {...register("fornecedor_id", { valueAsNumber: true })} className={selectCls}>
                 <option value={0}>
                   {loadingData
-                    ? "Carregando empresas..."
-                    : empresas.length === 0
-                      ? "Nenhuma empresa cadastrada"
-                      : "Selecione a empresa contratada..."}
+                    ? "Carregando fornecedores..."
+                    : fornecedores.length === 0
+                      ? "Nenhum fornecedor cadastrado"
+                      : "Selecione o fornecedor..."}
                 </option>
-                {empresas.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.nome} — CNPJ: {e.cnpj}
+                {fornecedores.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nome}{f.documento ? ` — ${f.documento}` : ""}
                   </option>
                 ))}
               </select>
@@ -485,12 +397,12 @@ export default function NovoContratoPage() {
               </Field>
             )}
 
-            <Field label="Fabricante" error={errors.fabricante_id?.message}>
-              <select {...register("fabricante_id", { valueAsNumber: true })} className={selectCls}>
-                <option value={0}>{loadingData ? "Carregando..." : "Selecione o fabricante..."}</option>
-                {fabricantes.map((f) => (
-                  <option key={f.id} value={f.id}>{f.nome}</option>
-                ))}
+            <Field label="Tipo de Fornecedor" error={(errors as any).tipo_fornecedor_contrato?.message}>
+              <select {...register("tipo_fornecedor_contrato")} className={selectCls}>
+                <option value="">Não definido</option>
+                <option value="REVENDEDOR">Revendedor</option>
+                <option value="FABRICANTE">Fabricante</option>
+                <option value="REVENDEDOR_E_FABRICANTE">Revendedor e Fabricante</option>
               </select>
             </Field>
 
@@ -505,13 +417,13 @@ export default function NovoContratoPage() {
 
           {/* ══ 2.5. ITENS DA CONTRATAÇÃO ══ */}
           <div className="mt-10 mb-6 flex items-center justify-between border-b border-slate-200 pb-2 dark:border-slate-700">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
               Itens da Contratação
             </h3>
             <button
               type="button"
-              onClick={() => appendItem({ tipo_catalogo: "", codigo_catalogo: "", objeto_contratado: "", quantidade: 1, valor_unitario: 0 })}
-              className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+              onClick={() => appendItem({ tipo_catalogo: "", codigo_catalogo: "", catalogo_produto_id: 0, quantidade: 1, valor_unitario: 0, data_inicio_vigencia: "", data_fim_vigencia: "" })}
+              className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-primary hover:opacity-85"
             >
               <Plus size={14} /> Adicionar Item
             </button>
@@ -535,32 +447,26 @@ export default function NovoContratoPage() {
                       <Trash2 size={12} />
                     </button>
                   )}
-                  <div className="grid gap-4 sm:grid-cols-12 items-start">
-                    <div className="sm:col-span-2">
-                      <Field label="Catálogo" error={itemError?.tipo_catalogo?.message}>
-                        <select {...register(`itens.${index}.tipo_catalogo` as const)} className={selectCls}>
-                          <option value="">Selecione...</option>
-                          <option value="CATMAT">CATMAT</option>
-                          <option value="CATSER">CATSER</option>
+                  <div className="grid gap-4 grid-cols-1 md:grid-cols-12 items-end">
+                    <div className="col-span-1 md:col-span-6">
+                      <Field label="Item do Catálogo" required error={(itemError as any)?.catalogo_produto_id?.message}>
+                        <select
+                          {...register(`itens.${index}.catalogo_produto_id` as const, { valueAsNumber: true })}
+                          className={selectCls}
+                        >
+                          <option value={0}>Selecione um item do catálogo...</option>
+                          {catalogoProdutos.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.nome}</option>
+                          ))}
                         </select>
                       </Field>
                     </div>
-                    <div className="sm:col-span-2">
-                      <Field label="Código" error={itemError?.codigo_catalogo?.message}>
-                        <input {...register(`itens.${index}.codigo_catalogo` as const)} placeholder="Ex: 4501002" className={inputCls} />
+                    <div className="col-span-1 md:col-span-2">
+                      <Field label="Quantidade" required error={itemError?.quantidade?.message}>
+                        <input type="number" min={1} {...register(`itens.${index}.quantidade` as const, { valueAsNumber: true })} className={inputCls + " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"} />
                       </Field>
                     </div>
-                    <div className="sm:col-span-4">
-                      <Field label="Objeto Contratado" required error={itemError?.objeto_contratado?.message}>
-                        <input {...register(`itens.${index}.objeto_contratado` as const)} placeholder="Ex: Licença Microsoft 365" className={inputCls} />
-                      </Field>
-                    </div>
-                    <div className="sm:col-span-1">
-                      <Field label="Qtd" required error={itemError?.quantidade?.message}>
-                        <input type="number" min={1} {...register(`itens.${index}.quantidade` as const, { valueAsNumber: true })} className={inputCls} />
-                      </Field>
-                    </div>
-                    <div className="sm:col-span-3">
+                    <div className="col-span-1 md:col-span-4">
                       <Field label="Valor Unitário" required error={itemError?.valor_unitario?.message}>
                         <Controller
                           control={control}
@@ -576,9 +482,57 @@ export default function NovoContratoPage() {
                         />
                       </Field>
                     </div>
+
+                    {/* Segunda linha do Grid: Detalhes opcionais e Datas */}
+                    <div className="col-span-1 md:col-span-2">
+                      <Field label="Catálogo Governo" error={itemError?.tipo_catalogo?.message}>
+                        <select {...register(`itens.${index}.tipo_catalogo` as const)} className={selectCls}>
+                          <option value="">Nenhum...</option>
+                          <option value="CATMAT">CATMAT</option>
+                          <option value="CATSER">CATSER</option>
+                        </select>
+                      </Field>
+                    </div>
+                    <div className="col-span-1 md:col-span-2">
+                      <Field label="Código Governo" error={itemError?.codigo_catalogo?.message}>
+                        <input {...register(`itens.${index}.codigo_catalogo` as const)} placeholder="Ex: 4501002" className={inputCls} />
+                      </Field>
+                    </div>
+                    <div className="col-span-1 md:col-span-4">
+                      <Controller
+                        name={`itens.${index}.data_inicio_vigencia` as const}
+                        control={control}
+                        render={({ field }) => (
+                          <Field label="INÍCIO DO SUPORTE/GARANTIA" error={itemError?.data_inicio_vigencia?.message}>
+                            <DatePickerField
+                              value={field.value || null}
+                              onChange={(d) => field.onChange(d ?? "")}
+                              placeholder="Selecione a data de início"
+                              id={`item_inicio_${index}`}
+                            />
+                          </Field>
+                        )}
+                      />
+                    </div>
+                    <div className="col-span-1 md:col-span-4">
+                      <Controller
+                        name={`itens.${index}.data_fim_vigencia` as const}
+                        control={control}
+                        render={({ field }) => (
+                          <Field label="FIM DO SUPORTE/GARANTIA" error={itemError?.data_fim_vigencia?.message}>
+                            <DatePickerField
+                              value={field.value || null}
+                              onChange={(d) => field.onChange(d ?? "")}
+                              placeholder="Selecione a data de fim"
+                              id={`item_fim_${index}`}
+                            />
+                          </Field>
+                        )}
+                      />
+                    </div>
                   </div>
                   <div className="mt-3 flex items-center justify-end border-t border-slate-100 pt-2 text-xs font-medium text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                    Subtotal deste item: <span className="ml-1 font-mono text-sm font-bold text-teal-600 dark:text-teal-400">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    Subtotal deste item: <span className="ml-1 font-mono text-sm font-bold text-brand-primary">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               );
@@ -588,98 +542,96 @@ export default function NovoContratoPage() {
               <p className="text-sm text-red-500 font-medium">{errors.itens.root.message}</p>
             )}
 
-            <div className="flex justify-end rounded-xl bg-teal-50 px-5 py-4 dark:bg-teal-900/20">
+            <div className="flex justify-end rounded-xl bg-brand-primary/5 px-5 py-4">
               <div className="text-right">
-                <div className="text-xs font-bold uppercase tracking-wider text-teal-600/70 dark:text-teal-400/70">Valor Total</div>
-                <div className="mt-1 font-mono text-xl font-extrabold text-teal-700 dark:text-teal-300">
+                <div className="text-xs font-bold uppercase tracking-wider text-brand-primary/80">Valor Total</div>
+                <div className="mt-1 font-mono text-xl font-extrabold text-brand-primary">
                   R$ {totalItens.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ══ 3. VIGÊNCIA ══ */}
-          <SectionTitle>Vigência</SectionTitle>
-          <div className="grid gap-6 sm:grid-cols-2">
-            <Controller
-              name="data_assinatura"
-              control={control}
-              render={({ field }) => (
-                <Field label="Data de Assinatura" required error={errors.data_assinatura?.message}>
-                  <DatePickerField
-                    value={field.value || null}
-                    onChange={(d) => field.onChange(d ?? "")}
-                    placeholder="Selecione a data de assinatura"
-                    id="data_assinatura"
-                  />
-                </Field>
-              )}
-            />
-
-            <Controller
-              name="data_fim_vigencia"
-              control={control}
-              render={({ field }) => (
-                <Field label={isARP ? "Validade da Ata" : "Data Fim de Vigência"} required error={errors.data_fim_vigencia?.message}>
-                  <DatePickerField
-                    value={field.value || null}
-                    onChange={(d) => field.onChange(d ?? "")}
-                    placeholder="Selecione a data fim"
-                    id="data_fim_vigencia"
-                  />
-                </Field>
-              )}
-            />
-
-            <Controller
-              name="data_inicio_vigencia"
-              control={control}
-              render={({ field }) => (
-                <Field label="Data de Início da Vigência" error={errors.data_inicio_vigencia?.message}>
-                  <DatePickerField
-                    value={field.value || null}
-                    onChange={(d) => field.onChange(d ?? "")}
-                    placeholder="Se diferente da assinatura"
-                    id="data_inicio_vigencia"
-                  />
-                </Field>
-              )}
-            />
-
-            <Field label="Vigência" error={errors.vigencia_meses?.message}>
-              {/* Campo hidden mantém o número para a API */}
-              <input type="hidden" {...register("vigencia_meses", { valueAsNumber: true })} />
-              <input
-                type="text"
-                readOnly
-                tabIndex={-1}
-                value={watchedFimVigencia ? `${watch("vigencia_meses") ?? 0} meses` : ""}
-                className={inputCls + " cursor-not-allowed bg-slate-100 dark:bg-slate-700/50 text-slate-500"}
-                placeholder="Calculado automaticamente"
+          {/* ══ 3. VIGÊNCIA DO CONTRATO ══ */}
+          <SectionTitle>Vigência do Contrato</SectionTitle>
+          <div className="space-y-4">
+            
+            {/* LINHA 1: Linha do Tempo */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Controller
+                name="data_assinatura"
+                control={control}
+                render={({ field }) => (
+                  <Field label="Data de Assinatura" required error={errors.data_assinatura?.message}>
+                    <DatePickerField
+                      value={field.value || null}
+                      onChange={(d) => field.onChange(d ?? "")}
+                      placeholder="Selecione a data de assinatura"
+                      id="data_assinatura"
+                    />
+                  </Field>
+                )}
               />
-            </Field>
 
-            <Field label="Prorrogação" error={errors.prorrogacao_meses?.message}>
-              <select {...register("prorrogacao_meses", { valueAsNumber: true })} className={selectCls}>
-                <option value={0}>Não há prorrogação</option>
-                {Array.from({ length: 120 }, (_, i) => i + 1).map((m) => (
-                  <option key={m} value={m}>
-                    {m} {m === 1 ? "mês" : "meses"}
-                  </option>
-                ))}
-              </select>
-            </Field>
+              <Controller
+                name="data_inicio_vigencia"
+                control={control}
+                render={({ field }) => (
+                  <Field label="Data de Início da Vigência" error={errors.data_inicio_vigencia?.message}>
+                    <DatePickerField
+                      value={field.value || null}
+                      onChange={(d) => field.onChange(d ?? "")}
+                      placeholder="Se diferente da assinatura"
+                      id="data_inicio_vigencia"
+                    />
+                  </Field>
+                )}
+              />
 
-            <div className="sm:col-span-2">
-              <Field label="Observações" error={errors.observacoes?.message}>
-                <textarea
-                  {...register("observacoes")}
-                  rows={3}
-                  placeholder="Informações adicionais sobre o contrato..."
-                  className={inputCls + " h-auto resize-none"}
+              <Controller
+                name="data_fim_vigencia"
+                control={control}
+                render={({ field }) => (
+                  <Field label={isARP ? "Validade da Ata" : "Data Fim de Vigência"} required error={errors.data_fim_vigencia?.message}>
+                    <DatePickerField
+                      value={field.value || null}
+                      onChange={(d) => field.onChange(d ?? "")}
+                      placeholder="Selecione a data fim"
+                      id="data_fim_vigencia"
+                    />
+                  </Field>
+                )}
+              />
+            </div>
+
+            {/* LINHA 2: Controle */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Vigência" error={errors.vigencia_meses?.message}>
+                {/* Campo hidden mantém o número para a API */}
+                <input type="hidden" {...register("vigencia_meses", { valueAsNumber: true })} />
+                <input
+                  type="text"
+                  readOnly
+                  tabIndex={-1}
+                  value={watchedFimVigencia ? `${watch("vigencia_meses") ?? 0} meses` : ""}
+                  className={inputCls + " cursor-not-allowed bg-slate-100 dark:bg-slate-700/50 text-slate-500"}
+                  placeholder="Calculado automaticamente"
                 />
               </Field>
+
+              <Field label="Prorrogação" error={errors.prorrogacao_meses?.message}>
+                <select {...register("prorrogacao_meses", { valueAsNumber: true })} className={selectCls}>
+                  <option value={0}>Não há prorrogação</option>
+                  {Array.from({ length: 120 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>
+                      {m} {m === 1 ? "mês" : "meses"}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
+
+
           </div>
 
           {/* ══ 4. EQUIPE DE FISCALIZAÇÃO ══ */}
@@ -695,15 +647,28 @@ export default function NovoContratoPage() {
                     label={papel.label}
                     papelKey={papel.key}
                     servidores={servidores}
-                    titularValue={field.value?.titular_id ?? 0}
-                    substitutosValue={field.value?.substitutos_ids ?? []}
-                    onTitularChange={(val) => field.onChange({ ...field.value, titular_id: val })}
+                    titularesIds={field.value?.titulares_ids ?? []}
+                    substitutosIds={field.value?.substitutos_ids ?? []}
+                    onTitularesChange={(ids) => field.onChange({ ...field.value, titulares_ids: ids })}
                     onSubstitutosChange={(ids) => field.onChange({ ...field.value, substitutos_ids: ids })}
                     loading={loadingData}
                   />
                 )}
               />
             ))}
+          </div>
+
+          {/* ══ 5. INFORMAÇÕES COMPLEMENTARES ══ */}
+          <SectionTitle>Informações Complementares</SectionTitle>
+          <div className="grid gap-6">
+            <Field label="Observações" error={errors.observacoes?.message}>
+              <textarea
+                {...register("observacoes")}
+                rows={4}
+                placeholder="Anotações gerais e informações adicionais sobre o contrato..."
+                className={inputCls + " h-auto resize-y"}
+              />
+            </Field>
           </div>
 
           {/* ══ AÇÕES ══ */}
@@ -722,7 +687,7 @@ export default function NovoContratoPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="flex h-10 items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-500 px-6 text-sm font-bold text-white shadow-md shadow-cyan-500/25 transition-all hover:brightness-110 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 items-center gap-2 rounded-lg bg-brand-primary px-6 text-sm font-bold text-white shadow-md shadow-brand-primary/25 transition-all hover:bg-brand-primary-hover hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? (
                   <><Loader2 size={14} className="animate-spin" />Criando...</>
@@ -734,8 +699,6 @@ export default function NovoContratoPage() {
           </div>
 
         </form>
-      </div>
-
       <ToastContainer />
     </div>
   );

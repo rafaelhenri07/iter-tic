@@ -11,7 +11,7 @@ import type { NextRequest } from "next/server";
  */
 
 // Rotas que NÃO exigem autenticação
-const PUBLIC_PATHS = ["/login"];
+const PUBLIC_PATHS = ["/login", "/esqueci-senha", "/ativar-conta", "/redefinir-senha"];
 
 // Prefixos que devem ser ignorados pelo middleware
 const IGNORED_PREFIXES = [
@@ -57,6 +57,29 @@ export function middleware(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Controle de Acesso (RBAC) para rotas administrativas
+  const ADMIN_PATHS = ["/admin", "/configuracoes", "/equipe"];
+  if (ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(path + "/"))) {
+    const userCookie = request.cookies.get("itertic_user")?.value;
+    let userRole = "";
+    
+    if (userCookie) {
+      try {
+        const decoded = decodeURIComponent(userCookie);
+        const parsed = JSON.parse(decoded);
+        userRole = parsed.role || parsed.nivel_acesso;
+      } catch (e) {
+        console.error("Erro ao decodificar cookie de usuario no middleware", e);
+      }
+    }
+    
+    if (userRole !== "ADMIN") {
+      const redirectUrl = new URL("/dashboard", request.url);
+      redirectUrl.searchParams.set("auth_error", "Acesso negado. Privilégios insuficientes.");
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   return NextResponse.next();

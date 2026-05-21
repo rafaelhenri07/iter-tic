@@ -5,8 +5,11 @@ Ponto de entrada da API. Registra todos os routers dos módulos
 de planejamento estratégico (PDTIC e PACC).
 """
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import traceback
+import sys
 from app.core.security import get_current_user
 
 from app.api.routers import pdtic as pdtic_router
@@ -14,8 +17,8 @@ from app.api.routers import pacc as pacc_router
 from app.api.routers import projetos as projetos_router
 from app.api.routers import dashboard as dashboard_router
 from app.api.routers import contratos as contratos_router
-from app.api.routers import fabricantes as fabricantes_router
-from app.api.routers import empresas as empresas_router
+from app.api.routers import fornecedores as fornecedores_router
+from app.api.routers import catalogo as catalogo_router
 from app.api.routers import configuracoes as configuracoes_router
 from app.api.routers import auth as auth_router
 from app.api.routers import usuarios as usuarios_router
@@ -37,6 +40,9 @@ app = FastAPI(
 
 from app.core.audit import AuditoriaMiddleware
 
+# ── Middleware de Auditoria Silenciosa ──────────────────────────────────────
+app.add_middleware(AuditoriaMiddleware)
+
 # ── CORS (origens explícitas para compatibilidade com credenciais JWT) ─────
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -52,9 +58,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Middleware de Auditoria Silenciosa ──────────────────────────────────────
-app.add_middleware(AuditoriaMiddleware)
-
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Captura exceções não tratadas e retorna JSON com CORS headers."""
+    print(">>> UNHANDLED EXCEPTION IN FASTAPI <<<", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
+    # Conversão segura — evita cascata de erros (ex: DetachedInstanceError no __repr__)
+    try:
+        msg = str(exc)
+    except Exception:
+        msg = exc.__class__.__name__
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Erro Interno no Servidor: {msg}"},
+        headers={"Access-Control-Allow-Origin": "http://localhost:3000", "Access-Control-Allow-Credentials": "true"}
+    )
 
 # ── Routers ────────────────────────────────────────────────────────────────
 # Protegemos todos os módulos com JWT, exceto as rotas de auth
@@ -63,8 +81,8 @@ app.include_router(pacc_router.router, prefix="/api/v1", dependencies=[Depends(g
 app.include_router(projetos_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(dashboard_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(contratos_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
-app.include_router(fabricantes_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
-app.include_router(empresas_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(fornecedores_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
+app.include_router(catalogo_router.router, prefix="/api/v1", dependencies=[Depends(get_current_user)])
 app.include_router(configuracoes_router.router, prefix="/api/v1")
 
 # Router de autenticação (público)

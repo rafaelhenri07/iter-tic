@@ -57,6 +57,7 @@ from app.schemas.projeto import (
     ArtefatoResumoListagem,
     ComentarioResumoListagem,
     TramitacaoResumoListagem,
+    UltimaMovimentacaoResumo,
     ProjetoPainelResponse,
     ProjetoResponse,
     ProjetoTramitacaoCreate,
@@ -315,6 +316,7 @@ async def listar_projetos(
             selectinload(Projeto.itens_pacc),
             selectinload(Projeto.artefatos).selectinload(Artefato.comentarios),
             selectinload(Projeto.tramitacoes),
+            selectinload(Projeto.observacoes_fase_externa).selectinload(ObservacaoFaseExterna.usuario),
         )
         .order_by(Projeto.criado_em.desc())
     )
@@ -331,6 +333,25 @@ async def listar_projetos(
 
     result = await db.execute(stmt)
     projetos = result.scalars().unique().all()
+
+    # ── Helpers para tooltip enriquecido ──────────────────────────────────
+    def _ultima_mov(p: Projeto):
+        obs_list = p.observacoes_fase_externa or []
+        if not obs_list:
+            return None
+        # relationship já ordenado por criado_em desc → primeiro é o mais recente
+        ultima = obs_list[0]
+        autor_nome = ultima.usuario.nome if ultima.usuario else "Usuário do Sistema"
+        return UltimaMovimentacaoResumo(
+            texto=ultima.texto,
+            autor=autor_nome,
+            data=ultima.criado_em,
+        )
+
+    def _duracao_fase(p: Projeto):
+        if not p.data_envio_licitacao:
+            return None
+        return (date.today() - p.data_envio_licitacao).days
 
     response = []
     # Ordem canônica da esteira de artefatos
@@ -428,6 +449,8 @@ async def listar_projetos(
                     )
                 ],
                 total_tramitacoes=len(p.tramitacoes),
+                ultima_movimentacao=_ultima_mov(p),
+                duracao_fase_externa_dias=_duracao_fase(p),
             )
         )
 
@@ -1335,67 +1358,111 @@ async def adicionar_tramitacao_projeto(
 @router.get(
     "/{projeto_id}/historico",
     response_model=list[HistoricoEventoResponse],
-    summary="Obter histórico do projeto em formato de timeline",
+    summary="Obter histórico unificado do projeto em formato de timeline",
+    description=(
+        "Retorna uma linha do tempo consolidada com: registro do projeto, "
+        "início/conclusão de artefatos e anotações do diário de bordo da "
+        "Fase Externa, ordenados cronologicamente."
+    ),
 )
 async def obter_historico_projeto(
     projeto_id: int,
     db: AsyncSession = Depends(get_db),
 ):
     projeto = await _garantir_projeto_existe(projeto_id, db)
-    # Eager load artefatos
-    stmt = select(Projeto).options(selectinload(Projeto.artefatos)).where(Projeto.id == projeto_id)
+
+    # ── Eager-load artefatos ─────────────────────────────────────────────
+    stmt = (
+        select(Projeto)
+        .options(selectinload(Projeto.artefatos))
+        .where(Projeto.id == projeto_id)
+    )
     projeto = (await db.execute(stmt)).scalar_one()
 
-    eventos = []
+    eventos: list[dict] = []
 
-    # Evento de Criação
+    # ── 1. Evento de Criação do Projeto ──────────────────────────────────
     eventos.append({
         "id": f"criacao-{projeto.id}",
         "data_evento": projeto.criado_em,
-        "titulo": "Projeto Registrado",
-        "descricao": "O projeto foi criado no sistema.",
+        "titulo": "Projeto Registrado no Sistema",
+        "descricao": (
+            "O projeto de contratação foi cadastrado no ITER-TIC e encontra-se "
+            "disponível para acompanhamento pela equipe de planejamento."
+        ),
         "tipo": "criacao",
-        "icone": "folder"
+        "icone": "folder",
     })
 
+    # ── 2. Eventos dos Artefatos ─────────────────────────────────────────
     for art in projeto.artefatos:
+        # Início
         if art.data_inicio:
             eventos.append({
                 "id": f"inicio-{art.id}",
-                "data_evento": func.now() if not hasattr(art, 'criado_em') else art.criado_em, # Usamos datetime para timeline
-                "titulo": f"Artefato {art.tipo.value} Iniciado",
-                "descricao": f"A elaboração do artefato foi iniciada com data de início em {art.data_inicio.strftime('%d/%m/%Y')}.",
+                "data_evento": art.criado_em,
+                "titulo": f"Elaboração do {art.tipo.value} Iniciada",
+                "descricao": (
+                    f"O status do artefato foi atualizado no sistema indicando "
+                    f"o início dos trabalhos. Data-base retroativa: "
+                    f"{art.data_inicio.strftime('%d/%m/%Y')}."
+                ),
                 "tipo": "inicio",
-                "icone": "play"
+                "icone": "play",
             })
-            # Corrige a data_evento para ser datetime na view, usando a meia-noite da data de inicio
-            from datetime import datetime
-            eventos[-1]["data_evento"] = datetime.combine(art.data_inicio, datetime.min.time()).astimezone()
 
+        # Conclusão
         if art.data_conclusao:
-            descricao = f"Artefato concluído em {art.data_conclusao.strftime('%d/%m/%Y')}."
+            descricao = (
+                f"A elaboração foi finalizada e registrada no sistema. "
+                f"Data de conclusão: {art.data_conclusao.strftime('%d/%m/%Y')}."
+            )
             tipo = "conclusao"
             icone = "check"
 
-            # Check atraso
+            # Verificar atraso
             if art.data_fim_prevista and art.data_conclusao > art.data_fim_prevista:
-                descricao += f" Houve atraso na conclusão (Prazo Limite era {art.data_fim_prevista.strftime('%d/%m/%Y')})."
+                descricao += (
+                    f"\n⚠ Atenção: A conclusão ultrapassou o prazo previsto "
+                    f"({art.data_fim_prevista.strftime('%d/%m/%Y')})."
+                )
                 if art.justificativa_atraso:
-                    descricao += f"\nJustificativa: {art.justificativa_atraso}"
+                    descricao += (
+                        f"\nJustificativa registrada: {art.justificativa_atraso}"
+                    )
                 tipo = "atraso"
                 icone = "alert"
 
-            from datetime import datetime
             eventos.append({
                 "id": f"conclusao-{art.id}",
-                "data_evento": datetime.combine(art.data_conclusao, datetime.min.time()).astimezone(),
-                "titulo": f"Artefato {art.tipo.value} Concluído",
+                "data_evento": art.atualizado_em,
+                "titulo": f"{art.tipo.value} Concluído",
                 "descricao": descricao,
                 "tipo": tipo,
-                "icone": icone
+                "icone": icone,
             })
 
-    # Ordenar por data
+    # ── 3. Anotações do Diário de Bordo (Fase Externa) ───────────────────
+    stmt_obs = (
+        select(ObservacaoFaseExterna)
+        .options(selectinload(ObservacaoFaseExterna.usuario))
+        .where(ObservacaoFaseExterna.projeto_id == projeto_id)
+    )
+    result_obs = await db.execute(stmt_obs)
+    observacoes = result_obs.scalars().all()
+
+    for obs in observacoes:
+        autor_nome = obs.usuario.nome if obs.usuario else "Usuário do Sistema"
+        eventos.append({
+            "id": f"obs-fase-ext-{obs.id}",
+            "data_evento": obs.criado_em,
+            "titulo": "Fase Externa",
+            "descricao": f"Registrado por: {autor_nome}\n\n{obs.texto}",
+            "tipo": "observacao",
+            "icone": "message",
+        })
+
+    # ── Ordenar cronologicamente ─────────────────────────────────────────
     eventos.sort(key=lambda x: x["data_evento"])
 
     return eventos
@@ -1415,7 +1482,7 @@ async def listar_observacoes_fase_externa(
         select(ObservacaoFaseExterna)
         .options(selectinload(ObservacaoFaseExterna.usuario))
         .where(ObservacaoFaseExterna.projeto_id == projeto_id)
-        .order_by(ObservacaoFaseExterna.criado_em.desc())
+        .order_by(ObservacaoFaseExterna.criado_em.asc())
     )
     result = await db.execute(stmt)
     return result.scalars().all()
@@ -1473,10 +1540,29 @@ async def _carregar_projeto_completo(
     projeto_id: int, db: AsyncSession
 ) -> Projeto:
     """Carrega o projeto com todos os relacionamentos eager-loaded."""
+    from app.models.estrutura_organizacional import UnidadeOrganizacional
+
+    # Cadeia recursiva para a hierarquia de unidades (até 5 níveis)
+    _lotacao_chain = (
+        selectinload(Servidor.lotacao)
+        .selectinload(UnidadeOrganizacional.unidade_pai)
+        .selectinload(UnidadeOrganizacional.unidade_pai)
+        .selectinload(UnidadeOrganizacional.unidade_pai)
+        .selectinload(UnidadeOrganizacional.unidade_pai)
+        .selectinload(UnidadeOrganizacional.unidade_pai)
+    )
+
     stmt = (
         select(Projeto)
         .options(
-            selectinload(Projeto.equipe_membros).selectinload(ProjetoEquipe.servidor).selectinload(Servidor.lotacao),
+            selectinload(Projeto.equipe_membros)
+            .selectinload(ProjetoEquipe.servidor)
+            .selectinload(Servidor.lotacao)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai)
+            .selectinload(UnidadeOrganizacional.unidade_pai),
             selectinload(Projeto.acoes_pdtic),
             selectinload(Projeto.itens_pacc),
             selectinload(Projeto.artefatos),

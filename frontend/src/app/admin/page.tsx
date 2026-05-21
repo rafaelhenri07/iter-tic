@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ShieldCheck,
   Users,
@@ -13,8 +13,6 @@ import {
   X,
   CheckCircle2,
   XCircle,
-  Eye,
-  EyeOff,
   RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -67,34 +65,94 @@ function ConcederAcessoModal({
   onClose: () => void;
   onSuccess: (u: UsuarioAdmin) => void;
 }) {
-  const [form, setForm] = useState<UsuarioCreatePayload>({
+  const [form, setForm] = useState<Omit<UsuarioCreatePayload, "senha"> & { senha?: string }>({
     nome: "",
     email: "",
-    senha: "",
     role: "COMUM",
     servidor_id: null,
   });
-  const [showPwd, setShowPwd] = useState(false);
+  const [servidorSearch, setServidorSearch] = useState("");
+  const [servidorDropdownOpen, setServidorDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleChange = (k: keyof UsuarioCreatePayload, v: string | number | null) =>
-    setForm((prev) => ({ ...prev, [k]: v }));
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setServidorDropdownOpen(false);
+      }
+    }
+    if (servidorDropdownOpen) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [servidorDropdownOpen]);
+
+  const servidorSelecionado = servidores.find((s) => s.id === form.servidor_id) ?? null;
+  const hasServidor = !!servidorSelecionado;
+
+  const filteredServidores = servidores
+    .filter((s) => {
+      const q = servidorSearch.toLowerCase();
+      return s.nome.toLowerCase().includes(q) || s.matricula.toLowerCase().includes(q);
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+
+  const handleSelectServidor = (servidor: ServidorItem) => {
+    setForm((prev) => ({
+      ...prev,
+      servidor_id: servidor.id,
+      nome: servidor.nome,
+      email: servidor.email_funcional ?? "",
+    }));
+    setServidorSearch("");
+    setServidorDropdownOpen(false);
+  };
+
+  const handleClearServidor = () => {
+    setForm((prev) => ({
+      ...prev,
+      servidor_id: null,
+      nome: "",
+      email: "",
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!form.nome.trim() || !form.email.trim()) {
+      setError("Selecione um servidor para preencher nome e e-mail.");
+      return;
+    }
     setLoading(true);
     try {
-      const novoUsuario = await criarUsuario(form);
+      const payload: UsuarioCreatePayload = {
+        nome: form.nome,
+        email: form.email,
+        senha: "",
+        role: form.role,
+        servidor_id: form.servidor_id,
+      };
+      const novoUsuario = await criarUsuario(payload);
       onSuccess(novoUsuario);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erro ao criar usuário");
+      console.error("[ConcederAcesso] Erro ao criar usuário:", err);
+      if (err instanceof TypeError && (err.message === "Failed to fetch" || err.message === "NetworkError when attempting to reach resource.")) {
+        setError("Erro de conexão com o servidor. Verifique se o backend está rodando.");
+      } else {
+        setError(err instanceof Error ? err.message : "Erro ao criar usuário. Verifique os dados ou o servidor.");
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const inputReadonlyCls =
+    "w-full rounded-xl border border-white/10 bg-slate-800/60 px-3 py-2.5 text-sm text-slate-400 outline-none cursor-not-allowed";
+  const inputEditableCls =
+    "w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -106,12 +164,12 @@ function ConcederAcessoModal({
         {/* Header */}
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/20">
-              <Users size={20} className="text-indigo-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+              <Users size={20} />
             </div>
             <div>
               <h2 className="text-base font-bold text-white">Conceder Acesso</h2>
-              <p className="text-xs text-slate-400">Cadastrar novo usuário no sistema</p>
+              <p className="text-xs text-slate-400">Vincular servidor e criar acesso ao sistema</p>
             </div>
           </div>
           <button
@@ -131,99 +189,125 @@ function ConcederAcessoModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Nome */}
+          {/* 1. Servidor Vinculado (PRIMEIRO — combobox com busca) */}
+          <div ref={dropdownRef} className="relative">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Servidor Vinculado *
+            </label>
+            {hasServidor ? (
+              <div className="flex items-center gap-2">
+                <div className={`${inputReadonlyCls} flex-1 flex items-center justify-between`}>
+                  <span className="truncate">{servidorSelecionado.nome}</span>
+                  <span className="ml-2 shrink-0 text-[11px] text-slate-500">
+                    Mat. {servidorSelecionado.matricula}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleClearServidor}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 text-slate-500 transition hover:bg-red-500/10 hover:text-red-400"
+                  title="Limpar seleção"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar por nome ou matrícula..."
+                  value={servidorSearch}
+                  onChange={(e) => {
+                    setServidorSearch(e.target.value);
+                    setServidorDropdownOpen(true);
+                  }}
+                  onFocus={() => setServidorDropdownOpen(true)}
+                  className={inputEditableCls}
+                />
+                {servidorDropdownOpen && (
+                  <div className="absolute left-0 top-full z-50 mt-1.5 max-h-48 w-full overflow-y-auto rounded-xl border border-white/10 bg-slate-800 shadow-xl">
+                    {filteredServidores.length === 0 ? (
+                      <div className="px-3 py-3 text-center text-xs text-slate-500">
+                        Nenhum servidor encontrado
+                      </div>
+                    ) : (
+                      filteredServidores.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => handleSelectServidor(s)}
+                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/5"
+                        >
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-primary/10 text-xs font-bold text-brand-primary uppercase">
+                            {s.nome.charAt(0)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-white">{s.nome}</div>
+                            <div className="text-[11px] text-slate-500">
+                              {s.cargo} · Mat. {s.matricula}
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Nome Completo (autopreenchido e bloqueado) */}
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Nome Completo *
+              Nome Completo
             </label>
             <input
-              required
               type="text"
-              placeholder="Nome do usuário"
               value={form.nome}
-              onChange={(e) => handleChange("nome", e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
+              readOnly
+              tabIndex={-1}
+              placeholder={hasServidor ? "" : "Preenchido ao selecionar servidor"}
+              className={inputReadonlyCls}
             />
           </div>
 
-          {/* Email */}
+          {/* 3. E-mail Institucional (autopreenchido e bloqueado) */}
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-              E-mail Institucional *
+              E-mail Institucional
             </label>
             <input
-              required
               type="email"
-              placeholder="usuario@orgao.gov.br"
               value={form.email}
-              onChange={(e) => handleChange("email", e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
+              readOnly
+              tabIndex={-1}
+              placeholder={hasServidor ? "" : "Preenchido ao selecionar servidor"}
+              className={inputReadonlyCls}
             />
           </div>
 
-          {/* Senha */}
+          {/* 4. Nível de Acesso */}
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Senha Temporária *
+              Nível de Acesso *
             </label>
-            <div className="relative">
-              <input
-                required
-                type={showPwd ? "text" : "password"}
-                placeholder="Mínimo 6 caracteres"
-                value={form.senha}
-                onChange={(e) => handleChange("senha", e.target.value)}
-                minLength={6}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 pr-10 text-sm text-white placeholder:text-slate-600 outline-none transition focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd(!showPwd)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                tabIndex={-1}
-              >
-                {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
+            <select
+              value={form.role}
+              onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
+              className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+            >
+              <option value="COMUM">COMUM</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
           </div>
 
-          {/* Role + Servidor em grid */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Nível de Acesso */}
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Nível de Acesso *
-              </label>
-              <select
-                value={form.role}
-                onChange={(e) => handleChange("role", e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
-              >
-                <option value="COMUM">COMUM</option>
-                <option value="ADMIN">ADMIN</option>
-              </select>
-            </div>
-
-            {/* Servidor vinculado */}
-            <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Servidor Vinculado
-              </label>
-              <select
-                value={form.servidor_id ?? ""}
-                onChange={(e) =>
-                  handleChange("servidor_id", e.target.value ? Number(e.target.value) : null)
-                }
-                className="w-full rounded-xl border border-white/10 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
-              >
-                <option value="">— Nenhum —</option>
-                {servidores.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Informativo sobre link de ativação */}
+          <div className="flex items-start gap-2 rounded-xl border border-brand-primary/20 bg-brand-primary/5 px-3 py-2.5 text-[12px] text-brand-primary">
+            <AlertCircle size={14} className="mt-0.5 shrink-0 text-brand-primary" />
+            <span>
+              O acesso será criado e um <strong>link de ativação</strong> será enviado para o e-mail
+              institucional do servidor.
+            </span>
           </div>
 
           {/* Actions */}
@@ -237,8 +321,8 @@ function ConcederAcessoModal({
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+              disabled={loading || !hasServidor}
+              className="flex items-center gap-2 rounded-xl bg-brand-primary px-5 py-2 text-sm font-semibold text-white shadow-md shadow-brand-primary/25 transition hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
               Conceder Acesso
@@ -295,7 +379,7 @@ function AbaAcessos() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 size={28} className="animate-spin text-indigo-400" />
+        <Loader2 size={28} className="animate-spin text-brand-primary" />
       </div>
     );
   }
@@ -326,7 +410,7 @@ function AbaAcessos() {
           </button>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-500"
+            className="flex items-center gap-1.5 rounded-lg bg-brand-primary px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-primary-hover"
           >
             <Plus size={14} />
             Conceder Acesso
@@ -353,7 +437,7 @@ function AbaAcessos() {
                 {/* Nome */}
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-xs font-bold text-indigo-400 uppercase">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-primary/10 text-xs font-bold text-brand-primary uppercase">
                       {u.nome.charAt(0)}
                     </div>
                     <span className="font-medium text-foreground">{u.nome}</span>
@@ -463,7 +547,7 @@ function AbaAuditoria() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 size={28} className="animate-spin text-indigo-400" />
+        <Loader2 size={28} className="animate-spin text-brand-primary" />
       </div>
     );
   }
@@ -521,7 +605,11 @@ function AbaAuditoria() {
                       {log.user_email ?? <span className="italic text-slate-500">Sistema</span>}
                     </td>
                     <td className="px-4 py-2.5">{acaoBadge(log.acao)}</td>
-                    <td className="px-4 py-2.5 font-medium text-foreground">{log.entidade}</td>
+                    <td className="px-4 py-2.5 font-medium text-foreground">
+                      {(log.rota?.includes("/projetos/servidores") || log.rota?.includes("/equipe"))
+                        ? "Equipe"
+                        : log.entidade}
+                    </td>
                     <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-foreground-muted">
                       {log.ip_address ?? "—"}
                     </td>
@@ -543,15 +631,12 @@ function AbaAuditoria() {
 
 type Tab = "acessos" | "auditoria";
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: "acessos", label: "Acessos do Sistema", icon: <Users size={16} /> },
-  { id: "auditoria", label: "Logs de Auditoria", icon: <ScrollText size={16} /> },
-];
-
-export default function AdminPage() {
+function AdminPageContent() {
   const { user, isAdmin, loading } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>("acessos");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as Tab;
+  const activeTab = (tabParam === "acessos" || tabParam === "auditoria") ? tabParam : "acessos";
 
   // Guard: redireciona não-admins
   useEffect(() => {
@@ -568,17 +653,23 @@ export default function AdminPage() {
     );
   }
 
+  const headerIcon = activeTab === "acessos" ? <Users size={22} /> : <ScrollText size={22} />;
+  const headerTitle = activeTab === "acessos" ? "Acessos do Sistema" : "Logs de Auditoria";
+  const headerDesc = activeTab === "acessos"
+    ? "Gestão de privilégios e permissões de usuários"
+    : "Trilha de auditoria e rastreabilidade de operações";
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       {/* Page Header */}
       <div className="flex items-center gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg shadow-amber-500/25">
-          <ShieldCheck size={24} className="text-white" />
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+          {headerIcon}
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Administração</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{headerTitle}</h1>
           <p className="text-sm text-foreground-muted">
-            Gestão de acessos e rastreabilidade de operações do sistema
+            {headerDesc}
           </p>
         </div>
         {/* Admin badge */}
@@ -588,30 +679,23 @@ export default function AdminPage() {
         </span>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 rounded-xl border border-border/60 bg-background-card p-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            id={`admin-tab-${tab.id}`}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-              activeTab === tab.id
-                ? "bg-brand-primary text-white shadow-sm"
-                : "text-foreground-muted hover:bg-background-secondary hover:text-foreground"
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       {/* Tab Content */}
       <div>
         {activeTab === "acessos" && <AbaAcessos />}
         {activeTab === "auditoria" && <AbaAuditoria />}
       </div>
     </div>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 size={28} className="animate-spin text-brand-primary" />
+      </div>
+    }>
+      <AdminPageContent />
+    </Suspense>
   );
 }

@@ -51,7 +51,7 @@ export function ContratoCard({ contrato, onVerDetalhes, onEditar }: ContratoCard
             </div>
             <div className="mt-0.5 flex items-center gap-1.5 text-xs text-foreground-muted">
               <Building2 size={11} />
-              <span className="truncate">{contrato.empresa_nome ?? "—"}</span>
+              <span className="truncate">{contrato.fornecedor_nome ?? "—"}</span>
             </div>
           </div>
         </div>

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { SingleSelectCombobox } from "@/components/ui/SingleSelectCombobox";
 import {
   itemPaccUpdateSchema,
   type ItemPaccUpdateFormData,
@@ -173,22 +174,32 @@ export function EditarItemPaccModal({
             required
             error={errors.acao_pdtic_id?.message}
           >
-            <select
-              {...register("acao_pdtic_id", { valueAsNumber: true })}
-              className={selectCls}
-            >
-              <option value={0}>
-                {loadingAcoes
-                  ? "Carregando ações..."
-                  : "Selecione uma ação PDTIC..."}
-              </option>
-              {acoesPdtic.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.codigo_acao} — {a.descricao.substring(0, 60)}
-                  {a.descricao.length > 60 ? "…" : ""}
-                </option>
-              ))}
-            </select>
+            <Controller
+              control={control}
+              name="acao_pdtic_id"
+              render={({ field }) => (
+                <SingleSelectCombobox
+                  options={acoesPdtic
+                    .map((a) => ({
+                      value: a.id,
+                      label: `${a.codigo_acao} — ${
+                        a.descricao.length > 60
+                          ? a.descricao.substring(0, 60) + "…"
+                          : a.descricao
+                      }`,
+                    }))
+                    .sort((a, b) => a.label.localeCompare(b.label))}
+                  value={field.value}
+                  onChange={(val) => field.onChange(val || 0)}
+                  placeholder={
+                    loadingAcoes
+                      ? "Carregando ações..."
+                      : "Selecione uma ação PDTIC..."
+                  }
+                  disabled={loadingAcoes}
+                />
+              )}
+            />
           </FormField>
 
           {/* Número + Quantidade */}
@@ -280,7 +291,7 @@ export function EditarItemPaccModal({
                 <button
                   type="button"
                   onClick={() => setSeiList([...seiList, ""])}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-brand-primary hover:text-brand-primary-hover"
                 >
                   <Plus size={14} />
                   Adicionar outro processo SEI

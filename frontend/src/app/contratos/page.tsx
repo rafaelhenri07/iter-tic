@@ -110,7 +110,7 @@ export default function ContratosPage() {
       result = result.filter(
         (c) =>
           `${c.numero}/${c.ano}`.includes(q) ||
-          (c.empresa_nome ?? "").toLowerCase().includes(q) ||
+          (c.fornecedor_nome ?? "").toLowerCase().includes(q) ||
           (c.projeto_nome ?? "").toLowerCase().includes(q) ||
           (c.nome_gestor ?? "").toLowerCase().includes(q)
       );
@@ -132,11 +132,11 @@ export default function ContratosPage() {
   const totalValor = contratos.reduce((sum, c) => sum + c.valor_total, 0);
 
   return (
-    <div className="space-y-6 p-6 lg:p-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 text-white shadow-lg shadow-cyan-500/25">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
             <FileSignature size={22} />
           </div>
           <div>
@@ -151,7 +151,7 @@ export default function ContratosPage() {
 
         <Link
           href="/execucao/contratos/novo"
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-xl hover:shadow-cyan-500/30 hover:brightness-110"
+          className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-primary/25 transition-all hover:shadow-xl hover:shadow-brand-primary/30 hover:bg-brand-primary-hover"
         >
           <Plus size={16} />
           Novo Contrato
@@ -219,10 +219,10 @@ export default function ContratosPage() {
           />
           <input
             type="text"
-            placeholder="Buscar por nº contrato, empresa, projeto ou gestor..."
+            placeholder="Buscar por nº contrato, fornecedor, projeto ou gestor..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-xl border border-border bg-background-card pl-10 pr-4 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-colors focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+            className="h-10 w-full rounded-xl border border-border bg-background-card pl-10 pr-4 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
           />
         </div>
 
@@ -231,7 +231,7 @@ export default function ContratosPage() {
           <select
             value={filterSituacao}
             onChange={(e) => setFilterSituacao(e.target.value)}
-            className="h-10 appearance-none rounded-xl border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-colors focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+            className="h-10 appearance-none rounded-xl border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
           >
             <option value="todos">Todas as situações</option>
             <option value="Vigente">Vigente</option>
@@ -256,7 +256,7 @@ export default function ContratosPage() {
           {contratos.length === 0 && (
             <Link
               href="/execucao/contratos/novo"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-4 py-2 text-xs font-bold text-cyan-700 transition-colors hover:bg-cyan-100 dark:bg-cyan-900/20 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-primary/10 px-4 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/20"
             >
               <Plus size={14} />
               Cadastrar primeiro contrato
@@ -311,7 +311,7 @@ export default function ContratosPage() {
                       })()}
                     </div>
                     <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {c.empresa_nome ?? "—"}
+                      {c.fornecedor_nome ?? "—"}
                     </div>
                   </td>
 
@@ -361,7 +361,7 @@ export default function ContratosPage() {
                   <td className="px-5 py-3.5 text-center">
                     <button
                       onClick={(e) => { e.stopPropagation(); handleEditar(c.id); }}
-                      className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-teal-50 hover:text-teal-600 dark:hover:bg-teal-900/20"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20 mx-auto"
                       title="Editar contrato"
                     >
                       <Pencil size={15} />

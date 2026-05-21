@@ -44,8 +44,8 @@ const MONTHS_PT = [
   "jul", "ago", "set", "out", "nov", "dez",
 ];
 
-const YEAR_START = 2010;
-const YEAR_END   = 2042;
+const YEAR_START = 2015;
+const YEAR_END   = 2045;
 const YEARS      = Array.from({ length: YEAR_END - YEAR_START + 1 }, (_, i) => YEAR_START + i);
 
 function parseDate(str: string | null | undefined): Date | undefined {
@@ -81,6 +81,20 @@ export function DatePickerField({
   const [viewMode, setViewMode]       = useState<ViewMode>("days");
   const [displayMonth, setDisplayMonth] = useState<Date>(selected ?? new Date());
   const containerRef = useRef<HTMLDivElement>(null);
+  const yearsContainerRef = useRef<HTMLDivElement>(null);
+
+  /* ── Smart Focus para Anos ── */
+  useEffect(() => {
+    if (viewMode === "years" && yearsContainerRef.current) {
+      // Usamos setTimeout para garantir que a renderização do grid foi concluída
+      setTimeout(() => {
+        const activeYearBtn = yearsContainerRef.current?.querySelector('[data-active="true"]');
+        if (activeYearBtn) {
+          activeYearBtn.scrollIntoView({ block: "center", behavior: "instant" });
+        }
+      }, 10);
+    }
+  }, [viewMode]);
 
   /* ── Sincroniza displayMonth quando o valor externo muda ── */
   useEffect(() => {
@@ -165,7 +179,7 @@ export function DatePickerField({
         disabled={disabled}
         onClick={() => !disabled && setOpen((p) => !p)}
         className={[
-          "flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm transition-all duration-150",
+          "flex w-full h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm transition-all duration-150",
           disabled
             ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60 dark:border-slate-800 dark:bg-slate-900"
             : "cursor-pointer border-slate-200 bg-white hover:bg-slate-50 focus:outline-none dark:border-slate-700 dark:bg-background dark:hover:bg-slate-800/50",
@@ -305,7 +319,7 @@ export function DatePickerField({
             * VIEW: YEARS — grade com scroll
             * ══════════════════════════════════════════════════════════════ */}
           {viewMode === "years" && (
-            <div className="max-h-52 overflow-y-auto px-4 pb-4 pt-1 scrollbar-thin">
+            <div ref={yearsContainerRef} className="max-h-52 overflow-y-auto px-4 pb-4 pt-1 scrollbar-thin">
               <div className="grid grid-cols-3 gap-2">
                 {YEARS.map((yr) => {
                   const isSelected = selected && getYear(selected) === yr;
@@ -314,6 +328,7 @@ export function DatePickerField({
                     <button
                       key={yr}
                       type="button"
+                      data-active={isSelected || (!selected && isCurrent)}
                       onClick={() => handleYearClick(yr)}
                       className={[
                         "flex h-10 w-full items-center justify-center rounded-xl text-sm font-semibold transition-all",

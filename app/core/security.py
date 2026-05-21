@@ -4,17 +4,21 @@ ITER TIC - Segurança e Autenticação (JWT + RBAC)
 Módulo central de segurança com:
   - Hash de senhas via bcrypt (passlib)
   - Geração e validação de tokens JWT (PyJWT)
+  - Sanitização de matrícula institucional
+  - Tokens de ativação/reset de uso único
   - Dependências de injeção: get_current_user, require_admin
 """
 
 import os
+import re
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 import jwt
 from jwt.exceptions import PyJWTError
@@ -28,6 +32,7 @@ from app.models.enums import RoleUsuarioEnum
 SECRET_KEY = os.getenv("SECRET_KEY", "minha_chave_super_secreta_de_desenvolvimento")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 dias
+ACTIVATION_TOKEN_EXPIRE_HOURS = 24  # Token de ativação/reset: 24h
 
 # ── Bcrypt ─────────────────────────────────────────────────────────────────
 
@@ -44,6 +49,34 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
+# ── Sanitização de Matrícula ───────────────────────────────────────────────
+
+def sanitize_matricula(raw: str) -> str:
+    """
+    Higieniza a matrícula removendo pontos, traços e espaços,
+    e converte para uppercase. Ex: '123.456-7' → '1234567', 'root' → 'ROOT'.
+    """
+    return re.sub(r"[\.\-\s]", "", raw).strip().upper()
+
+
+# ── Validação de Senha ─────────────────────────────────────────────────────
+
+def validar_senha(senha: str) -> str | None:
+    """
+    Valida regras estritas de senha. Retorna mensagem de erro ou None se válida.
+    Regras: mínimo 8 caracteres, ao menos 1 letra, 1 número, 1 caractere especial.
+    """
+    if len(senha) < 8:
+        return "A senha deve ter no mínimo 8 caracteres."
+    if not re.search(r"[a-zA-Z]", senha):
+        return "A senha deve conter pelo menos 1 letra."
+    if not re.search(r"[0-9]", senha):
+        return "A senha deve conter pelo menos 1 número."
+    if not re.search(r"[^a-zA-Z0-9]", senha):
+        return "A senha deve conter pelo menos 1 caractere especial (ex: @, #, $, !)."
+    return None
+
+
 # ── JWT ────────────────────────────────────────────────────────────────────
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -52,6 +85,48 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_activation_token(email: str, purpose: str) -> str:
+    """
+    Cria um JWT de ativação/reset de uso único.
+    purpose: 'ativacao' ou 'reset'
+    """
+    expire = datetime.now(timezone.utc) + timedelta(hours=ACTIVATION_TOKEN_EXPIRE_HOURS)
+    payload = {
+        "sub": email,
+        "purpose": purpose,
+        "exp": expire,
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_activation_token(token: str) -> dict:
+    """
+    Decodifica e valida um token de ativação/reset.
+    Retorna o payload com 'sub' (email) e 'purpose'.
+    Levanta HTTPException se inválido/expirado.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        purpose = payload.get("purpose")
+        if not email or purpose not in ("ativacao", "reset"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Token inválido.",
+            )
+        return payload
+    except PyJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token inválido ou expirado.",
+        )
+
+
+def hash_token(token: str) -> str:
+    """Gera hash SHA-256 do token para armazenamento seguro no BD."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 # ── Dependências FastAPI ───────────────────────────────────────────────────
@@ -65,10 +140,8 @@ async def get_current_user(
 ) -> Usuario:
     """
     Dependência que extrai e valida o token JWT, busca o usuário no banco
-    e retorna o objeto Usuario completo. Falha com 401 se:
-      - Token inválido ou expirado
-      - Usuário não encontrado
-      - Usuário inativo
+    e retorna o objeto Usuario completo. Busca por matrícula (sub do JWT).
+    Fallback por email para compatibilidade com admin root.
     """
     token = credentials.credentials
     credentials_exception = HTTPException(
@@ -79,14 +152,18 @@ async def get_current_user(
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str | None = payload.get("sub")
-        if email is None:
+        sub: str | None = payload.get("sub")
+        if sub is None:
             raise credentials_exception
     except PyJWTError:
         raise credentials_exception
 
-    # Buscar usuário no banco para garantir que ainda existe e está ativo
-    result = await db.execute(select(Usuario).where(Usuario.email == email))
+    # Buscar por matrícula (padrão) OU email (fallback para tokens antigos)
+    result = await db.execute(
+        select(Usuario).where(
+            or_(Usuario.matricula == sub, Usuario.email == sub)
+        )
+    )
     user = result.scalar_one_or_none()
 
     if user is None:

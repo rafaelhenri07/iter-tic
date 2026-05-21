@@ -5,8 +5,9 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { useConfig } from "@/components/providers/ConfigProvider";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { Loader2, Bell, Sun, Moon, Monitor, Menu as MenuIcon, LogOut, Shield, Search } from "lucide-react";
+import { Loader2, Bell, Sun, Moon, Monitor, Menu as MenuIcon, LogOut, Shield } from "lucide-react";
 import { useTheme } from "next-themes";
+import { showToast, ToastContainer } from "@/components/ui/Toast";
 
 /**
  * Shell do Dashboard — combina TopBar unificada + Sidebar + conteúdo.
@@ -21,7 +22,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const authError = params.get("auth_error");
+      if (authError) {
+        showToast("error", authError);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }
+    }
+  }, []);
 
   // Rotas públicas não exibem o shell (Sidebar + TopBar)
   const isPublicRoute = pathname === "/login";
@@ -59,6 +71,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       style={
         {
           "--brand-primary": primaryColor,
+          "--brand-primary-hover": `color-mix(in srgb, ${primaryColor} 85%, black)`,
           "--sidebar-accent": primaryColor,
         } as React.CSSProperties
       }
@@ -89,26 +102,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         {/* Spacer */}
         <div className="flex-1" />
-
-        {/* Global Search */}
-        <div className="hidden sm:flex items-center justify-end mr-4">
-          <div className="relative w-64 lg:w-80">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar em todo o sistema..."
-              className="w-full rounded-full border border-slate-700 bg-slate-800/50 py-1.5 pl-9 pr-4 text-sm text-slate-200 placeholder-slate-400 transition-all focus:border-brand-primary focus:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-brand-primary"
-            />
-          </div>
-        </div>
-        
-        {/* Mobile Search Icon */}
-        <button
-          className="sm:hidden mr-2 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-          aria-label="Buscar"
-        >
-          <Search size={18} />
-        </button>
 
         {/* Right Section: Actions */}
         <div className="flex items-center gap-1 sm:gap-2">
@@ -186,6 +179,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
+      <ToastContainer />
     </div>
   );
 }

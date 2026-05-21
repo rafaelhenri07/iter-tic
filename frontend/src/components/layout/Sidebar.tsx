@@ -16,6 +16,7 @@ import {
   Menu,
   Search,
   ShieldCheck,
+  ScrollText,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -43,7 +44,9 @@ interface SidebarProps {
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { user, isAdmin } = useAuth();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const { user } = useAuth();
+  const hasAdminAccess = user?.role === "ADMIN" || (user as any)?.nivel_acesso === "ADMIN";
 
   // Monta a lista de nav agrupada dinamicamente
   const navGroups: NavGroup[] = [
@@ -69,28 +72,18 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     {
       title: "Fornecedores",
       items: [
-        { label: "Empresas", href: "/empresas", icon: <Briefcase size={20} /> },
-        { label: "Fabricantes", href: "/execucao/fabricantes", icon: <Building2 size={20} /> },
+        { label: "Base de Fornecedores", href: "/fornecedores", icon: <Briefcase size={20} /> },
+        { label: "Catálogo", href: "/catalogo", icon: <Building2 size={20} /> },
       ],
     },
-    {
-      title: "Estrutura Interna",
-      items: [
-        { label: "Servidores", href: "/equipe", icon: <Users size={20} /> },
-        ...(isAdmin
-          ? [{ label: "Estrutura Org.", href: "/admin/estrutura-organizacional", icon: <Building2 size={20} /> }]
-          : []),
-      ],
-    },
-    {
-      title: "Sistema",
-      items: [
-        { label: "Configurações", href: "/configuracoes", icon: <Settings size={20} /> },
-        ...(isAdmin
-          ? [{ label: "Administração", href: "/admin", icon: <ShieldCheck size={20} /> }]
-          : []),
-      ],
-    },
+  ];
+
+  const adminItems = [
+    { label: "Equipe", href: "/equipe", icon: <Users size={16} /> },
+    { label: "Estrutura Organizacional", href: "/admin/estrutura-organizacional", icon: <Building2 size={16} /> },
+    { label: "Acessos do Sistema", href: "/admin?tab=acessos", icon: <ShieldCheck size={16} /> },
+    { label: "Logs de Auditoria", href: "/admin?tab=auditoria", icon: <ScrollText size={16} /> },
+    { label: "Configurações", href: "/configuracoes", icon: <Settings size={16} /> },
   ];
 
   return (
@@ -174,7 +167,66 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </div>
           ))}
         </nav>
+        {/* Rodapé da Sidebar */}
+        {hasAdminAccess && (
+          <div className="border-t border-slate-700/60 p-3 relative z-50">
+            {dropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setDropdownOpen(false)}
+                />
+                <div
+                  className={`absolute z-50 rounded-xl border border-slate-800 bg-slate-900 p-1.5 shadow-2xl animate-in fade-in-50 slide-in-from-bottom-2 duration-200
+                    ${isCollapsed 
+                      ? "left-full ml-3 bottom-3 w-56" 
+                      : "bottom-full left-3 right-3 mb-2"
+                    }`}
+                >
+                  <div className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-800/60 mb-1">
+                    Painel Administrativo
+                  </div>
+                  <div className="space-y-0.5">
+                    {adminItems.map((item) => {
+                      const isActive = pathname === item.href;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setDropdownOpen(false)}
+                          className={`flex items-center rounded-lg px-2.5 py-2 text-sm transition-all duration-150
+                            ${isActive 
+                              ? "bg-slate-800 font-medium text-white" 
+                              : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                            }`}
+                        >
+                          <span className={`shrink-0 opacity-80 ${isActive ? "text-sidebar-accent" : ""}`}>
+                            {item.icon}
+                          </span>
+                          <span className="ml-2.5 truncate">{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
 
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className={`flex w-full items-center rounded-lg p-2.5 text-sidebar-fg transition-all duration-200 hover:bg-sidebar-hover hover:text-sidebar-fg-active
+                ${isCollapsed ? "justify-center" : "justify-start"}`}
+              title="Configurações & Admin"
+            >
+              <span className="shrink-0">
+                <Settings size={20} className={`transition-transform duration-500 ${dropdownOpen ? "rotate-95 text-white" : ""}`} />
+              </span>
+              {!isCollapsed && (
+                <span className="ml-3 text-sm font-medium">Configurações & Admin</span>
+              )}
+            </button>
+          </div>
+        )}
       </aside>
     </>
   );

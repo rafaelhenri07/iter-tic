@@ -27,7 +27,9 @@ import type { UnidadeOrg } from "@/types/estrutura_organizacional";
 import { showToast } from "@/components/ui/Toast";
 import { FormField, inputCls, selectCls } from "@/components/ui/FormField";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
-import { DatePickerField } from "@/components/ui/DatePickerField";
+
+import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
+import { DynamicSelectArray } from "@/components/ui/DynamicSelectArray";
 
 const TIPOS_NECESSIDADE = Object.entries(TIPO_NECESSIDADE_LABEL) as [
   string,
@@ -96,31 +98,7 @@ export default function NovaAcaoPdticPage() {
   const selectedDems = watch("unidades_demandantes_ids") ?? [];
   const selectedResps = watch("unidades_responsaveis_ids") ?? [];
 
-  // Handlers para multi-select de unidades
-  const handleAddDep = (val: string) => {
-    const id = Number(val);
-    if (!id || selectedDeps.includes(id)) return;
-    setValue("departamentos_ids", [...selectedDeps, id], { shouldValidate: true });
-  };
-  const handleRemoveDep = (id: number) => {
-    setValue("departamentos_ids", selectedDeps.filter(d => d !== id), { shouldValidate: true });
-  };
-  const handleAddDem = (val: string) => {
-    const id = Number(val);
-    if (!id || selectedDems.includes(id)) return;
-    setValue("unidades_demandantes_ids", [...selectedDems, id], { shouldValidate: true });
-  };
-  const handleRemoveDem = (id: number) => {
-    setValue("unidades_demandantes_ids", selectedDems.filter(d => d !== id), { shouldValidate: true });
-  };
-  const handleAddResp = (val: string) => {
-    const id = Number(val);
-    if (!id || selectedResps.includes(id)) return;
-    setValue("unidades_responsaveis_ids", [...selectedResps, id], { shouldValidate: true });
-  };
-  const handleRemoveResp = (id: number) => {
-    setValue("unidades_responsaveis_ids", selectedResps.filter(d => d !== id), { shouldValidate: true });
-  };
+
 
   // Carregar períodos na montagem
   useEffect(() => {
@@ -191,17 +169,6 @@ export default function NovaAcaoPdticPage() {
     setValue(tipo, current, { shouldValidate: true });
   };
 
-  const handleAddTipo = (val: string) => {
-    if (!val) return;
-    if (!tipos_selecionados.includes(val as any)) {
-      setValue("tipo_necessidade", [...tipos_selecionados, val as any], { shouldValidate: true });
-    }
-  };
-
-  const handleRemoveTipo = (val: string) => {
-    setValue("tipo_necessidade", tipos_selecionados.filter((t) => t !== val), { shouldValidate: true });
-  };
-
   const onSubmit = async (data: AcaoPdticFormData) => {
     setSubmitting(true);
     try {
@@ -216,12 +183,28 @@ export default function NovaAcaoPdticPage() {
     }
   };
 
+  const onError = (errs: any) => {
+    console.error("VALIDATION ERRORS:", errs);
+    showToast("error", "Existem campos obrigatórios não preenchidos. Verifique as mensagens em vermelho no formulário.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const safeSubmit = (e: React.FormEvent) => {
+    e.preventDefault(); 
+    try {
+      handleSubmit(onSubmit, onError)(e).catch(err => {
+        console.error("Hook form async error:", err);
+      });
+    } catch (err: any) {
+      console.error("Hook form sync error:", err);
+    }
+  };
+
   const totalInv = Object.values(investimento).reduce((a, b) => a + b, 0);
   const totalCus = Object.values(custeio).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 dark:bg-background">
-      <div className="max-w-4xl mx-auto py-8 px-6 pb-20">
+    <div className="mx-auto max-w-4xl space-y-6 pb-20">
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="mb-8">
         <Link
@@ -239,14 +222,14 @@ export default function NovaAcaoPdticPage() {
 
       {loadingContext ? (
         <div className="flex justify-center py-12">
-          <Loader2 className="animate-spin text-emerald-500" size={32} />
+          <Loader2 className="animate-spin text-brand-primary" size={32} />
         </div>
       ) : (
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 pb-12">
+        <form onSubmit={safeSubmit} className="space-y-8 pb-12">
           
           {/* ── Seção: Contexto ─────────────────────────────────────────── */}
           <div>
-            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
+            <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800">
               Contexto do Plano
             </h3>
             <div className="grid gap-6 sm:grid-cols-2">
@@ -276,7 +259,7 @@ export default function NovaAcaoPdticPage() {
 
           {/* ── Seção: Identificação ────────────────────────────────────── */}
           <div>
-            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
+            <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800">
               Identificação da Ação
             </h3>
             <div className="grid gap-6 sm:grid-cols-2">
@@ -326,145 +309,57 @@ export default function NovaAcaoPdticPage() {
 
           {/* ── Seção: Unidades Envolvidas ──────────────────────────────── */}
           <div>
-            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
+            <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800">
               Unidades Envolvidas
             </h3>
-            <div className="flex flex-col gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <FormField label="Departamentos" error={errors.departamentos_ids?.message} required>
-                <div className="flex flex-col gap-2">
-                  <select
-                    className={selectCls}
-                    disabled={submitting || loadingContext}
-                    value=""
-                    onChange={(e) => handleAddDep(e.target.value)}
-                  >
-                    <option value="">Adicionar departamento...</option>
-                    {unidadesOrg
-                      .filter(d => !selectedDeps.includes(d.id))
-                      .map(d => (
-                        <option key={d.id} value={d.id}>{d.sigla ? `${d.sigla} - ${d.nome}` : d.nome}</option>
-                      ))}
-                  </select>
-                  {selectedDeps.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedDeps.map(id => {
-                        const dep = unidadesOrg.find(d => d.id === id);
-                        return (
-                          <span key={id} className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full border border-emerald-100 dark:bg-emerald-900/30 dark:border-emerald-500/50 dark:text-emerald-300">
-                            {dep ? (dep.sigla ? `${dep.sigla} - ${dep.nome}` : dep.nome) : `ID ${id}`}
-                            <button type="button" onClick={() => handleRemoveDep(id)} className="hover:text-emerald-900 dark:hover:text-emerald-100 ml-0.5">&times;</button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <DynamicSelectArray
+                  options={unidadesOrg.map(d => ({ value: d.id, label: d.caminho_completo }))}
+                  value={selectedDeps}
+                  onChange={(val) => setValue("departamentos_ids", val, { shouldValidate: true })}
+                  placeholder="Selecionar departamento..."
+                  disabled={submitting || loadingContext}
+                />
               </FormField>
 
               <FormField label="Unidades Demandantes" error={errors.unidades_demandantes_ids?.message} required>
-                <div className="flex flex-col gap-2">
-                  <select
-                    className={selectCls}
-                    disabled={submitting || loadingContext}
-                    value=""
-                    onChange={(e) => handleAddDem(e.target.value)}
-                  >
-                    <option value="">Adicionar unidade demandante...</option>
-                    {unidadesOrg
-                      .filter(d => !selectedDems.includes(d.id))
-                      .map(d => (
-                        <option key={d.id} value={d.id}>{d.sigla ? `${d.sigla} - ${d.nome}` : d.nome}</option>
-                      ))}
-                  </select>
-                  {selectedDems.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedDems.map(id => {
-                        const dem = unidadesOrg.find(d => d.id === id);
-                        return (
-                          <span key={id} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-full border border-blue-100 dark:bg-blue-900/30 dark:border-blue-500/50 dark:text-blue-300">
-                            {dem ? (dem.sigla ? `${dem.sigla} - ${dem.nome}` : dem.nome) : `ID ${id}`}
-                            <button type="button" onClick={() => handleRemoveDem(id)} className="hover:text-blue-900 dark:hover:text-blue-100 ml-0.5">&times;</button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <DynamicSelectArray
+                  options={unidadesOrg.map(d => ({ value: d.id, label: d.caminho_completo }))}
+                  value={selectedDems}
+                  onChange={(val) => setValue("unidades_demandantes_ids", val, { shouldValidate: true })}
+                  placeholder="Selecionar unidade demandante..."
+                  disabled={submitting || loadingContext}
+                />
               </FormField>
 
               <FormField label="Unidades Responsáveis" error={errors.unidades_responsaveis_ids?.message} required>
-                <div className="flex flex-col gap-2">
-                  <select
-                    className={selectCls}
-                    disabled={submitting || loadingContext}
-                    value=""
-                    onChange={(e) => handleAddResp(e.target.value)}
-                  >
-                    <option value="">Adicionar unidade responsável...</option>
-                    {unidadesOrg
-                      .filter(d => !selectedResps.includes(d.id))
-                      .map(d => (
-                        <option key={d.id} value={d.id}>{d.sigla ? `${d.sigla} - ${d.nome}` : d.nome}</option>
-                      ))}
-                  </select>
-                  {selectedResps.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedResps.map(id => {
-                        const resp = unidadesOrg.find(d => d.id === id);
-                        return (
-                          <span key={id} className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 text-xs px-2.5 py-1 rounded-full border border-violet-100 dark:bg-violet-900/30 dark:border-violet-500/50 dark:text-violet-300">
-                            {resp ? (resp.sigla ? `${resp.sigla} - ${resp.nome}` : resp.nome) : `ID ${id}`}
-                            <button type="button" onClick={() => handleRemoveResp(id)} className="hover:text-violet-900 dark:hover:text-violet-100 ml-0.5">&times;</button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                <DynamicSelectArray
+                  options={unidadesOrg.map(d => ({ value: d.id, label: d.caminho_completo }))}
+                  value={selectedResps}
+                  onChange={(val) => setValue("unidades_responsaveis_ids", val, { shouldValidate: true })}
+                  placeholder="Selecionar unidade responsável..."
+                  disabled={submitting || loadingContext}
+                />
               </FormField>
             </div>
           </div>
 
           {/* ── Seção: Classificação e Medição ──────────────────────────── */}
           <div>
-            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
+            <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800">
               Classificação e Medição
             </h3>
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="sm:col-span-1">
                 <FormField label="Tipo de Necessidade" error={errors.tipo_necessidade?.message} required>
-                  <div className="flex flex-col gap-2 mt-2">
-                    <select
-                      className={selectCls}
-                      disabled={submitting}
-                      value=""
-                      onChange={(e) => handleAddTipo(e.target.value)}
-                    >
-                      <option value="">Adicionar item...</option>
-                      {TIPOS_NECESSIDADE
-                        .filter(([value]) => !(tipos_selecionados as string[]).includes(value))
-                        .map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-
-                    {tipos_selecionados.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {tipos_selecionados.map((tipo) => (
-                          <span key={tipo} className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full border border-emerald-100 dark:bg-emerald-900/30 dark:border-emerald-500/50 dark:text-emerald-300">
-                            {TIPO_NECESSIDADE_LABEL[tipo as keyof typeof TIPO_NECESSIDADE_LABEL]}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveTipo(tipo)}
-                              className="hover:text-emerald-900 dark:hover:text-emerald-100 ml-0.5"
-                            >
-                              &times;
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <DynamicSelectArray
+                    options={TIPOS_NECESSIDADE.map(([value, label]) => ({ value, label }))}
+                    value={tipos_selecionados as string[]}
+                    onChange={(val) => setValue("tipo_necessidade", val as any, { shouldValidate: true })}
+                    placeholder="Selecionar tipo..."
+                    disabled={submitting}
+                  />
                 </FormField>
               </div>
 
@@ -488,24 +383,24 @@ export default function NovaAcaoPdticPage() {
 
           {/* ── Seção: Prazos e Previsões ───────────────────────────────── */}
           <div>
-            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
+            <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800">
               Prazos e Previsões
             </h3>
             <div className="grid gap-6 sm:grid-cols-2">
               <FormField label="Previsão de Contratação" error={errors.previsao_contratacao?.message}>
-                <DatePickerField
+                <MonthYearPicker
                   value={previsao_contratacao}
                   onChange={(val) => setValue("previsao_contratacao", val ?? "", { shouldValidate: true })}
-                  placeholder="Selecione a data..."
+                  placeholder="Selecione o mês/ano..."
                   disabled={submitting}
                 />
               </FormField>
 
               <FormField label="Previsão de Renovação" error={errors.previsao_renovacao?.message}>
-                <DatePickerField
+                <MonthYearPicker
                   value={previsao_renovacao}
                   onChange={(val) => setValue("previsao_renovacao", val ?? "", { shouldValidate: true })}
-                  placeholder="Selecione a data..."
+                  placeholder="Selecione o mês/ano..."
                   disabled={submitting}
                 />
               </FormField>
@@ -514,7 +409,7 @@ export default function NovaAcaoPdticPage() {
 
           {/* ── Seção: Orçamento (Opcional) ─────────────────────────────── */}
           <div>
-            <h3 className="text-sm font-bold text-emerald-600 uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800 dark:text-emerald-500">
+            <h3 className="text-sm font-bold text-brand-primary uppercase tracking-wider mt-10 mb-6 border-b border-slate-200 pb-2 dark:border-slate-800">
               Planejamento Orçamentário
             </h3>
             
@@ -614,7 +509,7 @@ export default function NovaAcaoPdticPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-brand-primary px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-primary-hover focus:ring-2 focus:ring-brand-primary/50 disabled:opacity-50"
             >
               {submitting ? (
                 <>
@@ -631,7 +526,6 @@ export default function NovaAcaoPdticPage() {
           </div>
         </form>
       )}
-      </div>
     </div>
   );
 }

@@ -13,11 +13,14 @@ import {
   GitBranchPlus,
   FolderPlus,
   Pencil,
+  CirclePause,
   Trash2,
   Settings,
 } from "lucide-react";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { EditarItemPaccModal } from "@/components/pacc/EditarItemPaccModal";
-import { ExcluirItemPaccDialog } from "@/components/pacc/ExcluirItemPaccDialog";
+import { DesativarItemPaccDialog } from "@/components/pacc/DesativarItemPaccDialog";
+import { ExcluirDefinitivoItemPaccDialog } from "@/components/pacc/ExcluirDefinitivoItemPaccDialog";
 import { ToastContainer, showToast } from "@/components/ui/Toast";
 import {
   fetchExercicios,
@@ -148,7 +151,7 @@ function NovoExercicioModal({
         style={{ animation: "modalIn 0.25s ease-out" }}
       >
         <h3 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
-          <FolderPlus size={18} className="text-teal-500" />
+          <FolderPlus size={18} className="text-brand-primary" />
           Novo Exercício PACC
         </h3>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -160,7 +163,7 @@ function NovoExercicioModal({
               type="number"
               value={ano}
               onChange={(e) => setAno(Number(e.target.value))}
-              className="mt-1 h-9 w-full rounded-lg border border-border bg-background-card px-3 text-sm text-foreground outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+              className="mt-1 h-9 w-full rounded-lg border border-border bg-background-card px-3 text-sm text-foreground outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
             />
           </div>
           <p className="text-[11px] text-foreground-muted">
@@ -177,7 +180,7 @@ function NovoExercicioModal({
             <button
               type="submit"
               disabled={submitting}
-              className="h-8 rounded-lg bg-teal-500 px-4 text-xs font-bold text-white hover:bg-teal-600 disabled:opacity-50"
+              className="h-8 rounded-lg bg-brand-primary px-4 text-xs font-bold text-white hover:bg-brand-primary-hover shadow-brand-primary/25 disabled:opacity-50"
             >
               {submitting ? "Criando..." : "Criar Exercício"}
             </button>
@@ -202,7 +205,8 @@ export default function PaccPage() {
   const [fetchKey, setFetchKey] = useState(0);
   const [showNovoExercicioModal, setShowNovoExercicioModal] = useState(false);
   const [editandoItem, setEditandoItem] = useState<PaccItemComAcao | PaccItem | null>(null);
-  const [excluindoItem, setExcluindoItem] = useState<PaccItemComAcao | PaccItem | null>(null);
+  const [desativarItem, setDesativarItem] = useState<PaccItemComAcao | PaccItem | null>(null);
+  const [excluirDefItem, setExcluirDefItem] = useState<PaccItemComAcao | PaccItem | null>(null);
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -298,8 +302,8 @@ export default function PaccPage() {
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-500/10 to-cyan-500/5 text-teal-600 dark:from-teal-500/20 dark:to-cyan-500/10 dark:text-teal-400">
-            <ClipboardList size={20} />
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+            <ClipboardList size={22} />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">PACC</h1>
@@ -319,7 +323,7 @@ export default function PaccPage() {
                 }}
                 className="h-9 appearance-none rounded-lg border border-border bg-background-card
                            pl-3 pr-7 text-xs font-medium text-foreground shadow-sm outline-none
-                           transition-all focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+                           transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
               >
                 {exercicios.map((e) => (
                   <option key={e.id} value={e.id}>
@@ -417,37 +421,29 @@ export default function PaccPage() {
 
       {/* ── Barra de Filtros Unificada ──────────────────────────── */}
       {painel && (
-        <div className="flex items-center gap-px rounded-lg border border-border bg-background-card shadow-sm overflow-hidden">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Busca */}
-          <div className="relative flex-1 min-w-[180px]">
+          <div className="relative flex-1 min-w-[200px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted" />
             <input
               type="text"
               placeholder="Buscar itens..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-10 w-full bg-transparent pl-9 pr-4 text-sm text-foreground
-                         placeholder:text-foreground-muted/60 outline-none"
+              className="h-9 w-full rounded-lg border border-border bg-background-card pl-9 pr-3 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
             />
           </div>
 
-          {/* Divisor */}
-          <div className="h-5 w-px bg-border" />
-
           {/* Filtro de auditoria */}
-          <div className="relative">
-            <select
-              value={filtroAuditoria}
-              onChange={(e) => setFiltroAuditoria(e.target.value as FiltroAuditoria)}
-              className="h-10 appearance-none bg-transparent px-3 pr-7 text-xs font-medium
-                         text-foreground outline-none cursor-pointer"
-            >
-              {FILTRO_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <ChevronDown size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-foreground-muted" />
-          </div>
+          <select
+            value={filtroAuditoria}
+            onChange={(e) => setFiltroAuditoria(e.target.value as FiltroAuditoria)}
+            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
+          >
+            {FILTRO_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
       )}
 
@@ -458,7 +454,7 @@ export default function PaccPage() {
           <p className="text-sm font-medium text-foreground-muted">Nenhum exercício PACC cadastrado</p>
           <button
             onClick={() => setShowNovoExercicioModal(true)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-teal-50 px-4 py-2 text-xs font-bold text-teal-700 transition-colors hover:bg-teal-100 dark:bg-teal-900/20 dark:text-teal-400"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-primary/10 px-4 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/20 dark:bg-brand-primary/20"
           >
             <FolderPlus size={14} />
             Criar primeiro exercício
@@ -508,7 +504,7 @@ export default function PaccPage() {
                         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
                           isExcluido
                             ? "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
-                            : "bg-teal-100 text-teal-600 dark:bg-teal-900/40 dark:text-teal-400"
+                            : "bg-brand-primary/10 text-brand-primary"
                         }`}>
                           {item.numero_item}
                         </span>
@@ -554,7 +550,7 @@ export default function PaccPage() {
                     {/* Vínculo PDTIC */}
                     <td className="px-5 py-3.5 text-center whitespace-nowrap">
                       {acaoPdtic ? (
-                        <span className="inline-block rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400">
+                        <span className="inline-block rounded-full bg-brand-primary/10 px-2.5 py-0.5 text-xs font-semibold text-brand-primary">
                           {acaoPdtic.codigo_acao}
                         </span>
                       ) : (
@@ -565,21 +561,31 @@ export default function PaccPage() {
                     {/* Ações */}
                     <td className="px-5 py-3.5 text-center">
                       {!isExcluido && (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setEditandoItem(item); }}
-                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20"
-                            title="Editar item"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setExcluindoItem(item); }}
-                            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-                            title="Desativar item"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                        <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Tooltip content="Editar Dados">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setEditandoItem(item); }}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                          </Tooltip>
+                          <Tooltip content="Desativar">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDesativarItem(item); }}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-orange-600 transition-colors hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/20"
+                            >
+                              <CirclePause size={15} />
+                            </button>
+                          </Tooltip>
+                          <Tooltip content="Excluir">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setExcluirDefItem(item); }}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </Tooltip>
                         </div>
                       )}
                     </td>
@@ -611,11 +617,21 @@ export default function PaccPage() {
         />
       )}
 
-      {excluindoItem && painel && (
-        <ExcluirItemPaccDialog
-          item={excluindoItem}
+      {desativarItem && painel && (
+        <DesativarItemPaccDialog
+          open={!!desativarItem}
+          item={desativarItem}
           revisoes={painel.revisoes}
-          onClose={() => setExcluindoItem(null)}
+          onClose={() => setDesativarItem(null)}
+          onSuccess={refresh}
+        />
+      )}
+
+      {excluirDefItem && (
+        <ExcluirDefinitivoItemPaccDialog
+          open={!!excluirDefItem}
+          item={excluirDefItem}
+          onClose={() => setExcluirDefItem(null)}
           onSuccess={refresh}
         />
       )}

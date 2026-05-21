@@ -293,10 +293,12 @@ async def graficos_dashboard(db: AsyncSession = Depends(get_db)):
                 - func.julianday(Artefato.data_inicio)
             ).label("media_dias"),
         )
+        .join(Projeto, Artefato.projeto_id == Projeto.id)
         .where(
             Artefato.status == StatusArtefatoEnum.CONCLUIDO,
             Artefato.data_inicio.is_not(None),
             Artefato.data_conclusao.is_not(None),
+            Projeto.is_legado == False,  # noqa: E712 — exclui legados do cálculo
         )
         .group_by(Artefato.tipo)
         .order_by(Artefato.tipo)
@@ -524,7 +526,10 @@ async def _metricas_projetos(db: AsyncSession) -> ProjetosMetricas:
             case((Projeto.complexidade == "alta", Projeto.id))
         ).label("alta"),
         func.count(Projeto.id).label("total"),
-    ).where(Projeto.status.in_(statuses_ativos))
+    ).where(
+        Projeto.status.in_(statuses_ativos),
+        Projeto.is_legado == False,  # noqa: E712 — exclui legados da distribuição
+    )
 
     row = (await db.execute(stmt_complexidade)).one()
 

@@ -294,9 +294,9 @@ async def listar_acoes_do_periodo(
     stmt = (
         select(AcaoPdtic)
         .options(
-            selectinload(AcaoPdtic.departamento_rel),
-            selectinload(AcaoPdtic.unidade_demandante_rel),
-            selectinload(AcaoPdtic.unidade_responsavel_rel),
+            selectinload(AcaoPdtic.departamentos_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_demandantes_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_responsaveis_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
         )
         .where(AcaoPdtic.periodo_id == periodo_id)
         .order_by(AcaoPdtic.codigo_acao, AcaoPdtic.id)
@@ -322,9 +322,9 @@ async def obter_acao(
         .options(
             selectinload(AcaoPdtic.revisao_inclusao),
             selectinload(AcaoPdtic.revisao_exclusao),
-            selectinload(AcaoPdtic.departamentos_rel),
-            selectinload(AcaoPdtic.unidades_demandantes_rel),
-            selectinload(AcaoPdtic.unidades_responsaveis_rel),
+            selectinload(AcaoPdtic.departamentos_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_demandantes_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_responsaveis_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
         )
         .where(AcaoPdtic.id == acao_id)
     )
@@ -378,9 +378,9 @@ async def obter_painel_periodo(
     stmt_acoes = (
         select(AcaoPdtic)
         .options(
-            selectinload(AcaoPdtic.departamentos_rel),
-            selectinload(AcaoPdtic.unidades_demandantes_rel),
-            selectinload(AcaoPdtic.unidades_responsaveis_rel),
+            selectinload(AcaoPdtic.departamentos_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_demandantes_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_responsaveis_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
         )
         .where(AcaoPdtic.periodo_id == periodo_id)
         .order_by(AcaoPdtic.codigo_acao, AcaoPdtic.id)
@@ -465,8 +465,90 @@ async def criar_acao(
 
     db.add(nova_acao)
     await db.flush()
-    await db.refresh(nova_acao, attribute_names=['departamentos_rel', 'unidades_demandantes_rel', 'unidades_responsaveis_rel'])
-    return nova_acao
+
+    # Recarregar a ação com eager-loading completo das unidades + cadeia pai
+    # (necessário para serializar caminho_completo sem lazy-load assíncrono)
+    _unidade_com_pais = selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai)
+    stmt = (
+        select(AcaoPdtic)
+        .options(
+            selectinload(AcaoPdtic.departamentos_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_demandantes_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_responsaveis_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+        )
+        .where(AcaoPdtic.id == nova_acao.id)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one()
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  AÇÕES — EDIÇÃO SIMPLES (update in-place, sem SCD)                      ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+@router.put(
+    "/acoes/{acao_id}/editar-simples",
+    response_model=PdticAcaoResponse,
+    summary="Editar ação PDTIC (correção simples — sem versionamento)",
+    description=(
+        "Atualiza os campos da ação diretamente no registro existente, "
+        "sem criar nova versão. Use para corrigir erros de digitação "
+        "e pequenos ajustes que não justificam uma revisão oficial."
+    ),
+)
+async def editar_acao_simples(
+    acao_id: int,
+    payload: PdticAcaoUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    acao = await db.get(AcaoPdtic, acao_id)
+    if not acao:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ação {acao_id} não encontrada.",
+        )
+
+    if acao.revisao_exclusao_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Ação {acao_id} já foi desativada. Não é possível editá-la.",
+        )
+
+    # Aplicar campos enviados (partial update in-place)
+    dados = payload.model_dump(exclude_unset=True)
+    dep_ids = dados.pop("departamentos_ids", None)
+    dem_ids = dados.pop("unidades_demandantes_ids", None)
+    resp_ids = dados.pop("unidades_responsaveis_ids", None)
+
+    for campo, valor in dados.items():
+        setattr(acao, campo, valor)
+
+    # Resolver N:N se enviados
+    if dep_ids is not None:
+        deps = (await db.execute(select(UnidadeOrganizacional).where(UnidadeOrganizacional.id.in_(dep_ids)))).scalars().all()
+        acao.departamentos_rel = list(deps)
+    if dem_ids is not None:
+        dems = (await db.execute(select(UnidadeOrganizacional).where(UnidadeOrganizacional.id.in_(dem_ids)))).scalars().all()
+        acao.unidades_demandantes_rel = list(dems)
+    if resp_ids is not None:
+        resps = (await db.execute(select(UnidadeOrganizacional).where(UnidadeOrganizacional.id.in_(resp_ids)))).scalars().all()
+        acao.unidades_responsaveis_rel = list(resps)
+
+    await db.flush()
+
+    # Recarregar com eager-loading
+    stmt = (
+        select(AcaoPdtic)
+        .options(
+            selectinload(AcaoPdtic.departamentos_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_demandantes_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_responsaveis_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+        )
+        .where(AcaoPdtic.id == acao.id)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -595,26 +677,37 @@ async def atualizar_acao_scd(
     db.add(nova_acao)
 
     await db.flush()
-    await db.refresh(nova_acao, attribute_names=['departamentos_rel', 'unidades_demandantes_rel', 'unidades_responsaveis_rel'])
-    return nova_acao
+
+    # Recarregar com eager-loading completo (cadeia pai para caminho_completo)
+    stmt = (
+        select(AcaoPdtic)
+        .options(
+            selectinload(AcaoPdtic.departamentos_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_demandantes_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_responsaveis_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+        )
+        .where(AcaoPdtic.id == nova_acao.id)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
-# ║  AÇÕES — EXCLUSÃO LÓGICA (soft-delete via revisão)                      ║
+# ║  AÇÕES — DESATIVAÇÃO (soft-delete via revisão — mantém histórico)       ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 
-@router.delete(
-    "/acoes/{acao_id}",
+@router.put(
+    "/acoes/{acao_id}/desativar",
     response_model=PdticAcaoResponse,
-    summary="Excluir ação PDTIC (exclusão lógica)",
+    summary="Desativar ação PDTIC (cancelada pelo comitê — mantém histórico)",
     description=(
-        "Não realiza hard-delete. Marca a ação como excluída preenchendo "
-        "`revisao_exclusao_id` com a revisão informada. A ação permanece "
-        "no banco para fins de histórico e rastreabilidade."
+        "Marca a ação como desativada preenchendo `revisao_exclusao_id` "
+        "com a revisão informada. A ação permanece no banco para fins "
+        "de histórico e rastreabilidade."
     ),
 )
-async def excluir_acao_logicamente(
+async def desativar_acao(
     acao_id: int,
     payload: PdticAcaoExcluir,
     db: AsyncSession = Depends(get_db),
@@ -627,27 +720,68 @@ async def excluir_acao_logicamente(
             detail=f"Ação {acao_id} não encontrada.",
         )
 
-    # Já excluída?
+    # Já desativada?
     if acao.revisao_exclusao_id is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                f"Ação {acao_id} já foi excluída na revisão "
+                f"Ação {acao_id} já foi desativada na revisão "
                 f"{acao.revisao_exclusao_id}."
             ),
         )
 
-    # ── 2. Validar a revisão de exclusão ────────────────────────────────────
+    # ── 2. Validar a revisão de desativação ─────────────────────────────────
     await _garantir_revisao_existe_e_pertence(
         payload.revisao_exclusao_id, acao.periodo_id, db
     )
 
-    # ── 3. Marcar como excluída ─────────────────────────────────────────────
+    # ── 3. Marcar como desativada ───────────────────────────────────────────
     acao.revisao_exclusao_id = payload.revisao_exclusao_id
 
     await db.flush()
-    await db.refresh(acao, attribute_names=['departamento_rel', 'unidade_demandante_rel', 'unidade_responsavel_rel'])
-    return acao
+
+    # Recarregar com eager-loading completo (cadeia pai para caminho_completo)
+    stmt = (
+        select(AcaoPdtic)
+        .options(
+            selectinload(AcaoPdtic.departamentos_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_demandantes_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+            selectinload(AcaoPdtic.unidades_responsaveis_rel).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai).selectinload(UnidadeOrganizacional.unidade_pai),
+        )
+        .where(AcaoPdtic.id == acao.id)
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one()
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  AÇÕES — EXCLUSÃO DEFINITIVA (hard-delete — erro de cadastro)           ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+@router.delete(
+    "/acoes/{acao_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Excluir ação PDTIC definitivamente (hard-delete)",
+    description=(
+        "Remove a ação permanentemente do banco de dados. "
+        "Use APENAS para corrigir ERROS DE CADASTRO. "
+        "Para ações canceladas em revisão oficial, utilize PUT /desativar."
+    ),
+)
+async def excluir_acao_definitivamente(
+    acao_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    acao = await db.get(AcaoPdtic, acao_id)
+    if not acao:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ação {acao_id} não encontrada.",
+        )
+
+    await db.delete(acao)
+    await db.flush()
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗

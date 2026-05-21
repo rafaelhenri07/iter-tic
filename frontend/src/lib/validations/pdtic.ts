@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 
-const RE_MM_YYYY = /^(0[1-9]|1[0-2])\/\d{4}$/;
+
 
 export const acaoPdticSchema = z.object({
   /* ── Campos de ciclo de vida ────────────────────────────────────────── */
@@ -69,16 +69,16 @@ export const acaoPdticSchema = z.object({
     .min(0, "GUT mínimo é 0.")
     .max(125, "GUT máximo é 125."),
 
-  /* ── Previsões (MM/YYYY) ────────────────────────────────────────────── */
+  /* ── Previsões (ISO date: YYYY-MM-DD) ─────────────────────────────────── */
   previsao_contratacao: z
     .string()
-    .regex(RE_MM_YYYY, "Formato inválido. Use MM/YYYY (ex: 06/2025).")
+    .regex(/^\d{4}-\d{2}$/, "Formato inválido. Use YYYY-MM.")
     .optional()
     .or(z.literal("")),
 
   previsao_renovacao: z
     .string()
-    .regex(RE_MM_YYYY, "Formato inválido. Use MM/YYYY (ex: 01/2028).")
+    .regex(/^\d{4}-\d{2}$/, "Formato inválido. Use YYYY-MM.")
     .optional()
     .or(z.literal("")),
 
@@ -108,10 +108,15 @@ export function cleanPayload(data: AcaoPdticFormData): Record<string, unknown> {
     "meta",
     "indicador",
     "quantidade",
-    "previsao_contratacao",
-    "previsao_renovacao",
   ]) {
     if (cleaned[key] === "" || cleaned[key] === undefined) {
+      cleaned[key] = null;
+    }
+  }
+
+  // Datas: converter para null se vazio/undefined
+  for (const key of ["previsao_contratacao", "previsao_renovacao"]) {
+    if (!cleaned[key]) {
       cleaned[key] = null;
     }
   }
@@ -164,13 +169,13 @@ export const acaoPdticUpdateSchema = z.object({
 
   previsao_contratacao: z
     .string()
-    .regex(RE_MM_YYYY, "Formato inválido. Use MM/YYYY (ex: 06/2025).")
+    .regex(/^\d{4}-\d{2}$/, "Formato inválido. Use YYYY-MM.")
     .optional()
     .or(z.literal("")),
 
   previsao_renovacao: z
     .string()
-    .regex(RE_MM_YYYY, "Formato inválido. Use MM/YYYY (ex: 01/2028).")
+    .regex(/^\d{4}-\d{2}$/, "Formato inválido. Use YYYY-MM.")
     .optional()
     .or(z.literal("")),
 
@@ -190,8 +195,15 @@ export type AcaoPdticUpdateFormData = z.infer<typeof acaoPdticUpdateSchema>;
 export function cleanUpdatePayload(data: AcaoPdticUpdateFormData): Record<string, unknown> {
   const cleaned: Record<string, unknown> = { ...data };
 
-  for (const key of ["meta", "indicador", "quantidade", "previsao_contratacao", "previsao_renovacao"]) {
+  for (const key of ["meta", "indicador", "quantidade"]) {
     if (cleaned[key] === "" || cleaned[key] === undefined) {
+      cleaned[key] = null;
+    }
+  }
+
+  // Datas: converter para null se vazio/undefined
+  for (const key of ["previsao_contratacao", "previsao_renovacao"]) {
+    if (!cleaned[key]) {
       cleaned[key] = null;
     }
   }

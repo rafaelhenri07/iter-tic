@@ -23,7 +23,7 @@ import {
   TIPO_NECESSIDADE_LABEL,
   STATUS_ACAO_COLOR,
 } from "@/types/pdtic";
-import { formatarNomeRevisao } from "@/lib/formatters";
+import { formatarNomeRevisao, formatMonthYear } from "@/lib/formatters";
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -398,12 +398,12 @@ export function AcaoCard({ acao, revisoes, revisaoAtualId, onEditar, onExcluir }
             />
             <DetailField
               label="Previsão de Contratação"
-              value={acao.previsao_contratacao}
+              value={acao.previsao_contratacao ? formatMonthYear(acao.previsao_contratacao) : "—"}
               icon={<Calendar size={10} />}
             />
             <DetailField
               label="Previsão de Renovação"
-              value={acao.previsao_renovacao}
+              value={acao.previsao_renovacao ? formatMonthYear(acao.previsao_renovacao) : "—"}
               icon={<Clock size={10} />}
             />
           </div>

@@ -146,12 +146,11 @@ export default function DashboardPage() {
       : null;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <div className="mx-auto max-w-[1440px] space-y-6 p-6 lg:p-8">
+    <div className="mx-auto max-w-[1440px] space-y-6">
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-500 text-white shadow-lg shadow-indigo-500/25">
-            <BarChart3 size={20} />
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+            <BarChart3 size={22} />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
@@ -308,7 +307,6 @@ export default function DashboardPage() {
             <CargaEquipeChart data={cargaEquipeData} />
           )}
         </ChartCard>
-      </div>
     </div>
   );
 }

@@ -200,7 +200,9 @@ export interface ProjetoBase {
   substitutos_administrativos_ids: number[];
   data_envio_licitacao: string | null;
   situacao_licitacao_texto: string | null;
+  observacoes: string | null;
 }
+
 
 export interface ProjetoComDetalhes extends ProjetoBase {
   integrantes_requisitantes: Servidor[];
@@ -261,6 +263,12 @@ export interface TramitacaoResumo {
   data_hora: string;
 }
 
+export interface UltimaMovimentacao {
+  texto: string;
+  autor: string;
+  data: string;
+}
+
 export interface ProjetoListagem {
   id: number;
   nome: string;
@@ -287,4 +295,7 @@ export interface ProjetoListagem {
 
   tramitacoes_resumo: TramitacaoResumo[];
   total_tramitacoes: number;
+
+  ultima_movimentacao: UltimaMovimentacao | null;
+  duracao_fase_externa_dias: number | null;
 }

@@ -26,7 +26,10 @@ class EmpresaCreate(BaseModel):
 
     # Contato
     contato_nome: Optional[str] = Field(None, max_length=150)
-    telefone: Optional[str] = Field(None, max_length=30)
+    telefones: list[str] = Field(
+        default_factory=list,
+        description="Lista de telefones no formato (XX) XXXXX-XXXX.",
+    )
     email: Optional[str] = Field(None, max_length=200)
 
     # Portfólio
@@ -44,7 +47,7 @@ class EmpresaUpdate(BaseModel):
     site: Optional[str] = Field(None, max_length=300)
 
     contato_nome: Optional[str] = Field(None, min_length=2, max_length=150)
-    telefone: Optional[str] = Field(None, min_length=8, max_length=30)
+    telefones: Optional[list[str]] = None
     email: Optional[str] = Field(None, max_length=200)
 
     servicos_ofertados: Optional[list[str]] = None
@@ -66,7 +69,7 @@ class EmpresaResponse(BaseModel):
     site: Optional[str] = None
 
     contato_nome: Optional[str] = None
-    telefone: Optional[str] = None
+    telefones: list[str] = []
     email: Optional[str] = None
 
     servicos_ofertados: list[str] = []

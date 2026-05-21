@@ -12,9 +12,6 @@ import { z } from "zod";
 /* ── Sub-schema: Itens do contrato ────────────── */
 
 const itemContratoSchema = z.object({
-  objeto_contratado: z
-    .string({ error: "Objeto é obrigatório." })
-    .min(1, "Objeto é obrigatório."),
   quantidade: z
     .number({ error: "Quantidade é obrigatória." })
     .int("Deve ser inteiro.")
@@ -24,20 +21,23 @@ const itemContratoSchema = z.object({
     .min(0, "Não pode ser negativo."),
   tipo_catalogo: z.enum(["CATMAT", "CATSER", ""]).optional().or(z.literal(null)),
   codigo_catalogo: z.string().optional().or(z.literal(null)),
+  catalogo_produto_id: z.number({ error: "Item do catálogo é obrigatório." }).min(1, "Item do catálogo é obrigatório."),
+  data_inicio_vigencia: z.string().optional().or(z.literal("")).nullable(),
+  data_fim_vigencia: z.string().optional().or(z.literal("")).nullable(),
 });
 
 /* ── Sub-schema: um papel da equipe (titular + substitutos) ────────────── */
 
 const equipePapelSchema = z.object({
-  titular_id: z.number().int().optional().or(z.literal(0)),
+  titulares_ids: z.array(z.number().int()).default([]),
   substitutos_ids: z.array(z.number().int()).default([]),
 });
 
 const equipeSchema = z.object({
-  gestor: equipePapelSchema.default({ titular_id: 0, substitutos_ids: [] }),
-  fiscal_requisitante: equipePapelSchema.default({ titular_id: 0, substitutos_ids: [] }),
-  fiscal_tecnico: equipePapelSchema.default({ titular_id: 0, substitutos_ids: [] }),
-  fiscal_administrativo: equipePapelSchema.default({ titular_id: 0, substitutos_ids: [] }),
+  gestor: equipePapelSchema.default({ titulares_ids: [], substitutos_ids: [] }),
+  fiscal_requisitante: equipePapelSchema.default({ titulares_ids: [], substitutos_ids: [] }),
+  fiscal_tecnico: equipePapelSchema.default({ titulares_ids: [], substitutos_ids: [] }),
+  fiscal_administrativo: equipePapelSchema.default({ titulares_ids: [], substitutos_ids: [] }),
 });
 
 /* ── Schema principal ──────────────────────────────────────────────────── */
@@ -57,16 +57,19 @@ export const contratoCreateSchema = z
     numero: z.coerce.number().int().positive("Número deve ser maior que 0."),
     ano: z.coerce.number().int().min(2015, "Ano inválido.").max(2035, "Ano inválido."),
 
-    empresa_id: z
-      .number({ error: "Selecione a empresa contratada." })
-      .int()
-      .min(1, "Selecione uma empresa válida."),
+    /* Tipo de Instrumento (obrigatório para CONTRATO) */
+    tipo_instrumento: z.enum(["CONTRATO", "NOTA_EMPENHO"]).optional().nullable(),
 
-    fabricante_id: z
+    fornecedor_id: z
       .number()
       .int()
       .optional()
       .or(z.literal(0)),
+
+    tipo_fornecedor_contrato: z
+      .enum(["REVENDEDOR", "FABRICANTE", "REVENDEDOR_E_FABRICANTE", ""])
+      .optional()
+      .or(z.literal(null)),
 
     tipo_contrato: z.enum(
       ["Aquisição", "Serviço continuado", "Subscrição"],
@@ -130,6 +133,19 @@ export const contratoCreateSchema = z
       message: "A data de fim de vigência deve ser posterior à data de assinatura.",
       path: ["data_fim_vigencia"],
     }
+  )
+  .refine(
+    (d) => {
+      // tipo_instrumento é obrigatório para modalidade CONTRATO
+      if (d.modalidade_contrato === "CONTRATO") {
+        return !!d.tipo_instrumento;
+      }
+      return true;
+    },
+    {
+      message: "Selecione o tipo de instrumento.",
+      path: ["tipo_instrumento"],
+    }
   );
 
 export type ContratoCreateFormData = z.infer<typeof contratoCreateSchema>;
@@ -142,11 +158,11 @@ export function cleanContratoPayload(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clean: Record<string, any> = { ...data };
 
-  // Converter fabricante_id = 0 → null
-  if (clean.fabricante_id === 0) clean.fabricante_id = null;
+  // Converter fornecedor_id = 0 → null
+  if (clean.fornecedor_id === 0) clean.fornecedor_id = null;
 
-  // Converter empresa_id = 0 → null (não deve acontecer, mas por segurança)
-  if (clean.empresa_id === 0) clean.empresa_id = null;
+  // Converter tipo_fornecedor_contrato vazio → null
+  if (!clean.tipo_fornecedor_contrato) clean.tipo_fornecedor_contrato = null;
 
   // Limpar campos de catálogo vazios nos itens
   if (clean.itens && Array.isArray(clean.itens)) {
@@ -154,6 +170,9 @@ export function cleanContratoPayload(
       ...item,
       tipo_catalogo: item.tipo_catalogo === "" ? null : item.tipo_catalogo,
       codigo_catalogo: item.codigo_catalogo === "" ? null : item.codigo_catalogo,
+      catalogo_produto_id: item.catalogo_produto_id === 0 || item.catalogo_produto_id === "" ? null : item.catalogo_produto_id,
+      data_inicio_vigencia: item.data_inicio_vigencia === "" ? null : item.data_inicio_vigencia,
+      data_fim_vigencia: item.data_fim_vigencia === "" ? null : item.data_fim_vigencia,
     }));
   }
 
@@ -165,6 +184,11 @@ export function cleanContratoPayload(
   // orgao_gerenciador: limpar se CONTRATO ou vazio
   if (clean.modalidade_contrato !== "ARP" || !clean.orgao_gerenciador) {
     clean.orgao_gerenciador = null;
+  }
+
+  // tipo_instrumento: limpar se ARP
+  if (clean.modalidade_contrato === "ARP") {
+    clean.tipo_instrumento = null;
   }
 
   // vigencia_meses 0 ou undefined → null
