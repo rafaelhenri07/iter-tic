@@ -137,6 +137,7 @@ class ItemContratoResponse(BaseModel):
     tipo_catalogo: Optional[str] = None
     codigo_catalogo: Optional[str] = None
     catalogo_produto_id: int
+    catalogo_produto_nome: Optional[str] = None
     data_inicio_vigencia: Optional[date] = None
     data_fim_vigencia: Optional[date] = None
 
@@ -154,6 +155,8 @@ class ContratoCreate(BaseModel):
     tipo_instrumento: Optional[str] = Field(
         None, description="Tipo de instrumento: CONTRATO ou NOTA_EMPENHO (somente para modalidade CONTRATO).",
     )
+    tipo_contratacao: str = Field(..., description="Tipo de contratação.")
+
     numero: int = Field(..., gt=0, examples=[42])
     ano: int = Field(..., ge=2015, le=2035, examples=[2025])
     fornecedor_id: Optional[int] = Field(
@@ -181,7 +184,6 @@ class ContratoCreate(BaseModel):
     data_fim_vigencia: date = Field(..., examples=["2026-06-14"])
 
     situacao_atual: SituacaoContratoEnum = SituacaoContratoEnum.VIGENTE
-    observacoes: Optional[str] = None
 
     # Equipe de fiscalização (novo formato: Titular + Substitutos)
     equipe: Optional[EquipeInput] = None
@@ -214,7 +216,9 @@ class ContratoUpdate(BaseModel):
     ano: Optional[int] = Field(None, ge=2015, le=2035)
     modalidade_contrato: Optional[ModalidadeContratoEnum] = None
     tipo_instrumento: Optional[str] = None
+    tipo_contratacao: Optional[str] = None
     orgao_gerenciador: Optional[str] = Field(None, max_length=300)
+
     fornecedor_id: Optional[int] = Field(None, description="ID do fornecedor vinculado")
     tipo_fornecedor_contrato: Optional[str] = None
     tipo_contrato: Optional[TipoContratoEnum] = None
@@ -227,7 +231,6 @@ class ContratoUpdate(BaseModel):
     data_fim_vigencia: Optional[date] = None
 
     situacao_atual: Optional[SituacaoContratoEnum] = None
-    observacoes: Optional[str] = None
 
     # Equipe (novo formato)
     equipe: Optional[EquipeInput] = None
@@ -249,7 +252,9 @@ class ContratoResponse(BaseModel):
     ano: int
     modalidade_contrato: ModalidadeContratoEnum = ModalidadeContratoEnum.CONTRATO
     tipo_instrumento: Optional[str] = None
+    tipo_contratacao: Optional[str] = None
     orgao_gerenciador: Optional[str] = None
+
     projeto_id: int
     fornecedor_id: Optional[int] = None
     fornecedor_nome: Optional[str] = None
@@ -264,7 +269,6 @@ class ContratoResponse(BaseModel):
     data_fim_vigencia: date
 
     situacao_atual: SituacaoContratoEnum
-    observacoes: Optional[str] = None
 
     criado_em: datetime
     atualizado_em: datetime
@@ -294,7 +298,9 @@ class ContratoListagemResponse(BaseModel):
     ano: int
     modalidade_contrato: ModalidadeContratoEnum = ModalidadeContratoEnum.CONTRATO
     tipo_instrumento: Optional[str] = None
+    tipo_contratacao: Optional[str] = None
     fornecedor_id: Optional[int] = None
+
     fornecedor_nome: Optional[str] = None
     tipo_fornecedor_contrato: Optional[str] = None
     tipo_contrato: TipoContratoEnum

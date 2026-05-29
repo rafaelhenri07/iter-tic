@@ -7,6 +7,7 @@ import {
   Building2,
   Plus,
   Trash2,
+  Pencil,
   Loader2,
   AlertCircle,
   ChevronRight,
@@ -16,9 +17,22 @@ import {
   fetchUnidadesOrganizacionais,
   criarUnidadeOrganizacional,
   excluirUnidadeOrganizacional,
+  atualizarUnidadeOrganizacional,
 } from "@/lib/api";
 import type { UnidadeOrg, UnidadeOrgCreatePayload } from "@/types/estrutura_organizacional";
 import { formatDate } from "@/lib/formatters";
+
+function isDescendant(parent: UnidadeOrg, possibleDescendant: UnidadeOrg, allItems: UnidadeOrg[]): boolean {
+  let currentId: number | null = possibleDescendant.unidade_pai_id;
+  while (currentId !== null) {
+    if (currentId === parent.id) {
+      return true;
+    }
+    const next = allItems.find((u) => u.id === currentId);
+    currentId = next ? next.unidade_pai_id : null;
+  }
+  return false;
+}
 
 export default function EstruturaOrganizacionalPage() {
   const { isAdmin } = useAuth();
@@ -34,6 +48,7 @@ export default function EstruturaOrganizacionalPage() {
   const [sigla, setSigla] = useState("");
   const [unidadePaiId, setUnidadePaiId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const [editingItem, setEditingItem] = useState<UnidadeOrg | null>(null);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -56,7 +71,15 @@ export default function EstruturaOrganizacionalPage() {
     }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleEdit = (item: UnidadeOrg) => {
+    setEditingItem(item);
+    setNome(item.nome);
+    setSigla(item.sigla || "");
+    setUnidadePaiId(item.unidade_pai_id ? item.unidade_pai_id.toString() : "");
+    setShowForm(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nome.trim()) return;
 
@@ -68,15 +91,26 @@ export default function EstruturaOrganizacionalPage() {
         sigla: sigla.trim() || null,
         unidade_pai_id: unidadePaiId ? parseInt(unidadePaiId) : null,
       };
-      await criarUnidadeOrganizacional(payload);
+
+      if (editingItem) {
+        await atualizarUnidadeOrganizacional(editingItem.id, payload);
+      } else {
+        await criarUnidadeOrganizacional(payload);
+      }
+
       setNome("");
       setSigla("");
       setUnidadePaiId("");
+      setEditingItem(null);
       setShowForm(false);
       await loadData();
     } catch (err: any) {
       console.error(err);
-      setError("Erro ao criar registro. Verifique se o nome já existe.");
+      setError(
+        editingItem
+          ? "Erro ao atualizar registro. Verifique se há conflito de nome."
+          : "Erro ao criar registro. Verifique se o nome já existe."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -125,7 +159,13 @@ export default function EstruturaOrganizacionalPage() {
             </p>
             {!showForm && (
               <button
-                onClick={() => setShowForm(true)}
+                onClick={() => {
+                  setEditingItem(null);
+                  setNome("");
+                  setSigla("");
+                  setUnidadePaiId("");
+                  setShowForm(true);
+                }}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-primary-hover"
               >
                 <Plus size={16} />
@@ -143,7 +183,10 @@ export default function EstruturaOrganizacionalPage() {
 
           {showForm && (
             <div className="rounded-xl border border-border bg-background-card p-5 shadow-sm animate-in fade-in slide-in-from-top-2">
-              <form onSubmit={handleCreate} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <h3 className="text-sm font-bold text-foreground mb-3 border-b border-border pb-2">
+                  {editingItem ? "Editar Unidade Organizacional" : "Nova Unidade Organizacional"}
+                </h3>
                 <div className="flex flex-col sm:flex-row gap-4 items-end">
                   <div className="flex-1 space-y-1.5 w-full">
                     <label className="text-xs font-bold uppercase tracking-wider text-foreground-muted">
@@ -185,11 +228,13 @@ export default function EstruturaOrganizacionalPage() {
                     disabled={submitting}
                   >
                     <option value="">— Nenhum (Raiz do Organograma) —</option>
-                    {items.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.caminho_completo}
-                      </option>
-                    ))}
+                    {items
+                      .filter((u) => !editingItem || (u.id !== editingItem.id && !isDescendant(editingItem, u, items)))
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.caminho_completo}
+                        </option>
+                      ))}
                   </select>
                 </div>
 
@@ -201,6 +246,7 @@ export default function EstruturaOrganizacionalPage() {
                       setNome("");
                       setSigla("");
                       setUnidadePaiId("");
+                      setEditingItem(null);
                     }}
                     disabled={submitting}
                     className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-background-hover"
@@ -237,7 +283,7 @@ export default function EstruturaOrganizacionalPage() {
                     <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-foreground-muted">Hierarquia</th>
                     <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-foreground-muted w-32">Sigla</th>
                     <th className="px-5 py-3 text-xs font-bold uppercase tracking-wider text-foreground-muted w-40 text-right">Cadastrado em</th>
-                    <th className="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-foreground-muted w-20">Ações</th>
+                    <th className="px-5 py-3 text-center text-xs font-bold uppercase tracking-wider text-foreground-muted w-24">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -277,13 +323,22 @@ export default function EstruturaOrganizacionalPage() {
                           {formatDate(item.criado_em)}
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <button
-                            onClick={() => handleDelete(item.id, item.nome)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20 mx-auto"
-                            title="Excluir"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleEdit(item)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20"
+                              title="Editar"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id, item.nome)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+                              title="Excluir"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

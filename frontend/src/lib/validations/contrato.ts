@@ -53,6 +53,9 @@ export const contratoCreateSchema = z
     /* Modalidade da Contratação */
     modalidade_contrato: z.enum(["CONTRATO", "ARP"]).default("CONTRATO"),
 
+    /* Tipo de Contratação */
+    tipo_contratacao: z.string({ error: "Selecione o tipo de contratação." }).min(1, "Selecione o tipo de contratação."),
+
     /* Dados da Contratação */
     numero: z.coerce.number().int().positive("Número deve ser maior que 0."),
     ano: z.coerce.number().int().min(2015, "Ano inválido.").max(2035, "Ano inválido."),
@@ -114,7 +117,6 @@ export const contratoCreateSchema = z
       { error: "Selecione a situação." }
     ),
 
-    observacoes: z.string().optional().or(z.literal("")),
 
     /* Campo específico de ARP */
     orgao_gerenciador: z.string().max(300).optional().or(z.literal("")),
@@ -177,7 +179,7 @@ export function cleanContratoPayload(
   }
 
   // Limpar strings vazias → null
-  for (const key of ["observacoes", "data_inicio_vigencia"]) {
+  for (const key of ["data_inicio_vigencia"]) {
     if (clean[key] === "") clean[key] = null;
   }
 
@@ -194,7 +196,7 @@ export function cleanContratoPayload(
   // vigencia_meses 0 ou undefined → null
   if (!clean.vigencia_meses) clean.vigencia_meses = null;
 
-  // Transformar equipe: converter titular_id=0 → null, filtrar substitutos
+  // Transformar equipe: filtrar IDs inválidos
   if (clean.equipe) {
     const equipeLimpa: Record<string, unknown> = {};
     for (const papel of [
@@ -206,7 +208,9 @@ export function cleanContratoPayload(
       const p = clean.equipe[papel];
       if (p) {
         equipeLimpa[papel] = {
-          titular_id: p.titular_id && p.titular_id > 0 ? p.titular_id : null,
+          titulares_ids: (p.titulares_ids || []).filter(
+            (id: number) => id > 0
+          ),
           substitutos_ids: (p.substitutos_ids || []).filter(
             (id: number) => id > 0
           ),

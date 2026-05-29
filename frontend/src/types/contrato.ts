@@ -140,6 +140,7 @@ export interface ItemContrato {
   valor_unitario: number;
   valor_total: number;
   catalogo_produto_id?: number | null;
+  catalogo_produto_nome?: string | null;
   tipo_catalogo: string | null;
   codigo_catalogo: string | null;
   data_inicio_vigencia: string | null;
@@ -169,6 +170,7 @@ export interface ContratoResponse {
   fornecedor_id: number | null;
   fornecedor_nome: string | null;
   tipo_fornecedor_contrato: string | null;
+  tipo_contratacao: string | null;
   tipo_contrato: TipoContrato;
   itens: ItemContrato[];
   valor_total: number;
@@ -180,7 +182,7 @@ export interface ContratoResponse {
   data_fim_vigencia: string;
 
   situacao_atual: SituacaoContrato;
-  observacoes: string | null;
+  observacoes?: string | null;
 
   criado_em: string;
   atualizado_em: string;
@@ -203,6 +205,7 @@ export interface ContratoListagem {
   fornecedor_id: number | null;
   fornecedor_nome: string | null;
   tipo_fornecedor_contrato: string | null;
+  tipo_contratacao: string | null;
   tipo_contrato: TipoContrato;
   situacao_atual: SituacaoContrato;
   valor_total: number;
@@ -241,6 +244,7 @@ export interface ContratoCreatePayload {
   orgao_gerenciador?: string | null;
   fornecedor_id?: number | null;
   tipo_fornecedor_contrato?: string | null;
+  tipo_contratacao?: string | null;
   tipo_contrato: TipoContrato;
   itens: ItemContratoPayload[];
   data_inicio_vigencia?: string | null;
@@ -249,7 +253,6 @@ export interface ContratoCreatePayload {
   data_assinatura: string;
   data_fim_vigencia: string;
   situacao_atual: SituacaoContrato;
-  observacoes?: string | null;
   equipe?: EquipeInput | null;
 }
 

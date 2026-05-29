@@ -15,8 +15,8 @@ import { useRouter } from "next/navigation";
 import { ProjetoRow } from "@/components/projetos/ProjetoRow";
 
 import { GerenciarArtefatoModal } from "@/components/projetos/GerenciarArtefatoModal";
-import { ToastContainer } from "@/components/ui/Toast";
-import { fetchProjetos } from "@/lib/api";
+import { ToastContainer, showToast } from "@/components/ui/Toast";
+import { fetchProjetos, excluirProjeto } from "@/lib/api";
 import type { ProjetoListagem, StatusProjeto, ArtefatoResumo, PrioridadeProjeto } from "@/types/projeto";
 import { ProjetosSkeleton } from "@/components/ui/Skeleton";
 
@@ -54,6 +54,25 @@ export default function ProjetosPage() {
   // Modais
 
   const [artefatoModal, setArtefatoModal] = useState<{ projetoId: number; artefato: ArtefatoResumo } | null>(null);
+
+  async function handleExcluir(projeto: ProjetoListagem) {
+    const confirmou = window.confirm(
+      `Tem certeza que deseja excluir o projeto "${projeto.nome}"?\nEsta ação excluirá todos os seus artefatos e não poderá ser desfeita.`
+    );
+    if (!confirmou) return;
+
+    try {
+      await excluirProjeto(projeto.id);
+      showToast("success", "Projeto excluído com sucesso.");
+      setFetchKey((k) => k + 1);
+    } catch (e) {
+      console.error(e);
+      showToast(
+        "error",
+        e instanceof Error ? e.message : "Erro ao excluir projeto."
+      );
+    }
+  }
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -322,6 +341,7 @@ export default function ProjetosPage() {
                     projeto={p}
                     onEditProjeto={(proj) => router.push(`/projetos/${proj.id}/editar`)}
                     onArtefatoClick={(pid, a) => setArtefatoModal({ projetoId: pid, artefato: a })}
+                    onExcluirProjeto={handleExcluir}
                   />
                 ))}
               </tbody>

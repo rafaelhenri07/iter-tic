@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
+import Cookies from "js-cookie";
 import {
   ArrowLeft,
   FolderKanban,
@@ -25,6 +26,7 @@ import {
   Folder,
   Lock,
   MessageSquare,
+  StickyNote,
 } from "lucide-react";
 import { differenceInDays, parseISO, isValid, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -38,6 +40,7 @@ import {
   fetchHistoricoProjeto,
   fetchObservacoesFaseExterna,
   addObservacaoFaseExterna,
+  adicionarObservacaoProjeto,
   type HistoricoEvento,
   type ObservacaoFaseExterna,
 } from "@/lib/api";
@@ -58,6 +61,12 @@ function fmtDate(d: string | null): string {
   return isValid(parsed) ? format(parsed, "dd/MM/yyyy", { locale: ptBR }) : "—";
 }
 
+function formatDateTime(d: string | null): string {
+  if (!d) return "—";
+  const parsed = parseISO(d);
+  return isValid(parsed) ? format(parsed, "dd/MM/yyyy HH:mm", { locale: ptBR }) : "—";
+}
+
 /* ── Página ────────────────────────────────────────────────────────────── */
 
 export default function ProjetoDetalhesPage({
@@ -71,9 +80,36 @@ export default function ProjetoDetalhesPage({
   const [data, setData] = useState<ProjetoPainelResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetchKey, setFetchKey] = useState(0);
-  const [activeTab, setActiveTab] = useState<"visao-geral" | "artefatos" | "equipe" | "fase-externa" | "historico">("visao-geral");
+  const [activeTab, setActiveTab] = useState<"visao-geral" | "artefatos" | "equipe" | "fase-externa" | "informacoes-complementares" | "historico">("visao-geral");
   const [eventos, setEventos] = useState<HistoricoEvento[]>([]);
   const [loadingEventos, setLoadingEventos] = useState(false);
+
+  const [obsTexto, setObsTexto] = useState("");
+  const [sendingObs, setSendingObs] = useState(false);
+
+  const handleEnviarObservacao = async () => {
+    if (!obsTexto.trim()) return;
+    setSendingObs(true);
+    try {
+      let username: string | undefined;
+      const userCookie = Cookies.get("itertic_user");
+      if (userCookie) {
+        try {
+          const userObj = JSON.parse(userCookie);
+          username = userObj.nome || userObj.matricula || undefined;
+        } catch {
+          username = userCookie;
+        }
+      }
+      await adicionarObservacaoProjeto(projetoId, obsTexto.trim(), username);
+      setObsTexto("");
+      refresh();
+    } catch {
+      showToast("error", "Erro ao salvar observação.");
+    } finally {
+      setSendingObs(false);
+    }
+  };
 
 
   useEffect(() => {
@@ -167,14 +203,6 @@ export default function ProjetoDetalhesPage({
                 📋 Anterior
               </span>
             )}
-            {complexidade && !projeto.is_legado && (
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide ${complexidade.cls}`}
-              >
-                <Shield size={11} />
-                {complexidade.label}
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -188,6 +216,7 @@ export default function ProjetoDetalhesPage({
           { key: "artefatos" as const, label: "Artefatos" },
           { key: "equipe" as const, label: "Equipe" },
           { key: "fase-externa" as const, label: "Fase Externa" },
+          { key: "informacoes-complementares" as const, label: "Informações Complementares" },
           { key: "historico" as const, label: "Histórico" },
         ]).map((tab) => (
           <button
@@ -295,25 +324,7 @@ export default function ProjetoDetalhesPage({
               </div>
             </section>
 
-            {/* Seção 3: INFORMAÇÕES COMPLEMENTARES */}
-            {projeto.observacoes && (
-              <section className="mt-10">
-                <div className="mb-6 border-b border-border pb-2">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-brand-primary">
-                    Informações Complementares
-                  </h2>
-                </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">
-                    Observações
-                  </label>
-                  <div className="w-full rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200 min-h-[100px] whitespace-pre-wrap leading-relaxed">
-                    {projeto.observacoes}
-                  </div>
-                </div>
-              </section>
-            )}
 
           </div>
         )}
@@ -486,6 +497,84 @@ export default function ProjetoDetalhesPage({
         {activeTab === "fase-externa" && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             <FaseExternaSection projeto={projeto} onRefresh={refresh} />
+          </div>
+        )}
+
+        {/* ═══ ABA: INFORMAÇÕES COMPLEMENTARES ═══ */}
+        {activeTab === "informacoes-complementares" && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+
+
+
+            {/* Form to submit new observation */}
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <textarea
+                  value={obsTexto}
+                  onChange={(e) => setObsTexto(e.target.value)}
+                  placeholder="Adicione uma observação sobre o projeto..."
+                  rows={2}
+                  className="w-full rounded-xl border border-border bg-background-secondary px-4 py-3 text-sm text-foreground placeholder:text-foreground-muted/60 resize-none focus:border-brand-primary focus:bg-background focus:outline-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm transition-all"
+                />
+              </div>
+              <button
+                onClick={handleEnviarObservacao}
+                disabled={!obsTexto.trim() || sendingObs}
+                className="flex h-[46px] items-center gap-2 self-start rounded-xl bg-brand-primary px-5 text-sm font-bold text-white shadow-md shadow-brand-primary/20 transition-all hover:shadow-lg hover:bg-brand-primary-hover active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+              >
+                {sendingObs ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                Registrar
+              </button>
+            </div>
+
+            {/* Historical observations of type "Observação Manual" */}
+            {projeto.historico && projeto.historico.filter(h => h.tipo_registro === "Observação Manual").length > 0 && (
+              <div className="space-y-4 border-t border-border pt-6">
+                <div className="space-y-4">
+                  {projeto.historico
+                    .filter(h => h.tipo_registro === "Observação Manual")
+                    .map((obs) => {
+                      const autorNome = (() => {
+                        if (!obs.autor) return "Usuário do Sistema";
+                        if (obs.autor.startsWith("{")) {
+                          try {
+                            const parsed = JSON.parse(obs.autor);
+                            return parsed.nome || parsed.matricula || obs.autor;
+                          } catch {
+                            return obs.autor;
+                          }
+                        }
+                        return obs.autor;
+                      })();
+                      const inicial = autorNome.charAt(0).toUpperCase();
+
+                      return (
+                        <div key={obs.id} className="flex gap-4 p-4 rounded-xl hover:bg-slate-500/5 transition-colors border border-border/40 bg-background-secondary/30">
+                          {/* Avatar Badge */}
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-primary/20 to-brand-primary/10 font-bold text-sm text-brand-primary shadow-inner">
+                            {inicial}
+                          </div>
+                          
+                          {/* Content */}
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold text-foreground">
+                                {autorNome}
+                              </span>
+                              <span className="text-[11px] text-foreground-muted">
+                                {formatDateTime(obs.data_hora)}
+                              </span>
+                            </div>
+                            <p className="text-sm text-foreground-muted whitespace-pre-wrap leading-relaxed">
+                              {obs.conteudo}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

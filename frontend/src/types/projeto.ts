@@ -204,6 +204,15 @@ export interface ProjetoBase {
 }
 
 
+export interface HistoricoProjeto {
+  id: number;
+  projeto_id: number;
+  data_hora: string;
+  autor: string;
+  tipo_registro: string;
+  conteudo: string;
+}
+
 export interface ProjetoComDetalhes extends ProjetoBase {
   integrantes_requisitantes: Servidor[];
   integrantes_tecnicos: Servidor[];
@@ -215,6 +224,7 @@ export interface ProjetoComDetalhes extends ProjetoBase {
   itens_pacc: ItemPaccResumo[];
   artefatos: Artefato[];
   tramitacoes: ProjetoTramitacao[];
+  historico: HistoricoProjeto[];
 }
 
 export interface ProjetoPainelResponse {

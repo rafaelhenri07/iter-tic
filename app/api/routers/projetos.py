@@ -38,6 +38,8 @@ from app.models.projeto import (
     TipoDataAlteradaEnum,
     projeto_acao_pdtic,
     projeto_item_pacc,
+    ProjetoHistorico,
+    TipoRegistroHistoricoProjetoEnum,
 )
 from app.schemas.projeto import (
     ArtefatoComHistoricoResponse,
@@ -67,6 +69,8 @@ from app.schemas.projeto import (
     ServidorCreate,
     ServidorResponse,
     ServidorUpdate,
+    ObservacaoProjetoCreate,
+    HistoricoProjetoResponse,
 )
 
 router = APIRouter(prefix="/projetos", tags=["Projetos e Licitações"])
@@ -1462,8 +1466,29 @@ async def obter_historico_projeto(
             "icone": "message",
         })
 
-    # ── Ordenar cronologicamente ─────────────────────────────────────────
-    eventos.sort(key=lambda x: x["data_evento"])
+    # ── 4. Observações Manuais (ProjetoHistorico) ─────────────────────────
+    stmt_hist = (
+        select(ProjetoHistorico)
+        .where(
+            ProjetoHistorico.projeto_id == projeto_id,
+            ProjetoHistorico.tipo_registro == TipoRegistroHistoricoProjetoEnum.OBSERVACAO_MANUAL,
+        )
+    )
+    result_hist = await db.execute(stmt_hist)
+    obs_manuais = result_hist.scalars().all()
+
+    for obs in obs_manuais:
+        eventos.append({
+            "id": f"obs-manual-{obs.id}",
+            "data_evento": obs.data_hora,
+            "titulo": "Observação Manual",
+            "descricao": f"Registrado por: {obs.autor}\n\n{obs.conteudo}",
+            "tipo": "observacao",
+            "icone": "message",
+        })
+
+    # ── Ordenar cronologicamente (decrescente) ───────────────────────────
+    eventos.sort(key=lambda x: x["data_evento"], reverse=True)
 
     return eventos
 
@@ -1518,6 +1543,32 @@ async def adicionar_observacao_fase_externa(
     return nova_obs
 
 
+@router.post(
+    "/{projeto_id}/observacoes",
+    response_model=HistoricoProjetoResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Adicionar observação manual ao projeto",
+)
+async def adicionar_observacao_projeto(
+    projeto_id: int,
+    payload: ObservacaoProjetoCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    await _garantir_projeto_existe(projeto_id, db)
+
+    historico = ProjetoHistorico(
+        projeto_id=projeto_id,
+        autor=payload.autor,
+        tipo_registro=TipoRegistroHistoricoProjetoEnum.OBSERVACAO_MANUAL,
+        conteudo=payload.conteudo,
+    )
+    db.add(historico)
+    await db.flush()
+    await db.refresh(historico)
+
+    return HistoricoProjetoResponse.model_validate(historico)
+
+
 # ╔══════════════════════════════════════════════════════════════════════════╗
 # ║  HELPERS INTERNOS                                                       ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
@@ -1567,6 +1618,7 @@ async def _carregar_projeto_completo(
             selectinload(Projeto.itens_pacc),
             selectinload(Projeto.artefatos),
             selectinload(Projeto.tramitacoes),
+            selectinload(Projeto.historico),
         )
         .where(Projeto.id == projeto_id)
     )

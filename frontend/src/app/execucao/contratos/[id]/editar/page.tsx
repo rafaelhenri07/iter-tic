@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller, useWatch, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,7 +15,8 @@ import {
   cleanContratoPayload,
 } from "@/lib/validations/contrato";
 import {
-  criarContrato,
+  atualizarContrato,
+  fetchContrato,
   fetchServidores,
   fetchProjetosLicitados,
   fetchFornecedores,
@@ -58,8 +59,6 @@ function Field({
     </div>
   );
 }
-
-
 
 /* ── Bloco de Papel da Equipe ───────────────────────────────────────────── */
 
@@ -119,14 +118,19 @@ function EquipePapelBlock({
 
 /* ── Página Principal ──────────────────────────────────────────────────── */
 
-export default function NovoContratoPage() {
+export default function EditarContratoPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const { id } = use(params);
+  const contratoId = Number(id);
+
   const [submitting, setSubmitting] = useState(false);
+  const [loadingContrato, setLoadingContrato] = useState(true);
+  const [loadingData, setLoadingData] = useState(true);
+
   const [servidores, setServidores] = useState<Servidor[]>([]);
   const [projetosLicitados, setProjetosLicitados] = useState<ProjetoListagem[]>([]);
   const [fornecedores, setFornecedores] = useState<FornecedorResponse[]>([]);
   const [catalogoProdutos, setCatalogoProdutos] = useState<CatalogoProduto[]>([]);
-  const [loadingData, setLoadingData] = useState(true);
 
   // Controle de etapas do Assistente (Wizard)
   const [currentStep, setCurrentStep] = useState(1);
@@ -139,6 +143,7 @@ export default function NovoContratoPage() {
     setValue,
     watch,
     trigger,
+    reset,
     formState: { errors },
   } = useForm<ContratoCreateFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,7 +158,7 @@ export default function NovoContratoPage() {
       tipo_fornecedor_contrato: "",
       tipo_contrato: "Aquisição",
       tipo_instrumento: "CONTRATO",
-      itens: [{ tipo_catalogo: "", codigo_catalogo: "", catalogo_produto_id: 0, quantidade: 1, valor_unitario: 0 }],
+      itens: [{ tipo_catalogo: "" as "" | "CATMAT" | "CATSER", codigo_catalogo: "", catalogo_produto_id: 0, quantidade: 1, valor_unitario: 0 }],
       data_inicio_vigencia: "",
       vigencia_meses: null,
       prorrogacao_meses: 0,
@@ -264,6 +269,7 @@ export default function NovoContratoPage() {
     calcVigenciaMeses();
   }, [calcVigenciaMeses]);
 
+  // Load dados auxiliares
   useEffect(() => {
     async function load() {
       try {
@@ -287,19 +293,85 @@ export default function NovoContratoPage() {
     load();
   }, []);
 
+  // Load contrato
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await fetchContrato(contratoId);
+        
+        const buildInitialEquipe = () => {
+          const equipe = data.equipe;
+          return {
+            gestor: {
+              titulares_ids: equipe?.gestor?.titulares?.map((s) => s.id) ?? [],
+              substitutos_ids: equipe?.gestor?.substitutos?.map((s) => s.id) ?? [],
+            },
+            fiscal_requisitante: {
+              titulares_ids: equipe?.fiscal_requisitante?.titulares?.map((s) => s.id) ?? [],
+              substitutos_ids:
+                equipe?.fiscal_requisitante?.substitutos?.map((s) => s.id) ?? [],
+            },
+            fiscal_tecnico: {
+              titulares_ids: equipe?.fiscal_tecnico?.titulares?.map((s) => s.id) ?? [],
+              substitutos_ids:
+                equipe?.fiscal_tecnico?.substitutos?.map((s) => s.id) ?? [],
+            },
+            fiscal_administrativo: {
+              titulares_ids: equipe?.fiscal_administrativo?.titulares?.map((s) => s.id) ?? [],
+              substitutos_ids:
+                equipe?.fiscal_administrativo?.substitutos?.map((s) => s.id) ?? [],
+            },
+          };
+        };
+
+        reset({
+          projeto_id: data.projeto_id,
+          numero: data.numero,
+          ano: data.ano,
+          modalidade_contrato: data.modalidade_contrato ?? "CONTRATO",
+          tipo_contratacao: data.tipo_contratacao ?? "",
+          fornecedor_id: data.fornecedor_id ?? 0,
+          tipo_fornecedor_contrato: (data.tipo_fornecedor_contrato as "REVENDEDOR" | "FABRICANTE" | "REVENDEDOR_E_FABRICANTE" | "") ?? "",
+          tipo_contrato: data.tipo_contrato as "Aquisição" | "Serviço continuado" | "Subscrição",
+          tipo_instrumento: (data.tipo_instrumento as "CONTRATO" | "NOTA_EMPENHO" | null) ?? "CONTRATO",
+          itens: data.itens?.map(i => ({
+            tipo_catalogo: (i.tipo_catalogo ?? "") as "" | "CATMAT" | "CATSER",
+            codigo_catalogo: i.codigo_catalogo ?? "",
+            catalogo_produto_id: i.catalogo_produto_id ?? 0,
+            quantidade: i.quantidade,
+            valor_unitario: Number(i.valor_unitario) || 0,
+            data_inicio_vigencia: i.data_inicio_vigencia ?? "",
+            data_fim_vigencia: i.data_fim_vigencia ?? "",
+          })) ?? [{ tipo_catalogo: "" as "" | "CATMAT" | "CATSER", codigo_catalogo: "", catalogo_produto_id: 0, quantidade: 1, valor_unitario: 0, data_inicio_vigencia: "", data_fim_vigencia: "" }],
+          data_inicio_vigencia: data.data_inicio_vigencia ?? "",
+          vigencia_meses: data.vigencia_meses ?? null,
+          prorrogacao_meses: data.prorrogacao_meses ?? 0,
+          data_assinatura: data.data_assinatura,
+          data_fim_vigencia: data.data_fim_vigencia,
+          situacao_atual: data.situacao_atual as "Vigente" | "Extinto" | "Extinto, mas suporte vigente",
+          orgao_gerenciador: data.orgao_gerenciador ?? "",
+          equipe: buildInitialEquipe(),
+        });
+      } catch {
+        showToast("error", "Erro ao carregar os dados do contrato.");
+      } finally {
+        setLoadingContrato(false);
+      }
+    })();
+  }, [contratoId, reset]);
+
   const onSubmit = async (data: ContratoCreateFormData) => {
     setSubmitting(true);
     try {
       const payload = cleanContratoPayload(data);
-      console.log("[NovoContrato] Payload:", JSON.stringify(payload, null, 2));
-      const result = await criarContrato(payload);
-      console.log("[NovoContrato] Sucesso:", result);
-      showToast("success", `${isARP ? 'ARP' : 'Contrato'} "${data.numero}/${data.ano}" criado com sucesso!`);
-      router.push("/contratos");
+      console.log("[EditarContrato] Payload:", JSON.stringify(payload, null, 2));
+      const result = await atualizarContrato(contratoId, payload);
+      console.log("[EditarContrato] Sucesso:", result);
+      showToast("success", `${isARP ? 'ARP' : 'Contrato'} "${data.numero}/${data.ano}" atualizado com sucesso!`);
+      setTimeout(() => router.push("/contratos"), 1000);
     } catch (err) {
-      console.error("[NovoContrato] Erro:", err);
-      showToast("error", err instanceof Error ? err.message : "Erro ao criar contrato.");
-    } finally {
+      console.error("[EditarContrato] Erro:", err);
+      showToast("error", err instanceof Error ? err.message : "Erro ao atualizar contrato.");
       setSubmitting(false);
     }
   };
@@ -313,6 +385,19 @@ export default function NovoContratoPage() {
 
   const watchedModalidade = watch("modalidade_contrato");
   const isARP = watchedModalidade === "ARP";
+
+  if (loadingContrato) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center text-slate-500">
+        <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+        Carregando contrato...
+      </div>
+    );
+  }
+
+  const watchedNumero = watch("numero");
+  const watchedAno = watch("ano");
+  const title = watchedNumero ? `Editar ${isARP ? 'ARP' : 'Contrato'} ${watchedNumero}/${watchedAno}` : "Editar Contrato";
 
   return (
     <div className="mx-auto max-w-4xl pb-20">
@@ -335,7 +420,7 @@ export default function NovoContratoPage() {
             <FileSignature size={18} />
           </div>
           <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex-1">
-            {steps[currentStep - 1].desc}
+            {title} — {steps[currentStep - 1].desc}
           </h1>
           <span className="text-sm font-semibold text-slate-400 dark:text-slate-500 whitespace-nowrap">
             Etapa {currentStep} de 7
@@ -352,13 +437,13 @@ export default function NovoContratoPage() {
 
         {/* Linha 2: Subtítulo descritivo */}
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          {currentStep === 1 && (isARP ? "Selecione a modalidade de contratação para a ARP" : "Selecione a modalidade de contratação para o contrato de TI")}
-          {currentStep === 2 && "Selecione o tipo de contratação aplicável"}
-          {currentStep === 3 && "Informe os dados principais da contratação"}
-          {currentStep === 4 && "Adicione os itens que compõem esta contratação"}
-          {currentStep === 5 && "Defina as datas e prazos de vigência"}
-          {currentStep === 6 && "Defina a equipe de fiscalização do contrato"}
-          {currentStep === 7 && "Revise as informações e finalize o cadastro"}
+          {currentStep === 1 && (isARP ? "Altere a modalidade de contratação para a ARP" : "Altere a modalidade de contratação para o contrato de TI")}
+          {currentStep === 2 && "Altere o tipo de contratação aplicável"}
+          {currentStep === 3 && "Edite os dados principais da contratação"}
+          {currentStep === 4 && "Gerencie os itens que compõem esta contratação"}
+          {currentStep === 5 && "Atualize as datas e prazos de vigência"}
+          {currentStep === 6 && "Atualize a equipe de fiscalização do contrato"}
+          {currentStep === 7 && "Revise as informações e salve as alterações"}
         </p>
       </div>
 
@@ -851,12 +936,12 @@ export default function NovoContratoPage() {
           </div>
         )}
 
-
         {/* ══ ETAPA 7. REVISÃO FINAL ══ */}
         {currentStep === 7 && (
           <div className="space-y-6">
+
             {/* Resumo visual do cadastro */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-6 dark:border-slate-800 dark:bg-slate-900/30">
+            <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50/50 p-6 dark:border-slate-800 dark:bg-slate-900/30">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-1.5">
                 <FileSignature size={14} className="text-brand-primary" />
                 Resumo das Informações Preenchidas
@@ -929,7 +1014,7 @@ export default function NovoContratoPage() {
             )}
           </div>
 
-          {/* Lado direito: Próximo / Finalizar */}
+          {/* Lado direito: Próximo / Salvar */}
           <div>
             {currentStep < 7 ? (
               <button
@@ -950,9 +1035,9 @@ export default function NovoContratoPage() {
                 className="inline-flex items-center gap-2 h-10 rounded-lg bg-brand-primary px-6 text-sm font-bold text-white shadow-md shadow-brand-primary/25 transition-all hover:bg-brand-primary-hover hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
               >
                 {submitting ? (
-                  <><Loader2 size={14} className="animate-spin" />Finalizando...</>
+                  <><Loader2 size={14} className="animate-spin" />Salvando...</>
                 ) : (
-                  <><FileSignature size={14} />Finalizar Cadastro</>
+                  <><FileSignature size={14} />Salvar Alterações</>
                 )}
               </button>
             )}

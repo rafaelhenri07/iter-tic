@@ -11,13 +11,14 @@ import {
   Inbox,
   Filter,
   Pencil,
+  Trash2,
 } from "lucide-react";
-import { EditarContratoModal } from "@/components/contratos/EditarContratoModal";
 
-import { ToastContainer } from "@/components/ui/Toast";
-import { fetchContratos, fetchContrato } from "@/lib/api";
+
+import { ToastContainer, showToast } from "@/components/ui/Toast";
+import { fetchContratos, excluirContrato } from "@/lib/api";
 import { formatarMoedaBRL } from "@/lib/formatters";
-import type { ContratoListagem, ContratoResponse } from "@/types/contrato";
+import type { ContratoListagem } from "@/types/contrato";
 import { MODALIDADE_CONTRATO_CONFIG } from "@/types/contrato";
 import { CardListSkeleton } from "@/components/ui/Skeleton";
 
@@ -69,14 +70,18 @@ export default function ContratosPage() {
 
   // Modals
 
-  const [editContratoData, setEditContratoData] = useState<ContratoResponse | null>(null);
+  const handleEditar = (id: number) => {
+    router.push(`/execucao/contratos/${id}/editar`);
+  };
 
-  const handleEditar = async (id: number) => {
+  const handleExcluir = async (id: number) => {
+    if (!confirm("Tem certeza que deseja excluir este contrato? Esta ação é irreversível.")) return;
     try {
-      const data = await fetchContrato(id);
-      setEditContratoData(data);
-    } catch {
-      console.error("Erro ao carregar contrato para edição");
+      await excluirContrato(id);
+      showToast("success", "Contrato excluído com sucesso.");
+      refresh();
+    } catch (e) {
+      showToast("error", e instanceof Error ? e.message : "Erro ao excluir contrato.");
     }
   };
 
@@ -359,13 +364,22 @@ export default function ContratosPage() {
 
                   {/* Ações */}
                   <td className="px-5 py-3.5 text-center">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEditar(c.id); }}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20 mx-auto"
-                      title="Editar contrato"
-                    >
-                      <Pencil size={15} />
-                    </button>
+                    <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleEditar(c.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20"
+                        title="Editar contrato"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleExcluir(c.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+                        title="Excluir contrato"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -378,14 +392,7 @@ export default function ContratosPage() {
 
 
 
-      {/* Modal Editar Contrato */}
-      {editContratoData && (
-      <EditarContratoModal
-          onClose={() => setEditContratoData(null)}
-          onSuccess={refresh}
-          initialData={editContratoData}
-        />
-      )}
+
 
       <ToastContainer />
     </div>

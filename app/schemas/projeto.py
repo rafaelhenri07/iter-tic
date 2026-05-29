@@ -21,6 +21,7 @@ from app.models.projeto import (
     TipoArtefatoEnum,
     StatusArtefatoEnum,
     TipoDataAlteradaEnum,
+    TipoRegistroHistoricoProjetoEnum,
 )
 
 _RE_PROCESSO_SEI = re.compile(r"^\d{5}-\d{8}/\d{4}-\d{2}$")
@@ -219,10 +220,7 @@ class ProjetoBase(BaseModel):
         default="Simples",
         examples=["Simples", "Intermediária", "Complexa"]
     )
-    observacoes: Optional[str] = Field(
-        None,
-        description="Anotações gerais e informações adicionais sobre o projeto.",
-    )
+
 
 
     @field_validator("processo_sei", mode="before")
@@ -283,10 +281,10 @@ class ProjetoUpdate(BaseModel):
     """Atualização parcial de projeto."""
     nome: Optional[str] = Field(None, min_length=1, max_length=500)
     processo_sei: Optional[str] = Field(None, max_length=50)
+    status: Optional[StatusProjetoEnum] = None
     prioridade: Optional[str] = None
     complexidade: Optional[str] = None
-    status: Optional[StatusProjetoEnum] = None
-    observacoes: Optional[str] = None
+
 
 
     integrantes_requisitantes_ids: Optional[list[int]] = None
@@ -387,6 +385,9 @@ class ProjetoComDetalhesResponse(ProjetoResponse):
 
     # Tramitações da fase externa (log de auditoria)
     tramitacoes: list["ProjetoTramitacaoResponse"] = []
+
+    # Histórico do projeto
+    historico: list[HistoricoProjetoResponse] = []
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
@@ -567,3 +568,26 @@ class HistoricoEventoResponse(BaseModel):
     descricao: str
     tipo: str  # ex: "criacao", "inicio", "conclusao", "atraso"
     icone: str  # ex: "folder", "play", "check", "alert"
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  HISTÓRICO DO PROJETO (Auditoria e Observações)                          ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+class HistoricoProjetoResponse(BaseModel):
+    """Um registro de histórico/auditoria do projeto."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    projeto_id: int
+    data_hora: datetime
+    autor: str
+    tipo_registro: TipoRegistroHistoricoProjetoEnum
+    conteudo: str
+
+
+class ObservacaoProjetoCreate(BaseModel):
+    """Payload para adicionar uma observação manual no projeto."""
+    conteudo: str = Field(..., min_length=1, max_length=5000)
+    autor: str = Field(default="Usuário do Sistema", max_length=200)

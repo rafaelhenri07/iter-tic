@@ -106,6 +106,19 @@ async def atualizar_unidade(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Uma unidade não pode ser pai de si mesma.",
             )
+        # Verificar se o novo pai é descendente do próprio item (evitar ciclo)
+        check_id = payload.unidade_pai_id
+        while check_id is not None:
+            if check_id == item_id:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Ciclo detectado: uma unidade não pode ter como pai um de seus próprios descendentes.",
+                )
+            parent_result = await db.execute(
+                select(UnidadeOrganizacional.unidade_pai_id).where(UnidadeOrganizacional.id == check_id)
+            )
+            check_id = parent_result.scalar_one_or_none()
+
         pai = await db.get(UnidadeOrganizacional, payload.unidade_pai_id)
         if not pai:
             raise HTTPException(

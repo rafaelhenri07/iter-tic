@@ -380,6 +380,10 @@ export async function atualizarProjeto(projetoId: number, payload: unknown): Pro
   return patcher<ProjetoBase>(`/projetos/${projetoId}`, payload);
 }
 
+export async function excluirProjeto(projetoId: number): Promise<void> {
+  return deleter(`/projetos/${projetoId}`);
+}
+
 export async function inicializarArtefatos(
   projetoId: number
 ): Promise<Artefato[]> {
@@ -571,11 +575,30 @@ export async function atualizarContrato(
   return patcher<ContratoResponse>(`/contratos/${id}`, payload);
 }
 
+export async function excluirContrato(id: number): Promise<void> {
+  return deleter(`/contratos/${id}`);
+}
+
 export async function adicionarObservacaoContrato(
   contratoId: number,
   conteudo: string,
+  autor?: string,
 ): Promise<unknown> {
-  return poster(`/contratos/${contratoId}/observacoes`, { conteudo });
+  return poster(`/contratos/${contratoId}/observacoes`, {
+    conteudo,
+    ...(autor ? { autor } : {}),
+  });
+}
+
+export async function adicionarObservacaoProjeto(
+  projetoId: number,
+  conteudo: string,
+  autor?: string,
+): Promise<unknown> {
+  return poster(`/projetos/${projetoId}/observacoes`, {
+    conteudo,
+    ...(autor ? { autor } : {}),
+  });
 }
 
 export async function fetchAditivos(contratoId: number): Promise<import("@/types/contrato").Aditivo[]> {
@@ -856,5 +879,25 @@ export async function criarUnidadeOrganizacional(payload: UnidadeOrgCreatePayloa
 }
 export async function excluirUnidadeOrganizacional(id: number): Promise<void> {
   return deleter(`/estrutura-organizacional/unidades/${id}`);
+}
+export async function atualizarUnidadeOrganizacional(id: number, payload: Partial<UnidadeOrgCreatePayload>): Promise<UnidadeOrg> {
+  const res = await fetch(`${API_BASE}/estrutura-organizacional/unidades/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    handleUnauthorized(res);
+    const detail = await res.text().catch(() => res.statusText);
+    try {
+      const parsed = JSON.parse(detail);
+      const msg = parsed?.detail ?? detail;
+      throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    } catch (parseErr) {
+      if (parseErr instanceof Error && parseErr.message !== detail) throw parseErr;
+      throw new Error(detail);
+    }
+  }
+  return res.json() as Promise<UnidadeOrg>;
 }
 

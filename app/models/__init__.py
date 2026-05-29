@@ -6,6 +6,8 @@ from app.models.projeto import (  # noqa: F401
     Projeto,
     Artefato,
     HistoricoDataArtefato,
+    ProjetoHistorico,
+    TipoRegistroHistoricoProjetoEnum,
     projeto_acao_pdtic,
     projeto_item_pacc,
 )

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Cookies from "js-cookie";
 import {
   FileSignature,
   Building2,
@@ -53,6 +54,20 @@ function formatDateTime(d: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** Extrai o nome legível de um campo autor que pode ser JSON bruto do cookie */
+function parseAutorNome(autor: string | null | undefined): string {
+  if (!autor) return "Usuário do Sistema";
+  try {
+    const parsed = JSON.parse(autor);
+    if (parsed && typeof parsed === "object" && parsed.nome) {
+      return parsed.nome;
+    }
+  } catch {
+    // não é JSON, é string normal
+  }
+  return autor;
 }
 
 function InfoField({
@@ -169,7 +184,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
   const [contrato, setContrato] = useState<ContratoResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"visao-geral" | "equipe" | "aditivos" | "historico">("visao-geral");
+  const [activeTab, setActiveTab] = useState<"visao-geral" | "equipe" | "aditivos" | "complementares" | "historico">("visao-geral");
 
   // ── Observações
   const [obsTexto, setObsTexto] = useState("");
@@ -202,7 +217,19 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
     if (!obsTexto.trim()) return;
     setSendingObs(true);
     try {
-      await adicionarObservacaoContrato(contratoId, obsTexto.trim());
+      const rawUser = Cookies.get("itertic_user") || undefined;
+      let username = rawUser;
+      if (rawUser) {
+        try {
+          const parsed = JSON.parse(rawUser);
+          if (parsed && typeof parsed === "object" && parsed.nome) {
+            username = parsed.nome;
+          }
+        } catch {
+          // not JSON, use as-is
+        }
+      }
+      await adicionarObservacaoContrato(contratoId, obsTexto.trim(), username);
       setObsTexto("");
       await loadContrato();
     } catch {
@@ -348,6 +375,21 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
             )}
           </button>
           <button
+            onClick={() => setActiveTab("complementares")}
+            className={`whitespace-nowrap flex items-center gap-2 px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-colors ${
+              activeTab === "complementares"
+                ? "border-b-2 border-brand-primary text-brand-primary"
+                : "text-foreground-muted hover:text-foreground"
+            }`}
+          >
+            Informações Complementares
+            {contrato.historico && contrato.historico.filter(h => h.tipo_registro === "Observação Manual").length > 0 && (
+               <span className="bg-brand-primary/10 text-brand-primary py-0.5 px-2 rounded-full text-[10px]">
+                 {contrato.historico.filter(h => h.tipo_registro === "Observação Manual").length}
+               </span>
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab("historico")}
             className={`whitespace-nowrap px-4 py-3 text-sm font-semibold uppercase tracking-wider transition-colors ${
               activeTab === "historico"
@@ -408,7 +450,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                       {contrato.itens && contrato.itens.length > 0 ? (
                         contrato.itens.map((item) => (
                           <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                            <td className="px-4 py-3 text-slate-800 dark:text-slate-200">{(item as any).objeto_contratado || "Produto/Serviço"}</td>
+                            <td className="px-4 py-3 text-slate-800 dark:text-slate-200">{item.catalogo_produto_nome || "Item sem nome"}</td>
                             <td className="px-4 py-3 text-xs text-slate-500 font-mono">
                               {item.tipo_catalogo && item.codigo_catalogo ? `${item.tipo_catalogo} - ${item.codigo_catalogo}` : "—"}
                             </td>
@@ -525,21 +567,78 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
-              {/* Observações Gerais do Contrato */}
+          {activeTab === "complementares" && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-foreground-muted">
+                <StickyNote size={14} className="text-brand-primary" />
+                Informações Complementares
+              </div>
+              <p className="text-xs text-foreground-muted mb-6">
+                Este espaço serve para adicionar informações complementares do contrato.
+              </p>
+
+              {/* Legacy Observations */}
               {contrato.observacoes && (
-                <>
-                  <hr className="border-border" />
-                  <div>
-                    <div className="mb-4 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-foreground-muted">
-                      <StickyNote size={14} />
-                      Observações Adicionais
-                    </div>
-                    <div className="rounded-xl border border-border bg-background-secondary p-5 text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-                      {contrato.observacoes}
-                    </div>
+                <div className="mb-6 rounded-xl border border-border bg-background-secondary p-4">
+                  <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-foreground-muted">
+                    Observação Inicial (Legado)
                   </div>
-                </>
+                  <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                    {contrato.observacoes}
+                  </div>
+                </div>
+              )}
+
+              {/* Form to submit new observation */}
+              <div className="mb-6 flex gap-3">
+                <div className="flex-1">
+                  <textarea
+                    value={obsTexto}
+                    onChange={(e) => setObsTexto(e.target.value)}
+                    placeholder="Adicione uma observação complementar..."
+                    rows={2}
+                    className="w-full rounded-xl border border-border bg-background-secondary px-4 py-3 text-sm text-foreground placeholder:text-foreground-muted/60 resize-none focus:border-brand-primary focus:bg-background focus:outline-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm transition-all"
+                  />
+                </div>
+                <button
+                  onClick={handleEnviarObservacao}
+                  disabled={!obsTexto.trim() || sendingObs}
+                  className="flex h-[46px] items-center gap-2 self-start rounded-xl bg-brand-primary px-5 text-sm font-bold text-white shadow-md shadow-brand-primary/20 transition-all hover:shadow-lg hover:bg-brand-primary-hover disabled:opacity-40"
+                >
+                  {sendingObs ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  Registrar
+                </button>
+              </div>
+
+              {/* Historical observations of type "Observação Manual" */}
+              {contrato.historico && contrato.historico.filter(h => h.tipo_registro === "Observação Manual").length > 0 && (
+                <div className="space-y-4 border-t border-border pt-6">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-foreground-muted">
+                    Histórico de Observações
+                  </div>
+                  <div className="space-y-3">
+                    {contrato.historico
+                      .filter(h => h.tipo_registro === "Observação Manual")
+                      .map((obs) => (
+                        <div key={obs.id} className="rounded-xl border border-border bg-background-secondary p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-foreground">
+                              {parseAutorNome(obs.autor)}
+                            </span>
+                            <span className="text-[10px] text-foreground-muted">
+                              {formatDateTime(obs.data_hora)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                            {obs.conteudo}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -689,26 +788,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                 Linha do Tempo
               </div>
 
-              {/* Formulário inline para nova observação */}
-              <div className="mb-8 flex gap-3">
-                <div className="flex-1">
-                   <textarea
-                     value={obsTexto}
-                     onChange={(e) => setObsTexto(e.target.value)}
-                     placeholder="Adicione uma observação ao histórico do contrato..."
-                     rows={2}
-                     className="w-full rounded-xl border border-border bg-background-secondary px-4 py-3 text-sm text-foreground placeholder:text-foreground-muted/60 resize-none focus:border-brand-primary focus:bg-background focus:outline-none focus:ring-2 focus:ring-brand-primary/20 shadow-sm transition-all"
-                   />
-                </div>
-                <button
-                  onClick={handleEnviarObservacao}
-                  disabled={!obsTexto.trim() || sendingObs}
-                  className="flex h-[46px] items-center gap-2 self-start rounded-xl bg-brand-primary px-5 text-sm font-bold text-white shadow-md shadow-brand-primary/20 transition-all hover:shadow-lg hover:bg-brand-primary-hover disabled:opacity-40"
-                >
-                  {sendingObs ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                  Registrar
-                </button>
-              </div>
+
 
               {/* Timeline */}
               {contrato.historico && contrato.historico.length > 0 ? (
@@ -753,7 +833,7 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                           <div className="mt-3 flex items-center gap-1.5 text-[11px] text-foreground-muted">
                              <User size={12} />
                              <span>
-                               por <strong className="text-foreground">{h.autor}</strong>
+                               por <strong className="text-foreground">{parseAutorNome(h.autor)}</strong>
                              </span>
                           </div>
                         </div>

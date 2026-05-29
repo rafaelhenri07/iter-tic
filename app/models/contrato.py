@@ -112,6 +112,11 @@ class Contrato(Base):
         String(20), nullable=True,
         comment="Tipo de instrumento: CONTRATO ou NOTA_EMPENHO (somente para modalidade CONTRATO).",
     )
+    tipo_contratacao: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True,
+        comment="Tipo de contratação (ex: Dispensa, Inexigibilidade, Pregão, etc.).",
+    )
+
 
     # ── Vínculo com Projeto ─────────────────────────────────────────────────
     projeto_id: Mapped[int] = mapped_column(
@@ -180,7 +185,7 @@ class Contrato(Base):
         nullable=False,
         default=SituacaoContratoEnum.VIGENTE,
     )
-    observacoes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
 
     # ── Timestamps ──────────────────────────────────────────────────────────
     criado_em: Mapped[datetime] = mapped_column(

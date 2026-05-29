@@ -23,6 +23,7 @@ from app.models.contrato import (
     Contrato,
     ContratoEquipe,
     ContratoHistorico,
+    ItemContrato,
     PapelEquipeEnum,
     SituacaoContratoEnum,
     TipoRegistroHistoricoEnum,
@@ -56,7 +57,9 @@ _FIELD_LABELS: dict[str, str] = {
     "tipo_fornecedor_contrato": "Tipo de Fornecedor",
     "tipo_contrato": "Tipo de Contrato",
     "tipo_instrumento": "Tipo de Instrumento",
+    "tipo_contratacao": "Tipo de Contratação",
     "quantidade": "Quantidade",
+
     "tecnologia_utilizada": "Tecnologia Utilizada",
     "valor_investimento": "Valor de Investimento",
     "valor_custeio": "Valor de Custeio",
@@ -66,7 +69,6 @@ _FIELD_LABELS: dict[str, str] = {
     "data_assinatura": "Data de Assinatura",
     "data_fim_vigencia": "Data Fim de Vigência",
     "situacao_atual": "Situação",
-    "observacoes": "Observações",
 }
 
 # ── Labels dos papéis para auditoria ───────────────────────────────────────
@@ -249,7 +251,9 @@ async def listar_contratos(
             fornecedor_id=c.fornecedor_id,
             fornecedor_nome=c.fornecedor_rel.nome if c.fornecedor_rel else None,
             tipo_fornecedor_contrato=c.tipo_fornecedor_contrato,
+            tipo_contratacao=c.tipo_contratacao,
             tipo_contrato=c.tipo_contrato,
+
             situacao_atual=c.situacao_atual,
             valor_total=c.valor_total,
             data_assinatura=c.data_assinatura,
@@ -340,7 +344,6 @@ async def criar_contrato(
     for item in itens_data:
         db.add(ItemContrato(
             contrato_id=contrato.id,
-            objeto_contratado=item.objeto_contratado,
             quantidade=item.quantidade,
             valor_unitario=item.valor_unitario,
             tipo_catalogo=item.tipo_catalogo,
@@ -431,7 +434,6 @@ async def atualizar_contrato(
         for item in itens_input:
             db.add(ItemContrato(
                 contrato_id=contrato_id,
-                objeto_contratado=item["objeto_contratado"],
                 quantidade=item["quantidade"],
                 valor_unitario=item["valor_unitario"],
                 tipo_catalogo=item.get("tipo_catalogo"),
@@ -589,7 +591,7 @@ async def _carregar_contrato_completo(
             selectinload(Contrato.historico),
             selectinload(Contrato.fornecedor_rel),
             selectinload(Contrato.aditivos),
-            selectinload(Contrato.itens),
+            selectinload(Contrato.itens).selectinload(ItemContrato.catalogo_produto),
         )
         .where(Contrato.id == contrato_id)
     )
@@ -647,8 +649,25 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
         fornecedor_id=contrato.fornecedor_id,
         fornecedor_nome=contrato.fornecedor_rel.nome if contrato.fornecedor_rel else None,
         tipo_fornecedor_contrato=contrato.tipo_fornecedor_contrato,
+        tipo_contratacao=contrato.tipo_contratacao,
         tipo_contrato=contrato.tipo_contrato,
-        itens=contrato.itens,
+
+        itens=[
+            {
+                "id": item.id,
+                "contrato_id": item.contrato_id,
+                "quantidade": item.quantidade,
+                "valor_unitario": item.valor_unitario,
+                "valor_total": item.valor_total,
+                "tipo_catalogo": item.tipo_catalogo,
+                "codigo_catalogo": item.codigo_catalogo,
+                "catalogo_produto_id": item.catalogo_produto_id,
+                "catalogo_produto_nome": item.catalogo_produto.nome if item.catalogo_produto else None,
+                "data_inicio_vigencia": item.data_inicio_vigencia,
+                "data_fim_vigencia": item.data_fim_vigencia,
+            }
+            for item in (contrato.itens or [])
+        ],
         valor_total=contrato.valor_total,
         data_inicio_vigencia=contrato.data_inicio_vigencia,
         vigencia_meses=contrato.vigencia_meses,
@@ -656,7 +675,6 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
         data_assinatura=contrato.data_assinatura,
         data_fim_vigencia=contrato.data_fim_vigencia,
         situacao_atual=contrato.situacao_atual,
-        observacoes=contrato.observacoes,
         criado_em=contrato.criado_em,
         atualizado_em=contrato.atualizado_em,
         projeto_origem=projeto_origem,
@@ -665,3 +683,39 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
         historico=historico,
         aditivos=aditivos,
     )
+
+
+# ── DELETE /contratos/{contrato_id} ─────────────────────────────────────
+
+
+@router.delete("/{contrato_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def excluir_contrato(
+    contrato_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Exclui um contrato e todos os seus registros relacionados."""
+    from app.models.contrato import ItemContrato
+
+    contrato = await db.get(Contrato, contrato_id)
+    if not contrato:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contrato não encontrado.",
+        )
+
+    # Remover registros filhos
+    await db.execute(
+        delete(ItemContrato).where(ItemContrato.contrato_id == contrato_id)
+    )
+    await db.execute(
+        delete(ContratoEquipe).where(ContratoEquipe.contrato_id == contrato_id)
+    )
+    await db.execute(
+        delete(ContratoHistorico).where(ContratoHistorico.contrato_id == contrato_id)
+    )
+    await db.execute(
+        delete(Aditivo).where(Aditivo.contrato_id == contrato_id)
+    )
+
+    await db.delete(contrato)
+    await db.commit()

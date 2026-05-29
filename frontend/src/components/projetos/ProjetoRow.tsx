@@ -6,6 +6,7 @@ import {
   Check,
   MessageSquare,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import type { ProjetoListagem, ArtefatoResumo, StatusProjeto, ComplexidadeProjeto, PrioridadeProjeto } from "@/types/projeto";
 import {
@@ -294,12 +295,14 @@ interface ProjetoRowProps {
   projeto: ProjetoListagem;
   onEditProjeto?: (projeto: ProjetoListagem) => void;
   onArtefatoClick?: (projetoId: number, artefato: ArtefatoResumo) => void;
+  onExcluirProjeto?: (projeto: ProjetoListagem) => void;
 }
 
 export function ProjetoRow({
   projeto,
   onEditProjeto,
   onArtefatoClick,
+  onExcluirProjeto,
 }: ProjetoRowProps) {
   const router = useRouter();
   const prioridade = projeto.prioridade ? PRIORIDADE_CONFIG[projeto.prioridade] : null;
@@ -371,15 +374,24 @@ export function ProjetoRow({
 
 
 
-      {/* AÇÕES — Apenas Editar */}
-      <td className="px-4 py-3.5 align-middle text-center">
-        <button
-          onClick={(e) => { e.stopPropagation(); onEditProjeto?.(projeto); }}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20 mx-auto"
-          title="Editar projeto"
-        >
-          <Pencil size={15} />
-        </button>
+      {/* AÇÕES — Editar e Excluir */}
+      <td className="px-4 py-3.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center gap-1">
+          <button
+            onClick={() => onEditProjeto?.(projeto)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/20"
+            title="Editar projeto"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            onClick={() => onExcluirProjeto?.(projeto)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
+            title="Excluir projeto"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
       </td>
     </tr>
   );

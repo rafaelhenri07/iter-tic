@@ -229,10 +229,7 @@ class Projeto(Base):
         Text, nullable=True,
         comment="Descrição livre do andamento na área de compras/licitação.",
     )
-    observacoes: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True,
-        comment="Anotações gerais e informações adicionais sobre o projeto.",
-    )
+
 
 
     # ── Timestamps ──────────────────────────────────────────────────────────
@@ -289,6 +286,14 @@ class Projeto(Base):
         back_populates="projeto",
         cascade="all, delete-orphan",
         order_by="ObservacaoFaseExterna.criado_em.desc()",
+    )
+
+    historico: Mapped[list["ProjetoHistorico"]] = relationship(
+        "ProjetoHistorico",
+        back_populates="projeto",
+        cascade="all, delete-orphan",
+        order_by="ProjetoHistorico.data_hora.desc()",
+        lazy="selectin",
     )
 
     # ── Constraints ─────────────────────────────────────────────────────────
@@ -415,6 +420,56 @@ class ObservacaoFaseExterna(Base):
 
     def __repr__(self) -> str:
         return f"<ObservacaoFaseExterna #{self.id} projeto_id={self.projeto_id}>"
+
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║  2d. PROJETO HISTÓRICO (Log de Auditoria e Observações)                  ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+
+class TipoRegistroHistoricoProjetoEnum(str, enum.Enum):
+    """Tipo de registro no histórico do projeto."""
+    EDICAO_SISTEMA = "Edição de Sistema"
+    OBSERVACAO_MANUAL = "Observação Manual"
+
+
+class ProjetoHistorico(Base):
+    __tablename__ = "projeto_historico"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    projeto_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("projetos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    data_hora: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+    autor: Mapped[str] = mapped_column(
+        String(200), nullable=False, default="Usuário do Sistema",
+        comment="Autor da ação (temporário até JWT).",
+    )
+    tipo_registro: Mapped[TipoRegistroHistoricoProjetoEnum] = mapped_column(
+        Enum(
+            TipoRegistroHistoricoProjetoEnum,
+            name="tipo_registro_historico_projeto_enum",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+    )
+    conteudo: Mapped[str] = mapped_column(
+        Text, nullable=False,
+        comment="Descrição da mudança ou texto da observação.",
+    )
+
+    # ── Relationships ───────────────────────────────────────────────────────
+    projeto: Mapped["Projeto"] = relationship(
+        "Projeto", back_populates="historico",
+    )
+
+    def __repr__(self) -> str:
+        return f"<ProjetoHistorico #{self.id} tipo={self.tipo_registro.value}>"
 
 
 # ╔══════════════════════════════════════════════════════════════════════════╗
