@@ -10,6 +10,8 @@ import {
   AlertCircle,
   Inbox,
   Filter,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ProjetoRow } from "@/components/projetos/ProjetoRow";
@@ -17,27 +19,34 @@ import { ProjetoRow } from "@/components/projetos/ProjetoRow";
 import { GerenciarArtefatoModal } from "@/components/projetos/GerenciarArtefatoModal";
 import { ToastContainer, showToast } from "@/components/ui/Toast";
 import { fetchProjetos, excluirProjeto } from "@/lib/api";
-import type { ProjetoListagem, StatusProjeto, ArtefatoResumo, PrioridadeProjeto } from "@/types/projeto";
+import type { ProjetoListagem, StatusProjeto, ArtefatoResumo, PrioridadeProjeto, ComplexidadeProjeto } from "@/types/projeto";
 import { ProjetosSkeleton } from "@/components/ui/Skeleton";
 
 /* ── Filtros de status ─────────────────────────────────────────────────── */
 
 const STATUS_OPTIONS: { label: string; value: StatusProjeto | "todos" }[] = [
-  { label: "Todos os status", value: "todos" },
+  { label: "Todos", value: "todos" },
   { label: "Fase interna", value: "Fase interna" },
   { label: "Fase externa", value: "Fase externa" },
   { label: "Contratado", value: "Contratado" },
 ];
 
 const PRIORIDADE_OPTIONS: { label: string; value: PrioridadeProjeto | "todas" }[] = [
-  { label: "Todas as prioridades", value: "todas" },
+  { label: "Todas", value: "todas" },
   { label: "Baixa", value: "baixa" },
   { label: "Média", value: "media" },
   { label: "Alta", value: "alta" },
 ];
 
+const COMPLEXIDADE_OPTIONS: { label: string; value: ComplexidadeProjeto | "todos" }[] = [
+  { label: "Todas", value: "todos" },
+  { label: "Simples", value: "Simples" },
+  { label: "Intermediária", value: "Intermediária" },
+  { label: "Complexa", value: "Complexa" },
+];
+
 const TIPO_OPTIONS: { label: string; value: "todos" | "nova" | "legado" }[] = [
-  { label: "Todos os tipos", value: "todos" },
+  { label: "Todos", value: "todos" },
   { label: "Projetos Atuais", value: "nova" },
   { label: "Projetos Anteriores", value: "legado" },
 ];
@@ -83,6 +92,24 @@ export default function ProjetosPage() {
     "todas"
   );
   const [tipoFilter, setTipoFilter] = useState<"todos" | "nova" | "legado">("todos");
+  const [complexidadeFilter, setComplexidadeFilter] = useState<ComplexidadeProjeto | "todos">("todos");
+  const [showFilters, setShowFilters] = useState(false);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (statusFilter !== "todos") count++;
+    if (prioridadeFilter !== "todas") count++;
+    if (tipoFilter !== "todos") count++;
+    if (complexidadeFilter !== "todos") count++;
+    return count;
+  }, [statusFilter, prioridadeFilter, tipoFilter, complexidadeFilter]);
+
+  const clearAllFilters = () => {
+    setStatusFilter("todos");
+    setPrioridadeFilter("todas");
+    setTipoFilter("todos");
+    setComplexidadeFilter("todos");
+  };
 
   // Fetch
   useEffect(() => {
@@ -120,6 +147,10 @@ export default function ProjetosPage() {
       );
     }
 
+    if (complexidadeFilter !== "todos") {
+      resultado = resultado.filter((p) => p.complexidade === complexidadeFilter);
+    }
+
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       resultado = resultado.filter(
@@ -132,7 +163,7 @@ export default function ProjetosPage() {
     }
 
     return resultado;
-  }, [projetos, statusFilter, prioridadeFilter, tipoFilter, searchTerm]);
+  }, [projetos, statusFilter, prioridadeFilter, tipoFilter, complexidadeFilter, searchTerm]);
 
   // Stats
   const stats = useMemo(() => {
@@ -222,62 +253,140 @@ export default function ProjetosPage() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Search + Filter Bar */}
       {!loading && projetos.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
-            />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nome, SEI ou membro da equipe..."
-              className="h-9 w-full rounded-lg border border-border bg-background-card pl-9 pr-3 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
-            />
+        <div className="space-y-3">
+          {/* Row: Search + Filter Toggle */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
+              />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por nome, SEI ou membro da equipe..."
+                className="h-10 w-full rounded-xl border border-border bg-background-card pl-10 pr-4 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+              />
+            </div>
+
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={`inline-flex items-center gap-2 rounded-xl border px-4 h-10 text-sm font-medium transition-all ${
+                showFilters || activeFilterCount > 0
+                  ? "border-brand-primary bg-brand-primary/5 text-brand-primary"
+                  : "border-border bg-background-card text-foreground-muted hover:border-slate-300 hover:text-foreground"
+              }`}
+            >
+              <Filter size={15} />
+              <span>Filtros</span>
+              {activeFilterCount > 0 && (
+                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-primary text-[10px] font-bold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-200 ${showFilters ? "rotate-180" : ""}`}
+              />
+            </button>
           </div>
 
-          {/* Status dropdown */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusProjeto | "todos")}
-            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          {/* Collapsible Filter Panel */}
+          {showFilters && (
+            <div className="rounded-xl border border-border bg-background-card p-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+                  Filtrar por
+                </span>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-primary hover:text-brand-primary-hover transition-colors"
+                  >
+                    <X size={12} />
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
 
-          {/* Prioridade dropdown */}
-          <select
-            value={prioridadeFilter}
-            onChange={(e) => setPrioridadeFilter(e.target.value as PrioridadeProjeto | "todas")}
-            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
-          >
-            {PRIORIDADE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* Status dropdown */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Status do Projeto
+                  </label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as StatusProjeto | "todos")}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          {/* Tipo de Projeto dropdown */}
-          <select
-            value={tipoFilter}
-            onChange={(e) => setTipoFilter(e.target.value as "todos" | "nova" | "legado")}
-            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
-          >
-            {TIPO_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+                {/* Prioridade dropdown */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Prioridade
+                  </label>
+                  <select
+                    value={prioridadeFilter}
+                    onChange={(e) => setPrioridadeFilter(e.target.value as PrioridadeProjeto | "todas")}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    {PRIORIDADE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Complexidade dropdown */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Complexidade
+                  </label>
+                  <select
+                    value={complexidadeFilter}
+                    onChange={(e) => setComplexidadeFilter(e.target.value as ComplexidadeProjeto | "todos")}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    {COMPLEXIDADE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tipo de Projeto dropdown */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Tipo de Projeto
+                  </label>
+                  <select
+                    value={tipoFilter}
+                    onChange={(e) => setTipoFilter(e.target.value as "todos" | "nova" | "legado")}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    {TIPO_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

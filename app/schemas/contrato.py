@@ -16,7 +16,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, computed_field
 
-from app.models.contrato import TipoContratoEnum, SituacaoContratoEnum, TipoRegistroHistoricoEnum, ModalidadeContratoEnum, TipoInstrumentoEnum
+from app.models.contrato import TipoContratoEnum, SituacaoContratoEnum, TipoRegistroHistoricoEnum, ModalidadeContratoEnum, TipoInstrumentoEnum, ComplexidadeContratoEnum
 from app.schemas.aditivo import AditivoResponse  # noqa: E402
 
 
@@ -166,6 +166,7 @@ class ContratoCreate(BaseModel):
         None, description="Tipo: REVENDEDOR, FABRICANTE ou REVENDEDOR_E_FABRICANTE.",
     )
     tipo_contrato: TipoContratoEnum
+    complexidade: ComplexidadeContratoEnum = ComplexidadeContratoEnum.SIMPLES
     itens: list[ItemContratoCreate] = Field(default_factory=list, description="Itens do contrato")
 
     data_inicio_vigencia: Optional[date] = Field(
@@ -222,6 +223,7 @@ class ContratoUpdate(BaseModel):
     fornecedor_id: Optional[int] = Field(None, description="ID do fornecedor vinculado")
     tipo_fornecedor_contrato: Optional[str] = None
     tipo_contrato: Optional[TipoContratoEnum] = None
+    complexidade: Optional[ComplexidadeContratoEnum] = None
     itens: Optional[list[ItemContratoCreate]] = None
 
     data_inicio_vigencia: Optional[date] = None
@@ -260,6 +262,7 @@ class ContratoResponse(BaseModel):
     fornecedor_nome: Optional[str] = None
     tipo_fornecedor_contrato: Optional[str] = None
     tipo_contrato: TipoContratoEnum
+    complexidade: ComplexidadeContratoEnum
     itens: list[ItemContratoResponse] = []
 
     data_inicio_vigencia: Optional[date] = None
@@ -304,6 +307,7 @@ class ContratoListagemResponse(BaseModel):
     fornecedor_nome: Optional[str] = None
     tipo_fornecedor_contrato: Optional[str] = None
     tipo_contrato: TipoContratoEnum
+    complexidade: ComplexidadeContratoEnum
     situacao_atual: SituacaoContratoEnum
     valor_total: Decimal = Field(default=Decimal(0))
     data_assinatura: date

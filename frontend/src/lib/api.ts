@@ -522,6 +522,69 @@ export async function fetchGraficos(): Promise<GraficosDashboard> {
   return fetcher<GraficosDashboard>("/dashboard/graficos");
 }
 
+export interface MetricasPdtic {
+  periodo_vigente: string | null;
+  total_acoes_ativas: number;
+  total_exclusoes: number;
+  acoes_em_andamento: number;
+  acoes_contratadas: number;
+  orcamento_total_estimado: number;
+}
+
+export interface MetricasPacc {
+  exercicio_vigente: string | null;
+  total_itens_ativos: number;
+  itens_em_andamento: number;
+  itens_contratados: number;
+  valor_total_estimado: number;
+}
+
+export interface MetricasProjetos {
+  total_projetos: number;
+  por_status: Record<string, number>;
+  por_prioridade: Record<string, number>;
+  por_complexidade: Record<string, number>;
+}
+
+export interface MetricasContratos {
+  total_contratos: number;
+  total_vigentes: number;
+  valor_total_investido: number;
+  total_a_vencer: number;
+}
+
+export interface TempoMedioFases {
+  fase_interna: number;
+  fase_externa: number;
+}
+
+export interface ComplexidadeCarga {
+  alta: number;
+  media: number;
+  baixa: number;
+}
+
+export interface CargaServidorResponse {
+  nome_completo: string;
+  total_contratos: number;
+  complexidade: ComplexidadeCarga;
+  pontuacao_total: number;
+  nomes_contratos: string[];
+}
+
+export interface StatsDashboardResponse {
+  metricas_pdtic: MetricasPdtic;
+  metricas_pacc: MetricasPacc;
+  metricas_projetos: MetricasProjetos;
+  metricas_contratos: MetricasContratos;
+  tempo_medio?: TempoMedioFases;
+  carga_equipe?: CargaServidorResponse[];
+}
+
+export async function fetchStatsDashboard(): Promise<StatsDashboardResponse> {
+  return fetcher<StatsDashboardResponse>("/dashboard/stats");
+}
+
 /* ── LICITAÇÃO (Fase Externa) ──────────────────────────────────────────── */
 
 export async function enviarParaLicitacao(projetoId: number): Promise<ProjetoBase> {

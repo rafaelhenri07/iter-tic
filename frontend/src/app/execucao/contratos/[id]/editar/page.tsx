@@ -116,6 +116,14 @@ function EquipePapelBlock({
   );
 }
 
+const SITUACOES_EXPLANATION: Record<string, string> = {
+  Vigente: "O contrato está dentro do prazo de vigência e produzindo efeitos regularmente.",
+  "Vigente com execução suspensa": "O contrato continua existindo e permanece vigente, porém sua execução foi temporariamente interrompida (ex: decisão judicial de suspensão).",
+  "Vigente prorrogado": "A vigência original terminou, mas houve termo aditivo prorrogando o prazo.",
+  Extinto: "Objeto executado e obrigações encerradas.",
+  "contrato extinto com obrigações remanescentes": "Contrato encerrado quanto à execução, mas com serviço de garantias e/ou suporte vigentes."
+};
+
 /* ── Página Principal ──────────────────────────────────────────────────── */
 
 export default function EditarContratoPage({ params }: { params: Promise<{ id: string }> }) {
@@ -157,6 +165,7 @@ export default function EditarContratoPage({ params }: { params: Promise<{ id: s
       fornecedor_id: 0,
       tipo_fornecedor_contrato: "",
       tipo_contrato: "Aquisição",
+      complexidade: "simples" as const,
       tipo_instrumento: "CONTRATO",
       itens: [{ tipo_catalogo: "" as "" | "CATMAT" | "CATSER", codigo_catalogo: "", catalogo_produto_id: 0, quantidade: 1, valor_unitario: 0 }],
       data_inicio_vigencia: "",
@@ -202,6 +211,7 @@ export default function EditarContratoPage({ params }: { params: Promise<{ id: s
       "numero",
       "ano",
       "tipo_contrato",
+      "complexidade",
       "fornecedor_id",
       "tipo_fornecedor_contrato",
       "situacao_atual",
@@ -333,6 +343,7 @@ export default function EditarContratoPage({ params }: { params: Promise<{ id: s
           fornecedor_id: data.fornecedor_id ?? 0,
           tipo_fornecedor_contrato: (data.tipo_fornecedor_contrato as "REVENDEDOR" | "FABRICANTE" | "REVENDEDOR_E_FABRICANTE" | "") ?? "",
           tipo_contrato: data.tipo_contrato as "Aquisição" | "Serviço continuado" | "Subscrição",
+          complexidade: (data.complexidade as "simples" | "intermediaria" | "complexa") ?? "simples",
           tipo_instrumento: (data.tipo_instrumento as "CONTRATO" | "NOTA_EMPENHO" | null) ?? "CONTRATO",
           itens: data.itens?.map(i => ({
             tipo_catalogo: (i.tipo_catalogo ?? "") as "" | "CATMAT" | "CATSER",
@@ -348,7 +359,7 @@ export default function EditarContratoPage({ params }: { params: Promise<{ id: s
           prorrogacao_meses: data.prorrogacao_meses ?? 0,
           data_assinatura: data.data_assinatura,
           data_fim_vigencia: data.data_fim_vigencia,
-          situacao_atual: data.situacao_atual as "Vigente" | "Extinto" | "Extinto, mas suporte vigente",
+          situacao_atual: data.situacao_atual as any,
           orgao_gerenciador: data.orgao_gerenciador ?? "",
           equipe: buildInitialEquipe(),
         });
@@ -385,6 +396,7 @@ export default function EditarContratoPage({ params }: { params: Promise<{ id: s
 
   const watchedModalidade = watch("modalidade_contrato");
   const isARP = watchedModalidade === "ARP";
+  const watchedSituacao = watch("situacao_atual");
 
   if (loadingContrato) {
     return (
@@ -627,9 +639,16 @@ export default function EditarContratoPage({ params }: { params: Promise<{ id: s
                 <Field label="Situação Atual" required error={errors.situacao_atual?.message}>
                   <select {...register("situacao_atual")} className={selectCls}>
                     <option value="Vigente">Vigente</option>
+                    <option value="Vigente com execução suspensa">Vigente com execução suspensa</option>
+                    <option value="Vigente prorrogado">Vigente prorrogado</option>
                     <option value="Extinto">Extinto</option>
-                    <option value="Extinto, mas suporte vigente">Extinto c/ suporte</option>
+                    <option value="contrato extinto com obrigações remanescentes">Contrato extinto com obrigações remanescentes</option>
                   </select>
+                  {watchedSituacao && SITUACOES_EXPLANATION[watchedSituacao] && (
+                    <p className="mt-1.5 text-xs text-slate-500 italic bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 leading-normal">
+                      💡 {SITUACOES_EXPLANATION[watchedSituacao]}
+                    </p>
+                  )}
                 </Field>
 
                 <Field label="Tipo de Fornecedor" error={errors.tipo_fornecedor_contrato?.message}>
@@ -673,6 +692,71 @@ export default function EditarContratoPage({ params }: { params: Promise<{ id: s
                     <input {...register("orgao_gerenciador")} placeholder="Ex: Ministério da Economia" className={inputCls} />
                   </Field>
                 )}
+
+                {/* Linha 5: Complexidade (Radio Cards) */}
+                <Field label="Complexidade" required error={errors.complexidade?.message} className="sm:col-span-3 mt-2">
+                  <Controller
+                    name="complexidade"
+                    control={control}
+                    render={({ field }) => (
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mt-1">
+                        {[
+                          {
+                            value: "simples",
+                            label: "Simples",
+                            desc: "Contratos de baixa exigência fiscalizatória e execução imediata (ex: aquisições com pagamento e entrega únicos)",
+                            color: "border-emerald-500/30 bg-emerald-50/10 hover:bg-emerald-50/20 dark:bg-emerald-950/10 dark:border-emerald-900/30",
+                            activeColor: "border-emerald-500 bg-emerald-50/40 ring-2 ring-emerald-500/20 dark:bg-emerald-950/30 dark:border-emerald-500",
+                            dotColor: "bg-emerald-500",
+                          },
+                          {
+                            value: "intermediaria",
+                            label: "Intermediária",
+                            desc: "Contratos de execução imediata, mas com alta volumetria de itens ou múltiplos fornecedores, exigindo conferência detalhada.",
+                            color: "border-amber-500/30 bg-amber-50/10 hover:bg-amber-50/20 dark:bg-amber-950/10 dark:border-amber-900/30",
+                            activeColor: "border-amber-500 bg-amber-50/40 ring-2 ring-amber-500/20 dark:bg-amber-950/30 dark:border-amber-500",
+                            dotColor: "bg-amber-500",
+                          },
+                          {
+                            value: "complexa",
+                            label: "Complexa",
+                            desc: "Contratos de longa duração com execução contínua ou parcelada (ex: serviços terceirizados), exigindo acompanhamento e medições mensais da gestão/fiscalização.",
+                            color: "border-rose-500/30 bg-rose-50/10 hover:bg-rose-50/20 dark:bg-rose-950/10 dark:border-rose-900/30",
+                            activeColor: "border-rose-500 bg-rose-50/40 ring-2 ring-rose-500/20 dark:bg-rose-950/30 dark:border-rose-500",
+                            dotColor: "bg-rose-500",
+                          },
+                        ].map((opt) => {
+                          const isSelected = field.value === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => field.onChange(opt.value)}
+                              className={`relative flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition-all cursor-pointer ${
+                                isSelected
+                                  ? opt.activeColor
+                                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={`h-2.5 w-2.5 rounded-full ${opt.dotColor}`} />
+                                <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{opt.label}</span>
+                              </div>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 font-normal leading-relaxed">
+                                {opt.desc}
+                              </span>
+                              {isSelected && (
+                                <span className="absolute top-3 right-3 flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-[10px] font-bold shadow">
+                                  ✓
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  />
+                </Field>
               </div>
             </div>
           </div>

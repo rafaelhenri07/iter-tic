@@ -6,10 +6,14 @@
 
 export type TipoContrato = "Aquisição" | "Serviço continuado" | "Subscrição";
 
+export type ComplexidadeContrato = "simples" | "intermediaria" | "complexa";
+
 export type SituacaoContrato =
   | "Vigente"
+  | "Vigente com execução suspensa"
+  | "Vigente prorrogado"
   | "Extinto"
-  | "Extinto, mas suporte vigente";
+  | "contrato extinto com obrigações remanescentes";
 
 export type ModalidadeContrato = "CONTRATO" | "ARP";
 
@@ -43,13 +47,21 @@ export const SITUACAO_CONTRATO_CONFIG: Record<
     icon: "✅",
     cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
   },
+  "Vigente com execução suspensa": {
+    icon: "⏸️",
+    cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+  },
+  "Vigente prorrogado": {
+    icon: "📅",
+    cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+  },
   Extinto: {
     icon: "⛔",
     cls: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
   },
-  "Extinto, mas suporte vigente": {
-    icon: "⚠️",
-    cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+  "contrato extinto com obrigações remanescentes": {
+    icon: "🛠️",
+    cls: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400",
   },
 };
 
@@ -66,6 +78,27 @@ export const MODALIDADE_CONTRATO_CONFIG: Record<
     icon: "📑",
     label: "ARP",
     cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400",
+  },
+};
+
+export const COMPLEXIDADE_CONTRATO_CONFIG: Record<
+  ComplexidadeContrato,
+  { icon: string; label: string; cls: string }
+> = {
+  simples: {
+    icon: "🟢",
+    label: "Simples",
+    cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-400",
+  },
+  intermediaria: {
+    icon: "🟡",
+    label: "Intermediária",
+    cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400",
+  },
+  complexa: {
+    icon: "🔴",
+    label: "Complexa",
+    cls: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-400",
   },
 };
 
@@ -172,6 +205,7 @@ export interface ContratoResponse {
   tipo_fornecedor_contrato: string | null;
   tipo_contratacao: string | null;
   tipo_contrato: TipoContrato;
+  complexidade: ComplexidadeContrato;
   itens: ItemContrato[];
   valor_total: number;
 
@@ -207,6 +241,7 @@ export interface ContratoListagem {
   tipo_fornecedor_contrato: string | null;
   tipo_contratacao: string | null;
   tipo_contrato: TipoContrato;
+  complexidade: ComplexidadeContrato;
   situacao_atual: SituacaoContrato;
   valor_total: number;
   data_assinatura: string;
@@ -246,6 +281,7 @@ export interface ContratoCreatePayload {
   tipo_fornecedor_contrato?: string | null;
   tipo_contratacao?: string | null;
   tipo_contrato: TipoContrato;
+  complexidade: ComplexidadeContrato;
   itens: ItemContratoPayload[];
   data_inicio_vigencia?: string | null;
   vigencia_meses?: number | null;

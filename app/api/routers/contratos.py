@@ -69,6 +69,7 @@ _FIELD_LABELS: dict[str, str] = {
     "data_assinatura": "Data de Assinatura",
     "data_fim_vigencia": "Data Fim de Vigência",
     "situacao_atual": "Situação",
+    "complexidade": "Complexidade",
 }
 
 # ── Labels dos papéis para auditoria ───────────────────────────────────────
@@ -195,8 +196,9 @@ async def listar_contratos(
     situacao: str | None = Query(
         None,
         description=(
-            "Filtrar por situação. Valores aceitos: Vigente, Extinto, "
-            "'Extinto, mas suporte vigente', ou 'a_vencer' (vigentes com "
+            "Filtrar por situação. Valores aceitos: Vigente, "
+            "Vigente com execução suspensa, Vigente prorrogado, Extinto, "
+            "'contrato extinto com obrigações remanescentes', ou 'a_vencer' (vigentes com "
             "data_fim_vigencia nos próximos 180 dias)."
         ),
     ),
@@ -217,7 +219,11 @@ async def listar_contratos(
         hoje = date.today()
         limite = hoje + timedelta(days=180)
         stmt = stmt.where(
-            Contrato.situacao_atual == SituacaoContratoEnum.VIGENTE,
+            Contrato.situacao_atual.in_([
+                SituacaoContratoEnum.VIGENTE,
+                SituacaoContratoEnum.VIGENTE_SUSPENSO,
+                SituacaoContratoEnum.VIGENTE_PRORROGADO
+            ]),
             Contrato.data_fim_vigencia > hoje,
             Contrato.data_fim_vigencia <= limite,
         )
@@ -253,7 +259,7 @@ async def listar_contratos(
             tipo_fornecedor_contrato=c.tipo_fornecedor_contrato,
             tipo_contratacao=c.tipo_contratacao,
             tipo_contrato=c.tipo_contrato,
-
+            complexidade=c.complexidade,
             situacao_atual=c.situacao_atual,
             valor_total=c.valor_total,
             data_assinatura=c.data_assinatura,
@@ -651,6 +657,7 @@ def _montar_response(contrato: Contrato) -> ContratoResponse:
         tipo_fornecedor_contrato=contrato.tipo_fornecedor_contrato,
         tipo_contratacao=contrato.tipo_contratacao,
         tipo_contrato=contrato.tipo_contrato,
+        complexidade=contrato.complexidade,
 
         itens=[
             {

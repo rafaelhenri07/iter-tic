@@ -20,6 +20,8 @@ import {
   MoreVertical,
   PauseCircle,
   RefreshCw,
+  X,
+  Filter,
 } from "lucide-react";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { DesativarAcaoDialog } from "@/components/pdtic/DesativarAcaoDialog";
@@ -37,8 +39,9 @@ import type {
   PdticPainelResponse,
   PdticAcao,
   StatusAcao,
+  TipoNecessidade,
 } from "@/types/pdtic";
-import { STATUS_ACAO_COLOR } from "@/types/pdtic";
+import { STATUS_ACAO_COLOR, TIPO_NECESSIDADE_LABEL } from "@/types/pdtic";
 import { PdticSkeleton } from "@/components/ui/Skeleton";
 
 /* ── Tipos ────────────────────────────────────────────────────────────── */
@@ -50,6 +53,13 @@ const FILTRO_OPTIONS: { value: FiltroAuditoria; label: string }[] = [
   { value: "todas", label: "Histórico Completo" },
   { value: "adicionadas", label: "Adicionadas nesta Revisão" },
   { value: "removidas", label: "Removidas nesta Revisão" },
+];
+
+const ORCAMENTO_OPTIONS = [
+  { label: "Todos", value: "todos" },
+  { label: "0 a R$ 99.000,00", value: "faixa_1" },
+  { label: "R$ 100.000,00 a R$ 999.000,00", value: "faixa_2" },
+  { label: "R$ 1.000.000,00 para cima", value: "faixa_3" },
 ];
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
@@ -262,6 +272,60 @@ export default function PdticPage() {
   const [filtroAuditoria, setFiltroAuditoria] = useState<FiltroAuditoria>("vigentes");
   const [selectedRevisaoId, setSelectedRevisaoId] = useState<number | null>(null);
 
+  const [departamentoFilter, setDepartamentoFilter] = useState<string>("todos");
+  const [demandanteFilter, setDemandanteFilter] = useState<string>("todos");
+  const [responsavelFilter, setResponsavelFilter] = useState<string>("todos");
+  const [necessidadeFilter, setNecessidadeFilter] = useState<string>("todos");
+  const [orcamentoFilter, setOrcamentoFilter] = useState<string>("todos");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Memos para obter listas dinâmicas baseadas nas ações carregadas
+  const departamentosDisponiveis = useMemo(() => {
+    if (!painel) return [];
+    const todas = [...painel.acoes_ativas, ...painel.acoes_excluidas];
+    const depts = todas.flatMap((a) => a.departamentos_rel ?? []);
+    const unique = Array.from(new Map(depts.map((d) => [d.id, d])).values());
+    return unique.sort((a, b) => (a.sigla || a.nome).localeCompare(b.sigla || b.nome));
+  }, [painel]);
+
+  const demandantesDisponiveis = useMemo(() => {
+    if (!painel) return [];
+    const todas = [...painel.acoes_ativas, ...painel.acoes_excluidas];
+    const unds = todas.flatMap((a) => a.unidades_demandantes_rel ?? []);
+    const unique = Array.from(new Map(unds.map((u) => [u.id, u])).values());
+    return unique.sort((a, b) => (a.sigla || a.nome).localeCompare(b.sigla || b.nome));
+  }, [painel]);
+
+  const responsaveisDisponiveis = useMemo(() => {
+    if (!painel) return [];
+    const todas = [...painel.acoes_ativas, ...painel.acoes_excluidas];
+    const unds = todas.flatMap((a) => a.unidades_responsaveis_rel ?? []);
+    const unique = Array.from(new Map(unds.map((u) => [u.id, u])).values());
+    return unique.sort((a, b) => (a.sigla || a.nome).localeCompare(b.sigla || b.nome));
+  }, [painel]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filtroAuditoria !== "vigentes") count++;
+    if (statusFilter !== "todas") count++;
+    if (departamentoFilter !== "todos") count++;
+    if (demandanteFilter !== "todos") count++;
+    if (responsavelFilter !== "todos") count++;
+    if (necessidadeFilter !== "todos") count++;
+    if (orcamentoFilter !== "todos") count++;
+    return count;
+  }, [filtroAuditoria, statusFilter, departamentoFilter, demandanteFilter, responsavelFilter, necessidadeFilter, orcamentoFilter]);
+
+  const clearAllFilters = () => {
+    setFiltroAuditoria("vigentes");
+    setStatusFilter("todas");
+    setDepartamentoFilter("todos");
+    setDemandanteFilter("todos");
+    setResponsavelFilter("todos");
+    setNecessidadeFilter("todos");
+    setOrcamentoFilter("todos");
+  };
+
   // Fetch períodos
   useEffect(() => {
     async function load() {
@@ -309,7 +373,7 @@ export default function PdticPage() {
 
   const refresh = useCallback(() => setFetchKey((k) => k + 1), []);
 
-  // Filtro local (busca + status)
+  // Filtro local (busca + status + novos filtros)
   const acoesFiltradas = useMemo(() => {
     if (!painel) return [];
     const todas: PdticAcao[] = [...painel.acoes_ativas, ...painel.acoes_excluidas];
@@ -321,15 +385,45 @@ export default function PdticPage() {
           acao.codigo_acao.toLowerCase().includes(searchTerm.toLowerCase()) ||
           (acao.departamentos_rel?.map(d => d.nome).join(" ") || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
           (acao.unidades_demandantes_rel?.map(d => d.nome).join(" ") || "").toLowerCase().includes(searchTerm.toLowerCase());
+
         const matchStatus = statusFilter === "todas" || acao.status === statusFilter;
-        return matchSearch && matchStatus;
+
+        const matchDept =
+          departamentoFilter === "todos" ||
+          (acao.departamentos_rel && acao.departamentos_rel.some((d) => String(d.id) === departamentoFilter));
+
+        const matchDemandante =
+          demandanteFilter === "todos" ||
+          (acao.unidades_demandantes_rel && acao.unidades_demandantes_rel.some((u) => String(u.id) === demandanteFilter));
+
+        const matchResponsavel =
+          responsavelFilter === "todos" ||
+          (acao.unidades_responsaveis_rel && acao.unidades_responsaveis_rel.some((u) => String(u.id) === responsavelFilter));
+
+        const matchNecessidade =
+          necessidadeFilter === "todos" ||
+          (acao.tipo_necessidade && acao.tipo_necessidade.includes(necessidadeFilter as TipoNecessidade));
+
+        let matchOrcamento = true;
+        if (orcamentoFilter !== "todos") {
+          const total = sumValues(acao.valores_investimento) + sumValues(acao.valores_custeio);
+          if (orcamentoFilter === "faixa_1") {
+            matchOrcamento = total < 100000;
+          } else if (orcamentoFilter === "faixa_2") {
+            matchOrcamento = total >= 100000 && total < 1000000;
+          } else if (orcamentoFilter === "faixa_3") {
+            matchOrcamento = total >= 1000000;
+          }
+        }
+
+        return matchSearch && matchStatus && matchDept && matchDemandante && matchResponsavel && matchNecessidade && matchOrcamento;
       })
       .sort((a, b) => {
         const numA = parseInt(a.codigo_acao.replace(/\D/g, ""), 10) || 0;
         const numB = parseInt(b.codigo_acao.replace(/\D/g, ""), 10) || 0;
         return numA - numB;
       });
-  }, [painel, searchTerm, statusFilter]);
+  }, [painel, searchTerm, statusFilter, departamentoFilter, demandanteFilter, responsavelFilter, necessidadeFilter, orcamentoFilter]);
 
   const selectedPeriodo = periodos.find((p) => p.id === selectedPeriodoId);
 
@@ -449,70 +543,222 @@ export default function PdticPage() {
         </div>
       )}
 
-      {/* ── Segmented Control – Revisões ────────────────────────── */}
-      {painel && painel.revisoes.length > 0 && (
-        <div className="rounded-lg border border-border bg-background-card p-1 shadow-sm">
-          <div className="flex gap-0.5 overflow-x-auto">
-            {painel.revisoes.map((rev) => {
-              const isSelected = rev.id === selectedRevisaoId;
-              return (
-                <button
-                  key={rev.id}
-                  onClick={() => setSelectedRevisaoId(rev.id)}
-                  className={`relative min-w-max rounded-md px-4 py-2 text-xs font-medium transition-all whitespace-nowrap
-                    ${
-                      isSelected
-                        ? "bg-brand-primary text-white shadow-sm"
-                        : "text-foreground-muted hover:bg-background-secondary hover:text-foreground"
-                    }`}
-                >
-                  {formatarNomeRevisao(rev.numero_revisao)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* ── Barra de Filtros Unificada ──────────────────────────── */}
       {painel && (
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Busca */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted" />
-            <input
-              type="text"
-              placeholder="Buscar ações..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-9 w-full rounded-lg border border-border bg-background-card pl-9 pr-3 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
-            />
+        <div className="space-y-3">
+          {/* Row: Search + Revision Select + Filter Toggle */}
+          <div className="flex flex-col md:flex-row md:items-center gap-3">
+            {/* Busca */}
+            <div className="relative flex-1">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
+              />
+              <input
+                type="text"
+                placeholder="Buscar ações..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-10 w-full rounded-xl border border-border bg-background-card pl-10 pr-4 text-sm text-foreground placeholder:text-foreground-muted outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+              />
+            </div>
+
+            {/* Revisões */}
+            {painel.revisoes.length > 0 && (
+              <div className="flex h-10 items-center gap-0.5 rounded-xl border border-border bg-background-card p-1 shadow-sm overflow-x-auto overflow-y-hidden scrollbar-none shrink-0">
+                {painel.revisoes.map((rev) => {
+                  const isSelected = rev.id === selectedRevisaoId;
+                  return (
+                    <button
+                      key={rev.id}
+                      onClick={() => setSelectedRevisaoId(rev.id)}
+                      className={`relative min-w-max rounded-lg px-3.5 h-[30px] flex items-center justify-center text-xs font-semibold transition-all whitespace-nowrap
+                        ${
+                          isSelected
+                            ? "bg-brand-primary text-white shadow-sm"
+                            : "text-foreground-muted hover:bg-background-secondary hover:text-foreground"
+                        }`}
+                    >
+                      {formatarNomeRevisao(rev.numero_revisao)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Botão Filtros */}
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={`inline-flex items-center gap-2 rounded-xl border px-4 h-10 text-sm font-medium transition-all shrink-0 ${
+                showFilters || activeFilterCount > 0
+                  ? "border-brand-primary bg-brand-primary/5 text-brand-primary"
+                  : "border-border bg-background-card text-foreground-muted hover:border-slate-300 hover:text-foreground"
+              }`}
+            >
+              <Filter size={15} />
+              <span>Filtros</span>
+              {activeFilterCount > 0 && (
+                <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-primary text-[10px] font-bold text-white">
+                  {activeFilterCount}
+                </span>
+              )}
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-200 ${showFilters ? "rotate-180" : ""}`}
+              />
+            </button>
           </div>
 
-          {/* Filtro de auditoria */}
-          <select
-            value={filtroAuditoria}
-            onChange={(e) => setFiltroAuditoria(e.target.value as FiltroAuditoria)}
-            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
-          >
-            {FILTRO_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          {/* Collapsible Filter Panel */}
+          {showFilters && (
+            <div className="rounded-xl border border-border bg-background-card p-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+                  Filtrar por
+                </span>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-primary hover:text-brand-primary-hover transition-colors"
+                  >
+                    <X size={12} />
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
 
-          {/* Filtro de status */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusAcao | "todas")}
-            className="h-9 rounded-lg border border-border bg-background-card px-3 pr-8 text-sm text-foreground outline-none transition-all focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 cursor-pointer appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat"
-          >
-            <option value="todas">Todos os status</option>
-            {(Object.keys(STATUS_ACAO_COLOR) as StatusAcao[]).map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                {/* Filtro de auditoria (Visão) */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Visão
+                  </label>
+                  <select
+                    value={filtroAuditoria}
+                    onChange={(e) => setFiltroAuditoria(e.target.value as FiltroAuditoria)}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    {FILTRO_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro de status */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Status
+                  </label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as StatusAcao | "todas")}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    <option value="todas">Todos</option>
+                    {(Object.keys(STATUS_ACAO_COLOR) as StatusAcao[]).map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Departamento */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Departamento
+                  </label>
+                  <select
+                    value={departamentoFilter}
+                    onChange={(e) => setDepartamentoFilter(e.target.value)}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    <option value="todos">Todos</option>
+                    {departamentosDisponiveis.map((d) => (
+                      <option key={d.id} value={String(d.id)}>
+                        {d.sigla || d.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Unidade Demandante */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Unidade Demandante
+                  </label>
+                  <select
+                    value={demandanteFilter}
+                    onChange={(e) => setDemandanteFilter(e.target.value)}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    <option value="todos">Todas</option>
+                    {demandantesDisponiveis.map((u) => (
+                      <option key={u.id} value={String(u.id)}>
+                        {u.sigla || u.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Unidade Responsável */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Unidade Responsável
+                  </label>
+                  <select
+                    value={responsavelFilter}
+                    onChange={(e) => setResponsavelFilter(e.target.value)}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    <option value="todos">Todas</option>
+                    {responsaveisDisponiveis.map((u) => (
+                      <option key={u.id} value={String(u.id)}>
+                        {u.sigla || u.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tipo de Necessidade */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Tipo de Necessidade
+                  </label>
+                  <select
+                    value={necessidadeFilter}
+                    onChange={(e) => setNecessidadeFilter(e.target.value)}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    <option value="todos">Todos</option>
+                    {(Object.keys(TIPO_NECESSIDADE_LABEL) as TipoNecessidade[]).map((t) => (
+                      <option key={t} value={t}>
+                        {TIPO_NECESSIDADE_LABEL[t]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Orçamento Estimado */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-foreground-muted">
+                    Orçamento Estimado
+                  </label>
+                  <select
+                    value={orcamentoFilter}
+                    onChange={(e) => setOrcamentoFilter(e.target.value)}
+                    className="h-9 w-full appearance-none rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                  >
+                    {ORCAMENTO_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

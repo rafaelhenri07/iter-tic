@@ -79,6 +79,11 @@ export const contratoCreateSchema = z
       { error: "Selecione o tipo de contrato." }
     ),
 
+    complexidade: z.enum(
+      ["simples", "intermediaria", "complexa"],
+      { error: "Selecione a complexidade do contrato." }
+    ).default("simples"),
+
     /* Itens da Contratação */
     itens: z
       .array(itemContratoSchema)
@@ -113,7 +118,13 @@ export const contratoCreateSchema = z
       .min(1, "Data de fim é obrigatória."),
 
     situacao_atual: z.enum(
-      ["Vigente", "Extinto", "Extinto, mas suporte vigente"],
+      [
+        "Vigente",
+        "Vigente com execução suspensa",
+        "Vigente prorrogado",
+        "Extinto",
+        "contrato extinto com obrigações remanescentes"
+      ],
       { error: "Selecione a situação." }
     ),
 

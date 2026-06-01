@@ -46,11 +46,21 @@ class TipoContratoEnum(str, enum.Enum):
     SUBSCRICAO = "Subscrição"
 
 
+class ComplexidadeContratoEnum(str, enum.Enum):
+    """Complexidade do contrato."""
+    SIMPLES = "simples"
+    INTERMEDIARIA = "intermediaria"
+    COMPLEXA = "complexa"
+
+
+
 class SituacaoContratoEnum(str, enum.Enum):
     """Situação atual do contrato na instituição."""
     VIGENTE = "Vigente"
+    VIGENTE_SUSPENSO = "Vigente com execução suspensa"
+    VIGENTE_PRORROGADO = "Vigente prorrogado"
     EXTINTO = "Extinto"
-    EXTINTO_SUPORTE_VIGENTE = "Extinto, mas suporte vigente"
+    EXTINTO_OBRIGACOES = "contrato extinto com obrigações remanescentes"
 
 
 class ModalidadeContratoEnum(str, enum.Enum):
@@ -184,6 +194,19 @@ class Contrato(Base):
         ),
         nullable=False,
         default=SituacaoContratoEnum.VIGENTE,
+    )
+
+    # ── Complexidade ────────────────────────────────────────────────────────
+    complexidade: Mapped[ComplexidadeContratoEnum] = mapped_column(
+        Enum(
+            ComplexidadeContratoEnum,
+            name="complexidade_contrato_enum",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+        default=ComplexidadeContratoEnum.SIMPLES,
+        server_default="simples",
+        comment="Complexidade do contrato: simples, intermediaria ou complexa.",
     )
 
 

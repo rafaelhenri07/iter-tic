@@ -40,6 +40,7 @@ import {
   TIPO_CONTRATO_CONFIG,
   SITUACAO_CONTRATO_CONFIG,
   MODALIDADE_CONTRATO_CONFIG,
+  COMPLEXIDADE_CONTRATO_CONFIG,
 } from "@/types/contrato";
 import { formatarMoedaBRL, formatDate } from "@/lib/formatters";
 
@@ -332,6 +333,15 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
                     {tipoCfg.icon} {contrato.tipo_contrato}
                   </span>
                 )}
+                {contrato.complexidade && (() => {
+                  const compCfg = COMPLEXIDADE_CONTRATO_CONFIG[contrato.complexidade];
+                  if (!compCfg) return null;
+                  return (
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ${compCfg.cls}`}>
+                      {compCfg.icon} Complexidade: {compCfg.label}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -572,14 +582,6 @@ export default function ContratoDashboardPage({ params }: { params: Promise<{ id
 
           {activeTab === "complementares" && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
-              <div className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-foreground-muted">
-                <StickyNote size={14} className="text-brand-primary" />
-                Informações Complementares
-              </div>
-              <p className="text-xs text-foreground-muted mb-6">
-                Este espaço serve para adicionar informações complementares do contrato.
-              </p>
-
               {/* Legacy Observations */}
               {contrato.observacoes && (
                 <div className="mb-6 rounded-xl border border-border bg-background-secondary p-4">
